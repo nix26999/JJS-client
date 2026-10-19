@@ -872,20 +872,22 @@ do
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
--- Blackflash Chain V2: nearest live player or optionally NPC; behind-only attempts.
+-- V2: continuous D, jump before each Black Flash, three sequences then LMB and stop.
 do
  local CAS=game:GetService("ContextActionService")
  local enabledV2,active=false,false
  local includeNPCsV2=false
  local generation=0
  local held={}
+ local mouseDown=false
  local targetRoot=nil
  local ownedHumanoid,previousAutoRotate=nil,nil
  local repeatGapMs=650
+ local jumpLeadMs=120
  local nextDash=0
  local action="JJSBlackflashV2Activate"
  local cameraBind,faceBind="JJSBlackflashV2Camera","JJSBlackflashV2Facing"
- local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Enable, then press 3 | closest target > W + D/Q > get behind > Black Flash > repeat")
+ local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Press 3: hold D continuously > get behind > jump + Black Flash x3 > LMB > stop")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,Text="Off - enable the module, then press 3 to start",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
  gui:SetAttribute("BlackflashChainV2Active",false)
  local start,bindCapture
@@ -896,7 +898,6 @@ do
  local function closest()
   local h,r=rig();if not h then return nil end
   local best,bestRoot,bestDistance=nil,nil,math.huge
-  -- The shared live-Humanoid cache already tracks workspace additions/removals.
   for hum in pairs(humanoids) do
    local model=hum.Parent
    if hum.Health>0 and model and model:IsA("Model") and model~=LP.Character and model:IsDescendantOf(workspace) then
@@ -915,25 +916,26 @@ do
   end
   return best,bestRoot
  end
- local function behind(tr)
+ local function behind(tr,ignoreHeight)
   local h,r=rig();if not h or not tr or not tr.Parent then return false end
   local look=Vector3.new(tr.CFrame.LookVector.X,0,tr.CFrame.LookVector.Z)
   local offset=Vector3.new(r.Position.X-tr.Position.X,0,r.Position.Z-tr.Position.Z)
-  if look.Magnitude<.01 or offset.Magnitude<.5 or offset.Magnitude>7.5 or math.abs(r.Position.Y-tr.Position.Y)>6 then return false end
+  if look.Magnitude<.01 or offset.Magnitude<.5 or offset.Magnitude>7.5 then return false end
+  if not ignoreHeight and math.abs(r.Position.Y-tr.Position.Y)>6 then return false end
   return offset.Unit:Dot(look.Unit)<=-.55
  end
  local function key(code,down)
   if down then if held[code] then return end;held[code]=true;VIM:SendKeyEvent(true,code,false,game)
   elseif held[code] then VIM:SendKeyEvent(false,code,false,game);held[code]=nil end
  end
- local function releaseMovement()
-  for _,code in ipairs({Enum.KeyCode.W,Enum.KeyCode.D,Enum.KeyCode.Q}) do if held[code] then pcall(function() VIM:SendKeyEvent(false,code,false,game) end);held[code]=nil end end
- end
  local function restoreFacing() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.AutoRotate=previousAutoRotate end;ownedHumanoid=nil end
  local function stop(message)
   generation+=1;local owned=active;active=false
   for code in pairs(held) do pcall(function() VIM:SendKeyEvent(false,code,false,game) end) end
-  held={};targetRoot=nil;restoreFacing();if owned then busy=false;manualSequenceBusy=false end;gui:SetAttribute("BlackflashChainV2Active",false)
+  if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+  held={};mouseDown=false;targetRoot=nil;restoreFacing()
+  if owned then busy=false;manualSequenceBusy=false end
+  gui:SetAttribute("BlackflashChainV2Active",false)
   if feedback.Parent then feedback.Text=message or "Stopped - press 3 to start again" end
  end
  bindCapture=function()
@@ -949,39 +951,85 @@ do
   if busy or todoBusy or manualSequenceBusy then feedback.Text="Wait for the other macro to finish";return end
   if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
   if not rig() then feedback.Text="Character unavailable";return end
-  active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;gui:SetAttribute("BlackflashChainV2Active",true);local id=generation
+  active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0
+  gui:SetAttribute("BlackflashChainV2Active",true)
+  local id=generation
   task.spawn(function()
+   local completed=0
    local function check() if not running or not enabledV2 or not active or generation~=id or not rig() then error("V2 stopped",0) end end
    local function updateTarget() local p,tr=closest();targetRoot=tr;return p,tr end
-   local function waitFor(seconds,requireBehind)
+   local function waitFor(seconds,requireBehind,ignoreHeight)
     local deadline=os.clock()+seconds
-    repeat check();local _,tr=updateTarget();if requireBehind and not behind(tr) then return false end;RS.Heartbeat:Wait() until os.clock()>=deadline
+    repeat
+     check();local _,tr=updateTarget()
+     if requireBehind and not behind(tr,ignoreHeight) then return false end
+     RS.Heartbeat:Wait()
+    until os.clock()>=deadline
     check();return true
    end
    local function tapThree()
     check();CAS:UnbindAction(action);key(Enum.KeyCode.Three,true);waitFor(.035,false);key(Enum.KeyCode.Three,false);bindCapture()
    end
+   local function jumpBeforeBlackflash()
+    check();local h=rig()
+    if h.FloorMaterial==Enum.Material.Air then return false end
+    key(Enum.KeyCode.Space,true);h.Jump=true
+    waitFor(.035,false);key(Enum.KeyCode.Space,false)
+    return waitFor(jumpLeadMs/1000,true,true)
+   end
+   local function clickLMB()
+    check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+    waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false
+   end
    local ok,err=pcall(function()
+    -- Let the older follow controller release its inputs before owning D.
     waitFor(.05,false)
+    key(Enum.KeyCode.D,true)
     while true do
-     check();local p,tr=updateTarget()
-     if not tr then releaseMovement();feedback.Text="V2: waiting for a live target";RS.Heartbeat:Wait()
-     elseif UIS:GetFocusedTextBox() then releaseMovement();feedback.Text="V2: paused while typing";RS.Heartbeat:Wait()
+     check();key(Enum.KeyCode.D,true)
+     local p,tr=updateTarget()
+     if not tr then key(Enum.KeyCode.Q,false);feedback.Text="V2: holding D - waiting for a live target";RS.Heartbeat:Wait()
+     elseif UIS:GetFocusedTextBox() then key(Enum.KeyCode.Q,false);feedback.Text="V2: D held - ability inputs paused while typing";RS.Heartbeat:Wait()
      elseif not behind(tr) then
-      feedback.Text="V2: getting behind "..p.DisplayName..(p.IsNPC and " [NPC]" or "")
-      key(Enum.KeyCode.W,true)
+      feedback.Text="V2: D held - getting behind "..p.DisplayName..(p.IsNPC and " [NPC]" or "").." | "..completed.."/3"
       if os.clock()>=nextDash then
-       local dashStart=os.clock();nextDash=dashStart+2;key(Enum.KeyCode.D,true);key(Enum.KeyCode.Q,true)
+       local dashStart=os.clock();nextDash=dashStart+2;key(Enum.KeyCode.Q,true)
        repeat
         check();local _,current=updateTarget();if behind(current) then break end
-        if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end;RS.Heartbeat:Wait()
+        if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end
+        RS.Heartbeat:Wait()
        until os.clock()-dashStart>=.500
-       key(Enum.KeyCode.Q,false);key(Enum.KeyCode.D,false);local _,current=updateTarget();if behind(current) then releaseMovement() end
+       key(Enum.KeyCode.Q,false)
+       -- D intentionally stays held past the dash window and while behind.
       else RS.Heartbeat:Wait() end
      else
-      releaseMovement();feedback.Text="V2: behind "..p.DisplayName..(p.IsNPC and " [NPC]" or "").." - Black Flash attempt"
-      local began=os.clock();tapThree();local remaining=math.max(0,delayMs/1000-(os.clock()-began))
-      if waitFor(remaining,true) then local _,current=updateTarget();if behind(current) then tapThree();waitFor(repeatGapMs/1000,false) end end
+      local h=rig()
+      if h.FloorMaterial==Enum.Material.Air then
+       feedback.Text="V2: D held - waiting to land before the next jump";RS.Heartbeat:Wait()
+      else
+       feedback.Text="V2: jump before Black Flash "..(completed+1).."/3 - D held"
+       if jumpBeforeBlackflash() then
+        local _,current=updateTarget()
+        if behind(current,true) then
+         local began=os.clock();tapThree()
+         local remaining=math.max(0,delayMs/1000-(os.clock()-began))
+         if waitFor(remaining,true,true) then
+          local _,latest=updateTarget()
+          if behind(latest,true) then
+           tapThree();completed+=1
+           if completed>=3 then
+            feedback.Text="V2: 3 sequences sent - LMB before fourth, then stop"
+            clickLMB()
+            stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started")
+            bindCapture()
+            return
+           end
+           waitFor(repeatGapMs/1000,false)
+          end
+         end
+        end
+       end
+      end
      end
     end
    end)
@@ -990,14 +1038,15 @@ do
  end
  blackflashV2Trigger=function() if not enabledV2 then return false end;if not active and not UIS:GetFocusedTextBox() then start() end;return true end
  toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v)
-  enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else feedback.Text="Ready - press 3 to start V2";bindCapture() end
+  enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else feedback.Text="Ready - press 3: D held, jump + Black Flash x3, LMB, stop";bindCapture() end
  end)
  toggle(box,"Include NPCs (V2)",function() return includeNPCsV2 end,function(v)
   includeNPCsV2=v;targetRoot=nil
-  if active then feedback.Text=v and "V2: targeting closest live player or NPC" or "V2: targeting closest live player only" end
+  if active then feedback.Text=v and "V2: closest live player or NPC" or "V2: closest live player only" end
  end)
  moduleSlider(box,"V2 repeat gap",100,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1,Text="Uses shared Blackflash delay. D holds up to 500 ms, ending early if behind. Include NPCs adds live Humanoid models to nearest-target selection. Turn module off to stop.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1,Text="D stays held until completion or cancellation. Each Black Flash sequence starts with a jump. After 3 completed input pairs, click LMB once and stop before a fourth. Hits are not confirmed.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  RS:BindToRenderStep(cameraBind,Enum.RenderPriority.Camera.Value+2,function()
   if not active then return end;local _,tr=closest();targetRoot=tr;local cam=workspace.CurrentCamera
   if cam and tr and(tr.Position-cam.CFrame.Position).Magnitude>.05 then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,tr.Position+Vector3.new(0,1,0)) end
@@ -1085,5 +1134,5 @@ do
   end
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
- notify("Ready","Full client: Blackflash Chain V2 now has Include NPCs.",T.acc)
-end
+ notify("Ready","Full client: V2 holds D, jumps before Black Flash x3, then LMB and stop.",T.acc)
+end-
