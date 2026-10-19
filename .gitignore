@@ -664,7 +664,7 @@ do
   if paused then paused=false;invalidate() end;local best,dist=nil,250
   if selectedId then best=Players:GetPlayerByUserId(selectedId)
   else
-   for _,p in ipairs(Players:GetPlayers()) do local c=p.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart");if p~=LP and th and tr and th.Health>0 then local d=(tr.Position-r.Position).Magnitude;if d<dist then dist=d;best=p end end end
+   for _,p in ipairs(Players:GetPlayers()) do local c=p.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart");if th and tr and th.Health>0 and p~=LP then local d=(tr.Position-r.Position).Magnitude;if d<dist then dist=d;best=p end end end
    local c=target and target.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart");if th and tr and th.Health>0 and(tr.Position-r.Position).Magnitude<250 and dist+6>=(tr.Position-r.Position).Magnitude then best=target end
   end
   if best~=target then invalidate();target=best end;local c=target and target.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart")
@@ -873,11 +873,10 @@ do
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
--- Optimized V2: cached target/routes, dash-first positioning, post-jump minimum 5 studs.
+-- Optimized V2: dash if available; otherwise immediate jump-over, no punch fallback.
 do
  local CAS=game:GetService("ContextActionService")
- local enabledV2,active=false,false;local includeNPCsV2=false;local turnaroundMixups=false
- local calculatorEnabled=true;local autoCameraAngle=false
+ local enabledV2,active=false,false;local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
  local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=250,120,250;local postDashTurnDegrees=90
  local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
@@ -886,13 +885,13 @@ do
  local flickUntil=0;local flickRotation=nil;local flickNavigationRight=Vector3.zero
  local lockSuppressed=false;local borrowedLock=false;local previousLockOn=false
  local fightModel,fightHumanoid=nil,nil;local fightLinks={};local suppressStartUntil=0
- local targetCacheAt=-math.huge;local targetCacheReady=false;local cachedCandidate,cachedRoot=nil,nil
- local routeCache=nil;local sharedParams=nil;local paramsModel,paramsCharacter=nil,nil
+ local targetCacheAt=-math.huge;local targetCacheReady=false;local cachedCandidate,cachedRoot=nil,nil;local routeCache=nil
+ local sharedParams=nil;local paramsModel,paramsCharacter=nil,nil
  local MOVE_KEYS={Enum.KeyCode.W,Enum.KeyCode.A,Enum.KeyCode.S,Enum.KeyCode.D};local PAUSED_FOR_TYPING={}
  local action="JJSBlackflashV2Activate";local cameraBind,faceBind="JJSBlackflashV2Camera","JJSBlackflashV2Facing"
- local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","3 starts | dash-first routes | jump-over only for recovery | back to >=5 after jump-over")
+ local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","3 starts | side dash when available; otherwise jump over immediately | no fallback punches")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable the module, then press 3 to start",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
- local calcBox=card(pages["Auto Blackflash"],"V2 Route Calculator","Cached left/right turn, obstacle and ETA estimates; auto side selection")
+ local calcBox=card(pages["Auto Blackflash"],"V2 Route Calculator","Cached left/right orbit, obstacle and ETA estimates")
  local calcStatus=make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,106),BackgroundTransparency=1,Text="Waiting for a live target",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3});ord[calcBox]=3
  gui:SetAttribute("BlackflashChainV2Active",false);local start,bindCapture,stop,stopForDefeat
  local function say(text) if feedback.Parent and feedback.Text~=text then feedback.Text=text end end
@@ -910,9 +909,9 @@ do
  local function restoreFacing() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.AutoRotate=previousAutoRotate end;ownedHumanoid=nil end
  local function move(mode,vector)
   if typing() then error(PAUSED_FOR_TYPING,0) end;phase=mode;steering=vector or Vector3.zero
-  key(Enum.KeyCode.W,mode=="catchup" or mode=="attackApproach" or mode=="punchApproach" or mode=="jumpOver")
+  key(Enum.KeyCode.W,mode=="catchup" or mode=="attackApproach" or mode=="jumpOver")
   key(Enum.KeyCode.S,mode=="backMixup" or mode=="postJumpBackoff")
-  local side=mode=="side" or mode=="walkSide";key(Enum.KeyCode.D,side and strafeKey==Enum.KeyCode.D);key(Enum.KeyCode.A,side and strafeKey==Enum.KeyCode.A)
+  local side=mode=="side";key(Enum.KeyCode.D,side and strafeKey==Enum.KeyCode.D);key(Enum.KeyCode.A,side and strafeKey==Enum.KeyCode.A)
   if mode~="side" and mode~="backMixup" then key(Enum.KeyCode.Q,false) end
  end
  local function releasePositioning() phase="idle";steering=Vector3.zero;for _,code in ipairs(MOVE_KEYS) do key(code,false) end;key(Enum.KeyCode.Q,false) end
@@ -983,8 +982,7 @@ do
  end
  local function calculateRoute(tr,right,force)
   local radius,offset,h,r=spacing(tr);if not radius or radius<.5 then return nil end
-  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return nil end;look=look.Unit
-  local now=os.clock();local speed=math.max(h.WalkSpeed,1)
+  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return nil end;look=look.Unit;local now=os.clock();local speed=math.max(h.WalkSpeed,1)
   if not force and routeCache and routeCache.Root==tr and now-routeCache.At<.12 and(r.Position-routeCache.PlayerPos).Magnitude<.75 and(tr.Position-routeCache.TargetPos).Magnitude<.75 and look:Dot(routeCache.Look)>.985 and right:Dot(routeCache.Right)>.985 and math.abs(speed-routeCache.Speed)<1 then return routeCache.Plan end
   local unit=offset.Unit;local rear=-look;local signed=math.atan2(unit:Cross(rear).Y,math.clamp(unit:Dot(rear),-1,1));local rightSign=unit:Cross(right).Y>=0 and 1 or -1
   local cone=math.acos(.55);local twoPi=math.pi*2;local rightRadians=(signed*rightSign)%twoPi;local leftRadians=(-signed*rightSign)%twoPi
@@ -994,12 +992,9 @@ do
    local length=radius*radians;local walkTime=length/speed;local dashTime=math.max(0,nextDash-now)+.5+math.max(0,length-17.5)/speed
    local blocked=false;local previous=r.Position;local steps=math.clamp(math.ceil(math.deg(radians)/20),1,8)
    for i=1,steps do
-    local angle=radians*sign*(i/steps);local c,s=math.cos(angle),math.sin(angle)
-    local x=unit.X*c+unit.Z*s;local z=-unit.X*s+unit.Z*c
+    local angle=radians*sign*(i/steps);local c,s=math.cos(angle),math.sin(angle);local x=unit.X*c+unit.Z*s;local z=-unit.X*s+unit.Z*c
     local point=Vector3.new(tr.Position.X+x*radius,r.Position.Y,tr.Position.Z+z*radius);local segment=point-previous
-    if segment.Magnitude>.01 then
-     for _,shift in ipairs({Vector3.zero,Vector3.new(0,-1.25,0)}) do if workspace:Raycast(previous+shift,segment,params) then blocked=true;break end end
-    end
+    if segment.Magnitude>.01 then for _,shift in ipairs({Vector3.zero,Vector3.new(0,-1.25,0)}) do if workspace:Raycast(previous+shift,segment,params) then blocked=true;break end end end
     if blocked then break end;previous=point
    end
    return {Degrees=math.deg(radians),Distance=length,Time=math.min(walkTime,dashTime),Blocked=blocked}
@@ -1007,8 +1002,7 @@ do
   local rightRoute=evaluate(rightRadians,rightSign);local leftRoute=evaluate(leftRadians,-rightSign);local chosen=nil
   if not rightRoute.Blocked and not leftRoute.Blocked then chosen=leftRoute.Time<rightRoute.Time and Enum.KeyCode.A or Enum.KeyCode.D
   elseif not rightRoute.Blocked then chosen=Enum.KeyCode.D elseif not leftRoute.Blocked then chosen=Enum.KeyCode.A end
-  local cam=workspace.CurrentCamera;local predictedYaw=0
-  if cam and chosen then local delta=(chosen==Enum.KeyCode.A and -right or right)*17.5;predictedYaw=signedYaw(cam.CFrame.LookVector,tr.Position-(cam.CFrame.Position+delta)) end
+  local cam=workspace.CurrentCamera;local predictedYaw=0;if cam and chosen then local delta=(chosen==Enum.KeyCode.A and -right or right)*17.5;predictedYaw=signedYaw(cam.CFrame.LookVector,tr.Position-(cam.CFrame.Position+delta)) end
   local plan={Left=leftRoute,Right=rightRoute,Side=chosen,BothBlocked=chosen==nil,PredictedYaw=predictedYaw}
   routeCache={Root=tr,At=now,PlayerPos=r.Position,TargetPos=tr.Position,Look=look,Right=right,Speed=speed,Plan=plan};return plan
  end
@@ -1030,8 +1024,7 @@ do
   end
   if distance>CATCHUP_DISTANCE then move("catchup",offset.Magnitude>.01 and -offset.Unit or Vector3.zero)
   elseif phase=="catchup" then releasePositioning()
-  elseif(phase=="side" or phase=="walkSide") and rearSide(targetRoot) then releasePositioning()
-  elseif phase=="side" and distance<SIDE_MIN then releasePositioning() end
+  elseif phase=="side" and(rearSide(targetRoot) or distance<SIDE_MIN) then releasePositioning() end
  end
  bindCapture=function()
   CAS:UnbindAction(action);if not enabledV2 or not running then return end
@@ -1043,11 +1036,11 @@ do
   if not okVIM or not VIM then say("Input simulation unavailable");return end;if not rig() then say("Character unavailable");return end
   disconnectFight();invalidateCaches();active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;strafeKey=Enum.KeyCode.D;flickUntil=0;needPostJumpBackoff=false;gui:SetAttribute("BlackflashChainV2Active",true);local id=generation
   task.spawn(function()
-   local completed=0;local fallbackStage=0;local punchGoal=math.random(2,3);local punchesSent=0;local targetModel=nil;local mixupUsed=false
-   local obstacleMode=0;local nextHop=0;local jumpPrimed=false;local primeTime=0;local walkFallbackAt=0
+   local completed=0;local targetModel=nil;local mixupUsed=false;local jumpPrimed=false;local primeTime=0
+   local recoveringOver=false;local recoveryJumpActive=false
    local function valid() if active and not ensureFightAlive() then error("V2 stopped after target defeat",0) end;if not running or not enabledV2 or not active or generation~=id or not rig() then error("V2 stopped",0) end end
    local function check() valid();if typing() then error(PAUSED_FOR_TYPING,0) end end
-   local function resetRoute() fallbackStage=0;punchGoal=math.random(2,3);punchesSent=0;mixupUsed=false;obstacleMode=0;strafeKey=Enum.KeyCode.D;jumpPrimed=false;needPostJumpBackoff=false;walkFallbackAt=0 end
+   local function resetRoute() mixupUsed=false;strafeKey=Enum.KeyCode.D;jumpPrimed=false;needPostJumpBackoff=false;recoveringOver=false;recoveryJumpActive=false end
    local function updateTarget()
     if not ensureFightAlive() then error("V2 target defeated - press 3 again",0) end
     local p,tr=closest();watchFight(p);if not active then error("V2 target defeated",0) end;targetRoot=tr
@@ -1064,34 +1057,37 @@ do
     local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();return waitFor(jumpLeadMs/1000,true)
    end
    local function clickLMB() check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false end
-   local function failedDash()
-    releasePositioning();if fallbackStage==2 then fallbackStage=3;walkFallbackAt=os.clock();say("V2: dash retry failed - trying side walk before jumping")
-    else fallbackStage=1;punchesSent=0;punchGoal=math.random(2,3);say("V2: dash failed - preparing "..punchGoal.." punches") end
-   end
-   local function useLeftOrJump(r,tr,right,length)
+   local function useAvailableSide(r,tr,right)
     if calculatorEnabled then local plan=calculateRoute(tr,right)
-     if plan and plan.BothBlocked then obstacleMode=2;releasePositioning();say("V2: both side routes blocked - jump recovery");return right end
+     if plan and plan.BothBlocked then return nil end
      if plan and plan.Side then strafeKey=plan.Side end
     end
-    if strafeKey==Enum.KeyCode.D and objectInRoute(r,tr,right,length) then obstacleMode=1;strafeKey=Enum.KeyCode.A;releasePositioning();say("V2: D blocked - trying A") end
     local direction=strafeKey==Enum.KeyCode.A and -right or right
-    if strafeKey==Enum.KeyCode.A and objectInRoute(r,tr,direction,length) then obstacleMode=2;releasePositioning();say("V2: both directions obstructed") end;return direction
+    if objectInRoute(r,tr,direction,17.5) then
+     local alternate=-direction
+     if objectInRoute(r,tr,alternate,17.5) then return nil end
+     strafeKey=strafeKey==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;direction=alternate
+    end
+    return direction
+   end
+   local function markJumpBehind()
+    recoveringOver=false;recoveryJumpActive=false;releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true
    end
    local function sideDash(r,tr,direction)
-    if objectInRoute(r,tr,direction,17.5) then return "blocked" end;if not dashPathClearOfTarget(r,tr,direction) then return false end
+    if objectInRoute(r,tr,direction,17.5) or not dashPathClearOfTarget(r,tr,direction) then return false end
     local attemptedTarget=targetModel;local dashKey=strafeKey;local right=dashKey==Enum.KeyCode.A and -direction or direction
     tapJump();local _,current=updateTarget();local h,root=rig();if targetModel~=attemptedTarget or not current or not h then return nil end
-    if rearSide(current) then releasePositioning();return true end;local distance=spacing(current)
-    if distance and distance>CATCHUP_DISTANCE then return "catchup" end
-    if not distance or distance<SIDE_MIN or not dashPathClearOfTarget(root,current,direction) then return false end
-    if objectInRoute(root,current,direction,17.5) then return "blocked" end
+    if rearSide(current) then markJumpBehind();return true end;local distance=spacing(current)
+    if distance and distance>CATCHUP_DISTANCE then return false end
+    if not distance or distance<SIDE_MIN or not dashPathClearOfTarget(root,current,direction) or objectInRoute(root,current,direction,17.5) then return false end
     strafeKey=dashKey;move("side",direction);local dashStart=os.clock();nextDash=dashStart+2;routeCache=nil;key(Enum.KeyCode.Q,true)
     local function finishDash(result) key(Enum.KeyCode.Q,false);flickCameraAfterSideDash(dashKey,right);return result end
     repeat
      check();local _,target=updateTarget();local d=spacing(target)
-     if targetModel~=attemptedTarget then return finishDash(nil) end;if d and d>CATCHUP_DISTANCE then return finishDash("catchup") end
+     if targetModel~=attemptedTarget then return finishDash(nil) end
+     if d and d>CATCHUP_DISTANCE then return finishDash(false) end
      if not d or rearSide(target) or d<SIDE_MIN or phase~="side" then break end
-     local _,_,_,movingRoot=spacing(target);if movingRoot and objectInRoute(movingRoot,target,direction,3) then return finishDash("blocked") end
+     local _,_,_,movingRoot=spacing(target);if movingRoot and objectInRoute(movingRoot,target,direction,3) then return finishDash(false) end
      if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end;RS.Heartbeat:Wait()
     until os.clock()-dashStart>=.500
     local _,latest=updateTarget();if targetModel~=attemptedTarget then return finishDash(nil) end;return finishDash(rearSide(latest))
@@ -1103,22 +1099,22 @@ do
    end
    local function jumpOverTarget()
     check();local attemptedTarget=targetModel;local _,tr=updateTarget();local h=rig();if not tr or not h or h.FloorMaterial==Enum.Material.Air then return false end
-    releasePositioning();say("V2: side routes failed - jump-over recovery");local began=os.clock();local wasAirborne=false;steerOverTarget(tr);tapJump()
+    releasePositioning();say("V2: dash unavailable - immediate jump-over, no punches")
+    local began=os.clock();local wasAirborne=false;steerOverTarget(tr);tapJump();recoveryJumpActive=true
     repeat
      check();local _,current=updateTarget();local hum=rig();if not current or targetModel~=attemptedTarget or not hum then releasePositioning();return false end
      if hum.FloorMaterial==Enum.Material.Air then wasAirborne=true end;steerOverTarget(current)
-     if os.clock()-began>=.12 and attackReady(current,false) then
-      releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true
-      say("V2: jumped behind - backing away to at least 5 studs");return true
-     end
+     if os.clock()-began>=.12 and attackReady(current,false) then markJumpBehind();say("V2: behind after jump - back to >=5 studs");return true end
      if not wasAirborne and os.clock()-began>.35 then break end
      if wasAirborne and hum.FloorMaterial~=Enum.Material.Air and os.clock()-began>.2 then break end;RS.Heartbeat:Wait()
     until os.clock()-began>=2.5
-    releasePositioning();local _,current=updateTarget();if wasAirborne and rearSide(current) then needPostJumpBackoff=true end;return false
+    local _,current=updateTarget();if wasAirborne and rearSide(current) then markJumpBehind() else releasePositioning() end;return false
    end
    local function recoverByJump(tr,h)
-    if h.FloorMaterial~=Enum.Material.Air and os.clock()>=nextHop then nextHop=os.clock()+.1;jumpOverTarget()
-    else steerOverTarget(tr);RS.Heartbeat:Wait() end
+    check();recoveringOver=true;key(Enum.KeyCode.Q,false)
+    say("V2: immediate jump-over recovery - no fallback punches")
+    if h.FloorMaterial~=Enum.Material.Air then jumpOverTarget();RS.Heartbeat:Wait()
+    else recoveryJumpActive=true;steerOverTarget(tr);RS.Heartbeat:Wait() end
    end
    local function turnaroundBackdash(tr,away)
     check();releasePositioning();mixupUsed=true;previousLockOn=lockOn;borrowedLock=true;lockOn=false;lockSuppressed=true
@@ -1130,14 +1126,19 @@ do
    local function step()
     check();local p,tr=updateTarget();if not tr then releasePositioning();say("V2: waiting for a live target");RS.Heartbeat:Wait();return end
     local distance,offset,h,r=spacing(tr);local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
+    if recoveringOver and recoveryJumpActive and rearSide(tr) and distance<=ATTACK_MAX then markJumpBehind() end
     if needPostJumpBackoff then
      if distance<POST_JUMP_MIN then move("postJumpBackoff",away);say("V2: post-jump backoff to >=5 studs");RS.Heartbeat:Wait();return
      else needPostJumpBackoff=false;releasePositioning() end
     end
     if distance>CATCHUP_DISTANCE then
-     move("catchup",-away);say("V2: gap >7 - W toward target")
-     if objectInRoute(r,tr,-away,3) and h.FloorMaterial~=Enum.Material.Air and os.clock()>=nextHop then nextHop=os.clock()+.1;tapJump() else RS.Heartbeat:Wait() end
+     if recoveringOver then recoverByJump(tr,h)
+     else
+      move("catchup",-away);say("V2: gap >7 - W toward target")
+      if objectInRoute(r,tr,-away,3) then recoverByJump(tr,h) else RS.Heartbeat:Wait() end
+     end
     elseif rearSide(tr) then
+     recoveringOver=false
      if distance>ATTACK_MAX then move("attackApproach",-away);say("V2: behind - approach to 2-6");RS.Heartbeat:Wait()
      elseif distance<ATTACK_MIN then releasePositioning();say("V2: too close - stopped");RS.Heartbeat:Wait()
      else
@@ -1160,26 +1161,20 @@ do
        end
       end
      end
-    elseif obstacleMode==2 then recoverByJump(tr,h)
-    elseif fallbackStage==1 then
-     if distance>ATTACK_MAX then move("punchApproach",-away);say("V2: close in for fallback punches");RS.Heartbeat:Wait()
-     elseif distance<ATTACK_MIN then releasePositioning();RS.Heartbeat:Wait()
-     else releasePositioning();local punchedTarget=targetModel;say("V2: fallback punch "..(punchesSent+1).."/"..punchGoal);clickLMB();waitFor(.35,false);if targetModel==punchedTarget then punchesSent+=1;if punchesSent>=punchGoal then fallbackStage=2 end end end
+    elseif recoveringOver then recoverByJump(tr,h)
+    elseif os.clock()<nextDash or distance<SIDE_MIN then
+     -- No cooldown waiting, no punch sequence: start overhead recovery now.
+     recoverByJump(tr,h)
     else
-     local right=navigationRight(away)
-     local canTryDash=distance>=SIDE_MIN and os.clock()>=nextDash and fallbackStage~=3
-     local direction=useLeftOrJump(r,tr,right,canTryDash and 17.5 or 3)
-     if obstacleMode==2 then recoverByJump(tr,h)
-     elseif canTryDash then
+     local right=navigationRight(away);local direction=useAvailableSide(r,tr,right)
+     if not direction then recoverByJump(tr,h)
+     else
       move("side",direction);say("V2: preferred "..(strafeKey==Enum.KeyCode.A and "A" or "D").." side dash")
       local success=sideDash(r,tr,direction)
-      if success=="blocked" then
-       if strafeKey==Enum.KeyCode.D then strafeKey=Enum.KeyCode.A;obstacleMode=1;releasePositioning() else obstacleMode=2;releasePositioning() end
-      elseif success==false then if obstacleMode==1 then obstacleMode=2;releasePositioning() else failedDash() end end
-     else
-      -- Keep positioning while the dash cools down; do not substitute repeated jumps.
-      if fallbackStage==3 and walkFallbackAt>0 and os.clock()-walkFallbackAt>1.5 and h.FloorMaterial~=Enum.Material.Air then recoverByJump(tr,h)
-      else move("walkSide",direction);say("V2: side positioning / waiting for preferred dash");RS.Heartbeat:Wait() end
+      if success==false then
+       local _,current=updateTarget();local currentHumanoid=rig()
+       if current and currentHumanoid then recoverByJump(current,currentHumanoid) end
+      end
      end
     end
    end
@@ -1194,23 +1189,22 @@ do
   end)
  end
  blackflashV2Trigger=function() if not enabledV2 then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
- toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else say("Ready - press 3; dash first, back to >=5 after jump-over");bindCapture() end end)
+ toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else say("Ready - press 3; dash unavailable means immediate jump-over");bindCapture() end end)
  toggle(box,"Include NPCs (V2)",function() return includeNPCsV2 end,function(v) includeNPCsV2=v;targetRoot=nil;invalidateCaches() end)
  toggle(box,"Occasional turnaround S + Q",function() return turnaroundMixups end,function(v) turnaroundMixups=v end)
  moduleSlider(box,"Post-dash turn angle",0,360,postDashTurnDegrees," degrees",function() return postDashTurnDegrees end,function(v) postDashTurnDegrees=math.clamp(v,0,360) end)
  moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
  moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
  moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,112),BackgroundTransparency=1,Text="Side dashes preferred; jump-over is recovery only. After crossing behind with a jump, back up to at least 5 studs before BF. Shared Blackflash tap delay stays unchanged; repeat gap defaults to 250 ms. Target death stops the run until 3 again. No manual-WASD override.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,120),BackgroundTransparency=1,Text="Dash available: use a side route. Dash unavailable, blocked or failed: immediately attempt overhead recovery, without fallback punches or a second-dash waiting stage. If already airborne, keep steering over the target. Back to >=5 after crossing behind. 3 BF input pairs then one final LMB/stop. Death stops until 3 again.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
  toggle(calcBox,"Auto camera angle (override slider)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
- make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates: orbit degrees, side-route time and blocked-route checks. Not measured game timings. Auto camera angle uses the live target direction; off uses the manual slider.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
+ make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the manual angle slider. Both side routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
  local lastCalc=-math.huge
  connect(RS.Heartbeat,function()
   if not running or not gui.Parent then return end;if active and not ensureFightAlive() then return end
-  if os.clock()-lastCalc<.25 then return end;lastCalc=os.clock()
-  local text
-  if not calculatorEnabled then text="Calculator off - normal D/A fallback and manual camera angle"
+  if os.clock()-lastCalc<.25 then return end;lastCalc=os.clock();local text
+  if not calculatorEnabled then text="Calculator off - direct D/A selection and manual camera angle"
   else
    local p,tr=closest();local d,offset=spacing(tr)
    if not p or not tr then text="No live target available"
@@ -1220,7 +1214,7 @@ do
     if not plan then text="Unable to estimate route for target"
     else
      local function line(route) return string.format("%.1f deg / %.1f studs / %s",route.Degrees,route.Distance,route.Blocked and "blocked" or string.format("~%.2f s",route.Time)) end
-     local recommendation=plan.Side==Enum.KeyCode.A and "LEFT (A)" or plan.Side==Enum.KeyCode.D and "RIGHT (D)" or "JUMP RECOVERY (both blocked)"
+     local recommendation=plan.Side==Enum.KeyCode.A and "LEFT (A)" or plan.Side==Enum.KeyCode.D and "RIGHT (D)" or "JUMP OVER (both blocked)"
      text=table.concat({"Target: "..p.DisplayName,"Left: "..line(plan.Left),"Right: "..line(plan.Right),"Estimated faster clear route: "..recommendation,string.format("Predicted post-dash yaw: %.1f deg %s",math.abs(plan.PredictedYaw),plan.PredictedYaw>=0 and "left" or "right")},string.char(10))
     end
    end
@@ -1241,7 +1235,7 @@ do
   local vector=steering;local remaining=nil
   if phase=="postJumpBackoff" then remaining=math.max(0,POST_JUMP_AIM-distance)
   elseif phase=="catchup" then remaining=math.max(0,distance-CATCHUP_DISTANCE)
-  elseif phase=="attackApproach" or phase=="punchApproach" then remaining=math.max(0,distance-ATTACK_CENTER)
+  elseif phase=="attackApproach" then remaining=math.max(0,distance-ATTACK_CENTER)
   elseif phase=="jumpOver" then local look=flat(targetRoot.CFrame.LookVector);if look.Magnitude>.01 then local delta=flat(targetRoot.Position-look.Unit*ATTACK_CENTER-r.Position);remaining=delta.Magnitude;vector=delta.Magnitude>.05 and delta.Unit or Vector3.zero end end
   if remaining then local alpha=math.clamp(remaining/math.max(h.WalkSpeed*math.max(dt,1/240),.01),0,1);vector=vector*alpha;if remaining<=.05 and phase~="jumpOver" then releasePositioning();vector=Vector3.zero end end
   h:Move(vector,false);local aim=lockSuppressed and(r.Position+mixFacing) or Vector3.new(targetRoot.Position.X,r.Position.Y,targetRoot.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end
@@ -1324,5 +1318,5 @@ do
   end
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
- notify("Ready","Optimized V2: dash-first routes and post-jump minimum 5 studs.",T.acc)
+ notify("Ready","V2: dash unavailable means immediate jump-over, no punch fallback.",T.acc)
 end
