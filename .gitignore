@@ -872,16 +872,16 @@ do
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
--- V2 spacing: side-dash at >=10 horizontal studs; behind-target attacks at 7-10.
+-- V2 spacing: side-dash at >=6 horizontal studs; behind-target attacks at 2-6.
 do
  local CAS=game:GetService("ContextActionService")
  local enabledV2,active=false,false;local includeNPCsV2=false;local generation=0;local held={};local mouseDown=false
- local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
- local repeatGapMs,jumpLeadMs=650,120
- local SIDE_MIN,ORBIT_RADIUS,ATTACK_MIN,ATTACK_MAX=10,11,7,10
+ local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil;local repeatGapMs,jumpLeadMs=650,120
+ local SIDE_MIN,ORBIT_RADIUS,ATTACK_MIN,ATTACK_MAX=6,7,2,6
+ local ATTACK_CENTER=(ATTACK_MIN+ATTACK_MAX)*.5
  local nextDash=0;local phase="idle";local steering=Vector3.zero
  local action="JJSBlackflashV2Activate";local cameraBind,faceBind="JJSBlackflashV2Camera","JJSBlackflashV2Facing"
- local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Press 3 | side-dash >=10 studs > behind > attack at 7-10 > jump/BF x3 > LMB/stop")
+ local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Press 3 | side-dash >=6 studs > behind > attack at 2-6 > jump/BF x3 > LMB/stop")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,48),BackgroundTransparency=1,Text="Off - enable the module, then press 3 to start",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
  gui:SetAttribute("BlackflashChainV2Active",false);local start,bindCapture
  local function flat(v) return Vector3.new(v.X,0,v.Z) end
@@ -902,14 +902,10 @@ do
   end
   return best,bestRoot
  end
- local function spacing(tr)
-  local h,r=rig();if not h or not tr or not tr.Parent then return nil end
-  local offset=flat(r.Position-tr.Position);return offset.Magnitude,offset,h,r
- end
+ local function spacing(tr) local h,r=rig();if not h or not tr or not tr.Parent then return nil end;local offset=flat(r.Position-tr.Position);return offset.Magnitude,offset,h,r end
  local function rearSide(tr)
   local distance,offset=spacing(tr);if not distance or distance<.5 then return false end
-  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return false end
-  return offset.Unit:Dot(look.Unit)<=-.55
+  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return false end;return offset.Unit:Dot(look.Unit)<=-.55
  end
  local function attackReady(tr,ignoreHeight)
   local distance,_,h,r=spacing(tr)
@@ -934,42 +930,32 @@ do
   for code in pairs(held) do pcall(function() VIM:SendKeyEvent(false,code,false,game) end) end
   if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
   held={};mouseDown=false;phase="idle";steering=Vector3.zero;targetRoot=nil;restoreFacing()
-  local h=rig();if h then h:Move(Vector3.zero,false) end
-  if owned then busy=false;manualSequenceBusy=false end;gui:SetAttribute("BlackflashChainV2Active",false)
-  if feedback.Parent then feedback.Text=message or "Stopped - press 3 to start again" end
+  local h=rig();if h then h:Move(Vector3.zero,false) end;if owned then busy=false;manualSequenceBusy=false end
+  gui:SetAttribute("BlackflashChainV2Active",false);if feedback.Parent then feedback.Text=message or "Stopped - press 3 to start again" end
  end
  local function dashPathClearOfTarget(r,tr,right)
-  local travel=right*17.5
-  local relative=flat(r.Position-tr.Position)
+  local travel=right*17.5;local relative=flat(r.Position-tr.Position)
   local t=math.clamp(-relative:Dot(travel)/math.max(travel:Dot(travel),.001),0,1)
   return (relative+travel*t).Magnitude>=SIDE_MIN
  end
  local function guardRange()
-  if not active or not targetRoot then return end
-  local distance,offset,h,r=spacing(targetRoot);if not distance then return end
+  if not active or not targetRoot then return end;local distance,offset,h,r=spacing(targetRoot);if not distance then return end
   if phase=="side" then
    if rearSide(targetRoot) then releasePositioning()
    elseif distance<SIDE_MIN then
-    local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
-    move("orbitBackoff",away)
-    local velocity=r.AssemblyLinearVelocity;local inward=flat(velocity):Dot(away)
-    if inward<0 then r.AssemblyLinearVelocity=velocity-away*inward end
+    local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1);move("orbitBackoff",away)
+    local velocity=r.AssemblyLinearVelocity;local inward=flat(velocity):Dot(away);if inward<0 then r.AssemblyLinearVelocity=velocity-away*inward end
    end
   end
  end
  bindCapture=function()
   CAS:UnbindAction(action);if not enabledV2 or not running then return end
-  CAS:BindActionAtPriority(action,function(_,state)
-   if UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
-   if state==Enum.UserInputState.Begin then start() end
-   return Enum.ContextActionResult.Sink
-  end,false,4000,Enum.KeyCode.Three)
+  CAS:BindActionAtPriority(action,function(_,state) if UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end;if state==Enum.UserInputState.Begin then start() end;return Enum.ContextActionResult.Sink end,false,4000,Enum.KeyCode.Three)
  end
  start=function()
   if active or not enabledV2 or not running then return end
   if busy or todoBusy or manualSequenceBusy then feedback.Text="Wait for the other macro to finish";return end
-  if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
-  if not rig() then feedback.Text="Character unavailable";return end
+  if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end;if not rig() then feedback.Text="Character unavailable";return end
   active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;gui:SetAttribute("BlackflashChainV2Active",true);local id=generation
   task.spawn(function()
    local completed=0
@@ -983,8 +969,7 @@ do
    local function tapThree() check();CAS:UnbindAction(action);key(Enum.KeyCode.Three,true);waitFor(.035,false);key(Enum.KeyCode.Three,false);bindCapture() end
    local function jumpBeforeBlackflash()
     check();releasePositioning();local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end
-    key(Enum.KeyCode.Space,true);h.Jump=true;waitFor(.035,false);key(Enum.KeyCode.Space,false)
-    return waitFor(jumpLeadMs/1000,true)
+    key(Enum.KeyCode.Space,true);h.Jump=true;waitFor(.035,false);key(Enum.KeyCode.Space,false);return waitFor(jumpLeadMs/1000,true)
    end
    local function clickLMB() check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false end
    local ok,err=pcall(function()
@@ -994,13 +979,10 @@ do
      if not tr then releasePositioning();feedback.Text="V2: waiting for a live target";RS.Heartbeat:Wait()
      elseif UIS:GetFocusedTextBox() then releasePositioning();feedback.Text="V2: paused while typing";RS.Heartbeat:Wait()
      else
-      local distance,offset,h,r=spacing(tr)
-      local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
+      local distance,offset,h,r=spacing(tr);local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
       if not rearSide(tr) then
-       if distance<SIDE_MIN then
-        move("orbitBackoff",away);feedback.Text="V2: backing away to keep side-dash spacing >=10";RS.Heartbeat:Wait()
-       elseif distance>ORBIT_RADIUS+.5 then
-        move("orbitApproach",-away);feedback.Text="V2: W approach to 11-stud orbit";RS.Heartbeat:Wait()
+       if distance<SIDE_MIN then move("orbitBackoff",away);feedback.Text="V2: backing away to keep side-dash spacing >=6";RS.Heartbeat:Wait()
+       elseif distance>ORBIT_RADIUS+.5 then move("orbitApproach",-away);feedback.Text="V2: W approach to 7-stud orbit";RS.Heartbeat:Wait()
        else
         local cam=workspace.CurrentCamera;local right=cam and flat(cam.CFrame.RightVector) or Vector3.new(-away.Z,0,away.X)
         if right.Magnitude<.01 then right=Vector3.new(-away.Z,0,away.X) end;right=right.Unit
@@ -1010,22 +992,19 @@ do
          repeat
           check();local _,current=updateTarget();local d=spacing(current)
           if not d or rearSide(current) or d<SIDE_MIN or phase~="side" then break end
-          if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end
-          RS.Heartbeat:Wait()
+          if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end;RS.Heartbeat:Wait()
          until os.clock()-dashStart>=.500
          key(Enum.KeyCode.Q,false)
         else RS.Heartbeat:Wait() end
        end
-      elseif distance>ATTACK_MAX then
-       move("attackApproach",-away);feedback.Text="V2: behind - D released, W into 7-10 range";RS.Heartbeat:Wait()
-      elseif distance<ATTACK_MIN then
-       move("attackBackoff",away);feedback.Text="V2: behind - backing away into 7-10 range";RS.Heartbeat:Wait()
+      elseif distance>ATTACK_MAX then move("attackApproach",-away);feedback.Text="V2: behind - D released, W into 2-6 range";RS.Heartbeat:Wait()
+      elseif distance<ATTACK_MIN then move("attackBackoff",away);feedback.Text="V2: behind - backing away into 2-6 range";RS.Heartbeat:Wait()
       else
        releasePositioning()
        if h.FloorMaterial==Enum.Material.Air then feedback.Text="V2: waiting to land before next jump";RS.Heartbeat:Wait()
        elseif not attackReady(tr,false) then feedback.Text="V2: waiting for target height alignment";RS.Heartbeat:Wait()
        else
-        feedback.Text="V2: jump + Black Flash "..(completed+1).."/3 at 7-10 studs"
+        feedback.Text="V2: jump + Black Flash "..(completed+1).."/3 at 2-6 studs"
         if jumpBeforeBlackflash() then
          local _,current=updateTarget()
          if attackReady(current,true) then
@@ -1049,11 +1028,11 @@ do
   end)
  end
  blackflashV2Trigger=function() if not enabledV2 then return false end;if not active and not UIS:GetFocusedTextBox() then start() end;return true end
- toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else feedback.Text="Ready - press 3; side-dash >=10, attack behind at 7-10";bindCapture() end end)
+ toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else feedback.Text="Ready - press 3; side-dash >=6, attack behind at 2-6";bindCapture() end end)
  toggle(box,"Include NPCs (V2)",function() return includeNPCsV2 end,function(v) includeNPCsV2=v;targetRoot=nil end)
  moduleSlider(box,"V2 repeat gap",100,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
  moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,58),BackgroundTransparency=1,Text="Horizontal spacing: side-dash minimum 10 studs; behind-target attack band 7-10. Releases D when behind; W approaches, S backs away. Jump before each Black Flash; 3 pairs then LMB/stop. Physics and hits not confirmed.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,58),BackgroundTransparency=1,Text="Horizontal spacing: side-dash minimum 6 studs; behind-target attack band 2-6. Releases D when behind; W approaches, S backs away. Jump before each Black Flash; 3 pairs then LMB/stop. Physics and hits not confirmed.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  RS:BindToRenderStep(cameraBind,Enum.RenderPriority.Camera.Value+2,function()
   if not active then return end;local _,tr=closest();targetRoot=tr;guardRange()
   local cam=workspace.CurrentCamera;if cam and tr and(tr.Position-cam.CFrame.Position).Magnitude>.05 then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,tr.Position+Vector3.new(0,1,0)) end
@@ -1062,18 +1041,16 @@ do
   if not active or not targetRoot or not targetRoot.Parent then return end;guardRange()
   local distance,offset,h,r=spacing(targetRoot);if not distance then return end
   if ownedHumanoid~=h then restoreFacing();ownedHumanoid=h;previousAutoRotate=h.AutoRotate end;h.AutoRotate=false
-  local vector=steering
-  local remaining=nil
+  local vector=steering;local remaining=nil
   if phase=="orbitApproach" then remaining=math.max(0,distance-ORBIT_RADIUS)
   elseif phase=="orbitBackoff" then remaining=math.max(0,ORBIT_RADIUS-distance)
-  elseif phase=="attackApproach" then remaining=math.max(0,distance-8.5)
-  elseif phase=="attackBackoff" then remaining=math.max(0,8.5-distance) end
+  elseif phase=="attackApproach" then remaining=math.max(0,distance-ATTACK_CENTER)
+  elseif phase=="attackBackoff" then remaining=math.max(0,ATTACK_CENTER-distance) end
   if remaining then
    local alpha=math.clamp(remaining/math.max(h.WalkSpeed*math.max(dt,1/240),.01),0,1);vector=vector*alpha
    if remaining<=.05 then releasePositioning();vector=Vector3.zero end
   end
-  h:Move(vector,false)
-  local aim=Vector3.new(targetRoot.Position.X,r.Position.Y,targetRoot.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end
+  h:Move(vector,false);local aim=Vector3.new(targetRoot.Position.X,r.Position.Y,targetRoot.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end
  end)
  connect(LP.CharacterRemoving,function() stop("V2 stopped: character removed");bindCapture() end)
  connect(UIS.WindowFocusReleased,function() if active then stop("V2 stopped: window lost focus");bindCapture() end end)
@@ -1153,5 +1130,5 @@ do
   end
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
- notify("Ready","Full client: V2 side-dash minimum 10, behind attack band 7-10.",T.acc)
+ notify("Ready","Full client: V2 side-dash minimum 6, behind attack band 2-6.",T.acc)
 end
