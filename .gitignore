@@ -1135,4 +1135,4 @@ do
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
  notify("Ready","Full client: V2 holds D, jumps before Black Flash x3, then LMB and stop.",T.acc)
-end-
+end
