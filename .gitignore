@@ -1,19 +1,10 @@
--- MASTER FILE / COMPLETE RECONSTRUCTION
--- Base: attached JJS_FULL_Merged_Gojo_Visuals_VerifiedHit.lua (132214 bytes).
--- Reconstructed additions: Yuji Quick, Gojo opening M1s + Advanced, Mahito,
--- Megumi, compact refreshed UI, search, settings arrows and shared side dashes.
--- Fixed scripted dash: A/D + Q held 300 ms, then an 80-degree camera flick
--- eased over 120 ms; estimated side-dash cooldown is 2 seconds.
--- No adjustable dash-hold, flick-angle or flick-delay controls.
--- IMPORTANT: no Luau compiler or Roblox gameplay test was performed here.
--- JJSVerifiedCombat is a CUSTOM integration and is NOT configured by this file.
--- Without it, V2/V3 and Yuji Quick remain blocked instead of fabricating hits.
--- Optional CUSTOM JJSActionFeedback.isReady(character, keyName, targetModel)
--- can gate the added modules' skill inputs. It is not a discovered game API.
--- Without that adapter, non-verified moves retain uncalibrated timing fallback.
--- Existing legacy combos also retain uncalibrated attack timings.
--- A reported self-hit must identify the relevant originating attack in the adapter.
--- No perfect Black Flash, true combo, knockback or damage guarantee is made.
+-- BLACK FLASH REPAIR BUILD: based on the attached 132214-byte client.
+-- Not the later reconstructed all-in-one master: no inaccessible additions are claimed.
+-- Auto / V1 inputs now have exclusive ownership and cancellation.
+-- V2 / V3 still REQUIRE the real JJSVerifiedCombat adapter. It is not provided here.
+-- Attack timing is NOT game-calibrated. 75 ms lateness and 100 ms adapter timeout
+-- are controller safeguards, not measurements of the game's timing windows.
+-- Not Luau-compiled or live-tested. Structural/model tests do not prove gameplay.
 -- FULL MERGED CLIENT: organized UI + verified V2/V3 + Visuals + Gojo.
 -- Not Luau-compiled or live-tested. Gojo delays and dash timers are estimates.
 -- AUTO BLACKFLASH + DASH COOLDOWNS
@@ -51,9 +42,12 @@ local delayMs,mode=325,"Single"
 local busy=false
 local manualSequenceBusy=false
 local blackflashV2Trigger=nil
+local legacyCancel=nil
+local legacyOwnsInput=nil
+local legacyArmed=false
 local dashReady,sideReady=0,0
 local conns={}
-local T={bg=Color3.fromRGB(13,16,24),panel=Color3.fromRGB(18,22,33),p2=Color3.fromRGB(27,32,47),card=Color3.fromRGB(21,26,39),stroke=Color3.fromRGB(48,55,75),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(237,240,250),dim=Color3.fromRGB(166,176,197),mut=Color3.fromRGB(131,143,166),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
+local T={bg=Color3.fromRGB(12,12,16),panel=Color3.fromRGB(18,18,24),p2=Color3.fromRGB(24,24,32),card=Color3.fromRGB(22,22,30),stroke=Color3.fromRGB(40,40,55),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(235,235,245),dim=Color3.fromRGB(140,140,160),mut=Color3.fromRGB(90,90,110),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
 local function make(class,parent,props)
  local o=Instance.new(class); for k,v in pairs(props or {}) do o[k]=v end; o.Parent=parent; return o
 end
@@ -67,17 +61,17 @@ local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="MASTER FILE / JJS",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="AUTO BLACKFLASH",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
-local side=make("ScrollingFrame",main,{Size=UDim2.new(0,168,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
+local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
 make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
 make("UIPadding",side,{PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)})
-local content=make("Frame",main,{Size=UDim2.new(1,-168,1,-44),Position=UDim2.fromOffset(168,44),BackgroundColor3=T.bg,BorderSizePixel=0,ClipsDescendants=true})
+local content=make("Frame",main,{Size=UDim2.new(1,-150,1,-44),Position=UDim2.fromOffset(150,44),BackgroundColor3=T.bg,BorderSizePixel=0,ClipsDescendants=true})
 local title=make("TextLabel",content,{Size=UDim2.new(1,-24,0,22),Position=UDim2.fromOffset(16,10),BackgroundTransparency=1,Text="Yuji",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left})
 local desc=make("TextLabel",content,{Size=UDim2.new(1,-24,0,14),Position=UDim2.fromOffset(16,32),BackgroundTransparency=1,Text="Black Flash controls and chains V1-V3",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left})
 local pages,buttons={},{}
-local cats={{"Yuji","Black Flash controls and chains V1-V3"},{"Gojo","Quick Combo and editable timing"},{"Mahito","Focus Strike variants"},{"Megumi","The Well's Unknown Abyss"},{"Combos","Named combo sequences"},{"Todo","Todo macro and Perfect Clap"},{"Defense","Automatic blocking"},{"Targeting","Camera targeting"},{"Movement","Follow, teleport, speed and jump"},{"Dash Timers","Manual cooldown estimates"},{"Visuals","ESP, tracers, HUD and local appearance"},{"Settings","Session and unload"}}
+local cats={{"Yuji","Black Flash controls and chains V1-V3"},{"Gojo","Quick Combo and editable timing"},{"Combos","Named combo sequences"},{"Todo","Todo macro and Perfect Clap"},{"Defense","Automatic blocking"},{"Targeting","Camera targeting"},{"Movement","Follow, teleport, speed and jump"},{"Dash Timers","Manual cooldown estimates"},{"Visuals","ESP, tracers, HUD and local appearance"},{"Settings","Session and unload"}}
 for i,cat in ipairs(cats) do
  local name,description=cat[1],cat[2]
  local b=make("TextButton",side,{Size=UDim2.new(1,0,0,32),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.txt or T.dim,Font=Enum.Font.GothamMedium,TextSize=13,LayoutOrder=i}); corner(b,8); buttons[name]=b
@@ -109,7 +103,7 @@ local function toggle(p,name,get,set)
  connect(r.Activated,function() set(not get()); paint() end); paint()
 end
 local c=card(pages.Yuji,"Black Flash Follow-up","Press 3 normally; the macro sends only the delayed action")
-toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
+toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v;if not v and legacyCancel then legacyCancel("auto") end end)
 local row=make("Frame",c,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(c)+2})
 make("TextLabel",row,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text="Delay",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
 local val=make("TextLabel",row,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text="325 ms",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
@@ -161,7 +155,7 @@ connect(modeBtn.Activated,function() mode=modes[(table.find(modes,mode)%#modes)+
 c.LayoutOrder=1
 local cc=card(pages.Yuji,"Blackflash Chain V1","After 3: copied sequence; no added chain-start lockout")
 cc.LayoutOrder=2
-toggle(cc,"Blackflash Chain V1",function() return chainEnabled end,function(v) chainEnabled=v end)
+toggle(cc,"Blackflash Chain V1",function() return chainEnabled end,function(v) chainEnabled=v;if not v and legacyCancel then legacyCancel("chain") end end)
 local cd=card(pages["Dash Timers"],"Dash Cooldowns","Click Ready/Use to start each timer")
 local function cooldownCard(parent,label,total)
  local box=make("Frame",parent,{Size=UDim2.new(1,0,0,64),BackgroundColor3=T.p2,BorderSizePixel=0,LayoutOrder=nextOrder(parent)+2}); corner(box,8)
@@ -260,82 +254,105 @@ local function runTodo()
   todoStatus.TextColor3=ok and T.dim or T.warn
  end
 end
-local keyHeld=false
-local function release() if keyHeld and okVIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game) end) end; keyHeld=false end
-local function send(duration)
- assert(okVIM and VIM,"Input simulation unavailable")
- keyHeld=true; VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
- local untilTime=os.clock()+duration
- while running and enabled and os.clock()<untilTime do task.wait() end
- release()
-end
-local function run()
- if busy or not enabled or not running then return end
- busy=true
- local ms,action=delayMs,mode
- local ok,err=pcall(function()
-  task.wait(ms/1000)
-  if not running or not enabled then return end
-  local count=action=="Triple" and 3 or action=="Double" and 2 or 1
-  for i=1,count do
-   if not enabled or not running then break end
-   send(action=="Hold" and ms/1000 or .035)
-   if i<count then task.wait(.08) end
-  end
- end)
- release(); busy=false
- if running then status.Text=ok and "Action finished (not a hit confirmation)" or tostring(err) end
-end
-local function chainActive() return running and chainEnabled end
-local function chainWait(seconds)
- local finish=os.clock()+seconds
- while chainActive() and os.clock()<finish do task.wait() end
- return chainActive()
-end
-local function chainClickLMB()
- if not chainActive() then return false end
- assert(okVIM and VIM,"Input simulation unavailable")
- VIM:SendMouseButtonEvent(0,0,0,true,game,0)
- chainWait(.035)
- VIM:SendMouseButtonEvent(0,0,0,false,game,0)
- return chainActive()
-end
-local function chainPress3()
- if not chainActive() then return false end
- send(.035)
- return chainActive()
-end
-local function runChain()
- if busy or not chainActive() then return end
- busy=true
- local ok,err=pcall(function()
-  for i=1,chainRepeats do
-   if not chainActive() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(.65) then break end
-   if not chainClickLMB() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(.65) then break end
-   if not chainClickLMB() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if i%2==0 and i<chainRepeats then
-    chainCooldownUntil=os.clock()+5
-    busy=false
-    return
-   end
-  end
- end)
- release()
- busy=false
- if running then status.Text=ok and "Copied Auto Blackflash sequence finished" or tostring(err) end
-end
+-- Exclusive, cancellable legacy input controller: Auto and V1 cannot race.
+local release,run,runChain
+;(function()
+ local owner=nil
+ local sequence=0
+ local function rig()
+  local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid")
+  return c,h
+ end
+ local function finish(job,reason)
+  if job.done then return end
+  job.done=true
+  if job.key then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game) end) end
+  if job.mouse then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+  job.key=false;job.mouse=false
+  if owner==job then owner=nil;busy=false;manualSequenceBusy=false end
+  if running and status.Parent then status.Text=reason or "Inputs complete; hits not confirmed" end
+ end
+ legacyOwnsInput=function() return owner~=nil end
+ legacyCancel=function(kind)
+  legacyArmed=false
+  if owner and (not kind or owner.kind==kind) then finish(owner,"Cancelled: "..owner.kind) end
+ end
+ release=function() legacyCancel() end
+ local function current(job)
+  local character,humanoid=rig()
+  return owner==job and not job.done and running and not UIS:GetFocusedTextBox()
+   and character==job.character and humanoid and humanoid.Health>0
+   and (job.kind=="auto" and enabled or job.kind=="chain" and chainEnabled)
+ end
+ local function waitUntil(job,deadline)
+  repeat
+   if not current(job) then error("Cancelled",0) end
+   if os.clock()>=deadline then return end
+   RS.Heartbeat:Wait()
+  until false
+ end
+ local function waitFor(job,seconds) waitUntil(job,os.clock()+seconds) end
+ local function three(job,duration)
+  if not current(job) then error("Cancelled",0) end
+  job.key=true;VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+  waitFor(job,duration)
+  VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game);job.key=false
+ end
+ local function click(job)
+  if not current(job) then error("Cancelled",0) end
+  job.mouse=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+  waitFor(job,.035)
+  VIM:SendMouseButtonEvent(0,0,0,false,game,0);job.mouse=false
+ end
+ local function begin(kind)
+  if owner or busy or todoBusy or manualSequenceBusy or not running or UIS:GetFocusedTextBox() then return end
+  if kind=="auto" and not enabled or kind=="chain" and not chainEnabled then return end
+  if not okVIM or not VIM then status.Text="Input simulation unavailable";return end
+  local character,humanoid=rig();if not humanoid or humanoid.Health<=0 then return end
+  sequence+=1
+  local job={id=sequence,kind=kind,character=character,done=false,key=false,mouse=false,
+   gap=delayMs/1000,mode=mode,repeats=math.clamp(math.floor(chainRepeats),1,20)}
+  owner=job;busy=true;manualSequenceBusy=true
+  return job
+ end
+ local function launch(kind,initialKeyDown)
+  local job=begin(kind);if not job then return end
+  task.spawn(function()
+   local ok,err=pcall(function()
+    if kind=="auto" then
+     waitUntil(job,math.max(os.clock(),(initialKeyDown or os.clock())+job.gap))
+     local count=job.mode=="Triple" and 3 or job.mode=="Double" and 2 or 1
+     for index=1,count do
+      three(job,job.mode=="Hold" and job.gap or .035)
+      if index<count then waitFor(job,.08) end
+     end
+    else
+     -- Keep the copied V1 order; its own enabled state controls every pulse.
+     for pass=1,job.repeats do
+      waitFor(job,job.gap);three(job,.035);waitFor(job,.65);click(job)
+      waitFor(job,job.gap);three(job,.035);waitFor(job,job.gap);three(job,.035)
+      waitFor(job,.65);click(job)
+      waitFor(job,job.gap);three(job,.035);waitFor(job,job.gap);three(job,.035)
+      if pass%2==0 and pass<job.repeats then
+       chainCooldownUntil=os.clock()+5
+       status.Text="V1: five-second legacy cooldown; continuing same run"
+       waitUntil(job,chainCooldownUntil)
+      end
+     end
+    end
+   end)
+   if owner==job then finish(job,ok and kind.." inputs complete; hits not confirmed" or tostring(err)) end
+  end)
+ end
+ run=function(initialKeyDown) launch("auto",initialKeyDown) end
+ runChain=function(initialKeyDown) launch("chain",initialKeyDown) end
+ connect(UIS.WindowFocusReleased,function() legacyCancel() end)
+ connect(UIS.TextBoxFocused,function() legacyCancel() end)
+ connect(LP.CharacterRemoving,function() legacyCancel() end)
+ connect(unload.Activated,function() legacyCancel() end)
+ connect(gui.Destroying,function() legacyCancel() end)
+end)()
+
 local humanoids={}
 local function track(o) if o:IsA("Humanoid") then humanoids[o]=true end end
 connect(workspace.DescendantAdded,track)
@@ -427,85 +444,11 @@ local function attackerNearby()
  return false
 end
 connect(RS.Heartbeat,function()
- setBlock(running and autoBlockEnabled and not gui:GetAttribute("BlackflashChainV2Active") and not gui:GetAttribute("BlackflashChainV3Active") and not gui:GetAttribute("GojoQuickComboActive") and not gui:GetAttribute("MasterMacroActive") and not gui:GetAttribute("MasterDashActive") and attackerNearby())
+ setBlock(running and autoBlockEnabled and not gui:GetAttribute("BlackflashChainV2Active") and not gui:GetAttribute("BlackflashChainV3Active") and not gui:GetAttribute("GojoQuickComboActive") and attackerNearby())
 end)
 connect(LP.CharacterRemoving,function()
  setBlock(false)
 end)
-
-
-local Dash=(function()
- local current=nil;local nextReady=0;local api={}
- local function finish(job,reason)
-  if job.done then return end
-  if not job.released then
-   job.released=true
-   pcall(function() VIM:SendKeyEvent(false,job.side,false,game) end)
-   pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game) end)
-  end
-  if job.humanoid.Parent then job.humanoid:Move(Vector3.zero,false);job.humanoid.AutoRotate=job.oldRotate end
-  pcall(function() job.camera.CameraType=job.cameraType end)
-  job.done=true;job.error=reason
-  if current==job then current=nil;gui:SetAttribute("MasterDashActive",false) end
-  if reason then gui:SetAttribute("MasterLastError",reason) end
- end
- function api.start(side,valid)
-  if current then return nil,"Another side dash owns inputs" end
-  if os.clock()<nextReady then return nil,"Estimated side dash cooldown" end
-  if not okVIM or not VIM then return nil,"Input simulation unavailable" end
-  local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");local camera=workspace.CurrentCamera
-  if not h or not r or h.Health<=0 or not camera then return nil,"Character/camera unavailable" end
-  local target,minimum=nil,math.huge
-  for th in pairs(humanoids) do
-   local model=th.Parent;local tr=model and model:FindFirstChild("HumanoidRootPart")
-   if model and model:IsA("Model") and model~=c and model:IsDescendantOf(workspace) and tr and th.Health>0 then local d=(tr.Position-r.Position).Magnitude;if d<minimum then minimum=d;target={model=model,humanoid=th,root=tr} end end
-  end
-  if not target then return nil,"No living player or NPC" end
-  side=side==Enum.KeyCode.A and Enum.KeyCode.A or Enum.KeyCode.D
-  local job={side=side,target=target,character=c,humanoid=h,root=r,camera=camera,cameraType=camera.CameraType,oldRotate=h.AutoRotate,valid=valid,started=os.clock(),done=false,released=false}
-  current=job;nextReady=job.started+2
-  gui:SetAttribute("MasterDashActive",true);gui:SetAttribute("MasterLastAction","Side dash: "..side.Name)
-  h.AutoRotate=false;camera.CameraType=Enum.CameraType.Scriptable
-  local ok,err=pcall(function() VIM:SendKeyEvent(true,side,false,game);VIM:SendKeyEvent(true,Enum.KeyCode.Q,false,game) end)
-  if not ok then finish(job,tostring(err));return nil,tostring(err) end
-  sideTimer.start();return job
- end
- function api.await(job,valid)
-  while not job.done do
-   if valid then local ok,result=pcall(valid);if not ok or result~=true then finish(job,"Cancelled");break end end
-   RS.Heartbeat:Wait()
-  end
-  if job.error then error(job.error,0) end
- end
- function api.cancel() if current then finish(current,"Cancelled") end end
- local name="MasterSharedDash"
- RS:BindToRenderStep(name,Enum.RenderPriority.Last.Value+100,function()
-  local job=current;if not job then return end
-  local ok,err=pcall(function()
-   if not running or UIS:GetFocusedTextBox() or LP.Character~=job.character or workspace.CurrentCamera~=job.camera or not job.root.Parent or job.humanoid.Health<=0 or not job.target.model:IsDescendantOf(workspace) or not job.target.root.Parent or job.target.humanoid.Health<=0 then finish(job,"Dash lifecycle changed");return end
-   if job.valid then local good,result=pcall(job.valid);if not good or result~=true then finish(job,"Cancelled");return end end
-   local elapsed=os.clock()-job.started;local root,camera,tr=job.root,job.camera,job.target.root
-   if elapsed<.300 then
-    local away=Vector3.new(root.Position.X-tr.Position.X,0,root.Position.Z-tr.Position.Z);if away.Magnitude<.01 then away=Vector3.new(0,0,1) end;away=away.Unit
-    local tangent=Vector3.new(away.Z,0,-away.X)*(job.side==Enum.KeyCode.D and 1 or -1)
-    job.humanoid:Move(tangent,false)
-    local aim=Vector3.new(tr.Position.X,root.Position.Y,tr.Position.Z);if (aim-root.Position).Magnitude>.01 then root.CFrame=CFrame.lookAt(root.Position,aim) end
-    local cameraAim=tr.Position+Vector3.new(0,1,0);if (cameraAim-camera.CFrame.Position).Magnitude>.01 then camera.CFrame=CFrame.lookAt(camera.CFrame.Position,cameraAim) end
-   else
-    if not job.released then job.released=true;VIM:SendKeyEvent(false,job.side,false,game);VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game);job.humanoid:Move(Vector3.zero,false) end
-    if not job.from then job.from=camera.CFrame.Rotation;job.to=CFrame.Angles(0,math.rad(job.side==Enum.KeyCode.D and -80 or 80),0)*job.from end
-    local alpha=math.clamp((elapsed-.300)/.120,0,1);alpha=alpha*alpha*(3-2*alpha)
-    camera.CFrame=CFrame.new(camera.CFrame.Position)*job.from:Lerp(job.to,alpha)
-    if elapsed>=.500 then finish(job) end
-   end
-  end)
-  if not ok then finish(job,tostring(err));REPORT("Master shared dash",err) end
- end)
- connect(UIS.WindowFocusReleased,api.cancel);connect(LP.CharacterRemoving,api.cancel)
- local function shutdown() api.cancel();RS:UnbindFromRenderStep(name) end
- connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
- return api
-end)()
 
 -- Added combo only. K starts; K again cancels. Timings require in-game tuning.
 ;(function()
@@ -591,10 +534,11 @@ end)()
  local held={}
  local mouseDown=false
  local side=Enum.KeyCode.D
+ local angle=135
  local secondTapDelay=.40
  local box=card(pages.Yuji,"Yuji Black Flash Setup","L: run/cancel | 2 punches > side + Q + 3 > camera flick > 3")
  box.LayoutOrder=6
- local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Nearest-target dash; fixed 300 ms / smooth 80-degree flick",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Untested input sequence; flick is relative, not target tracking",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
  local function button(text,order)
   local b=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text=text,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=order});corner(b,6);return b
  end
@@ -602,6 +546,11 @@ end)()
  connect(sideButton.Activated,function()
   side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D
   sideButton.Text=side==Enum.KeyCode.D and "Dash side: D (right)" or "Dash side: A (left)"
+ end)
+ local angleButton=button("Camera flick: 135 degrees",5)
+ connect(angleButton.Activated,function()
+  angle=angle==90 and 135 or angle==135 and 180 or 90
+  angleButton.Text="Camera flick: "..angle.." degrees"
  end)
  local playButton=button("Run / Cancel (L)",6)
  local function releaseAll()
@@ -622,7 +571,7 @@ end)()
   if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
   active=true;manualSequenceBusy=true;generation+=1
   local id=generation
-  local chosenSide=side
+  local chosenSide,chosenAngle=side,angle
   task.spawn(function()
    local function check()
     local char=LP.Character
@@ -650,13 +599,20 @@ end)()
     feedback.Text="Running - manually position near your opponent first"
     punch();waitFor(.35);punch();waitFor(.20)
     local started=os.clock()
-    local dashJob,why=Dash.start(chosenSide,function() return generation==id and active end)
-    if not dashJob then error(why,0) end
-    key(Enum.KeyCode.Three,true);waitFor(.035);key(Enum.KeyCode.Three,false)
+    -- Sent in one frame without yielding; input delivery is not atomic.
+    key(chosenSide,true);key(Enum.KeyCode.Q,true);key(Enum.KeyCode.Three,true)
+    waitFor(.035)
+    key(Enum.KeyCode.Q,false);key(Enum.KeyCode.Three,false)
+    waitFor(.065)
+    local cam=workspace.CurrentCamera
+    if cam then
+     local sign=chosenSide==Enum.KeyCode.D and -1 or 1
+     cam.CFrame=CFrame.new(cam.CFrame.Position)*CFrame.Angles(0,math.rad(chosenAngle*sign),0)*cam.CFrame.Rotation
+    end
     local remaining=secondTapDelay-(os.clock()-started)
     if remaining>0 then waitFor(remaining) end
     key(Enum.KeyCode.Three,true);waitFor(.035);key(Enum.KeyCode.Three,false)
-    Dash.await(dashJob,function() return generation==id and active end)
+    key(chosenSide,false)
    end)
    if generation==id then
     releaseAll();active=false;manualSequenceBusy=false
@@ -738,10 +694,6 @@ end)()
   if not k or flat(goal-r.Position).Magnitude<d+2 or flat(wp.Position-r.Position).Magnitude<d+1 then return end
   local p=paramsFor(tc);if workspace:Raycast(r.Position,v*(d+2),p) then return end
   if h.FloorMaterial~=Enum.Material.Air then for _,t in ipairs({.25,.5,.75,1}) do if not workspace:Raycast(r.Position+v*d*t,Vector3.new(0,-7,0),p) then return end end end
-  if k==Enum.KeyCode.A or k==Enum.KeyCode.D then
-   local job=Dash.start(k,function() return on and running end)
-   if job then quickReady=now+2;pauseUntil=now+.55 end;return
-  end
   sprint(false);dashTicket+=1;local ticket=dashTicket;held[k]=true;held[Enum.KeyCode.Q]=true;pauseUntil=now+.75
   if k==Enum.KeyCode.W then frontReady=now+6 else quickReady=now+2 end;send(k,true);send(Enum.KeyCode.Q,true)
   task.spawn(function() task.wait(.06);if ticket==dashTicket then releaseDash() end end)
@@ -887,13 +839,13 @@ end)()
 
 ;(function()
  local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
- local timings={punchGap=.35,uppercutLead=.02,afterUppercut=.12,afterStrikes=2.0,afterSecondM1s=.20,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
+ local timings={punchGap=.35,uppercutLead=.02,afterUppercut=.12,afterStrikes=2.0,afterSecondM1s=.20,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
  local box=card(pages.Combos,"Style Combo","B: run/cancel | 3 M1 > Uppercut > Cursed Strikes > 3 M1 > Side Dash > Black Flash > Aerial Crushing Blow")
  local info=make("TextLabel",box,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - timings untested",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
  local sideButton=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Style dash side: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4});corner(sideButton,6)
  connect(sideButton.Activated,function() side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;sideButton.Text=side==Enum.KeyCode.D and "Style dash side: D (right)" or "Style dash side: A (left)" end)
  local button=make("TextButton",box,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Style Combo (B)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5});corner(button,6)
- for _,s in ipairs({{"M1 spacing",150,650,"punchGap"},{"After uppercut",0,600,"afterUppercut"},{"After Cursed Strikes",500,3500,"afterStrikes"},{"After second 3 M1s",0,800,"afterSecondM1s"},{"Black Flash second tap",150,700,"blackFlashDelay"},{"After Black Flash",100,1200,"afterBlackFlash"},{"Aerial jump lead",35,400,"aerialLead"}}) do local name=s[4];moduleSlider(box,s[1],s[2],s[3],math.floor(timings[name]*1000+.5)," ms",function() return timings[name]*1000 end,function(v) timings[name]=v/1000 end) end
+ for _,s in ipairs({{"M1 spacing",150,650,"punchGap"},{"After uppercut",0,600,"afterUppercut"},{"After Cursed Strikes",500,3500,"afterStrikes"},{"After second 3 M1s",0,800,"afterSecondM1s"},{"Side dash hold",35,300,"dashHold"},{"After side dash",0,500,"afterDash"},{"Black Flash second tap",150,700,"blackFlashDelay"},{"After Black Flash",100,1200,"afterBlackFlash"},{"Aerial jump lead",35,400,"aerialLead"}}) do local name=s[4];moduleSlider(box,s[1],s[2],s[3],math.floor(timings[name]*1000+.5)," ms",function() return timings[name]*1000 end,function(v) timings[name]=v/1000 end) end
  local function release() if okVIM and VIM then for k in pairs(held) do pcall(function() VIM:SendKeyEvent(false,k,false,game) end) end;if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end end;held={};mouseDown=false end
  local function finish() release();if active then busy=false;manualSequenceBusy=false end;active=false end
  local function cancel() generation+=1;finish();if info.Parent then info.Text="Style Combo cancelled / ready" end end
@@ -911,7 +863,7 @@ end)()
     info.Text="Running Style Combo";waitFor(.05);three();waitFor(t.punchGap)
     key(Enum.KeyCode.Space,true);waitFor(t.uppercutLead);punch();key(Enum.KeyCode.Space,false);waitFor(t.afterUppercut)
     tap(Enum.KeyCode.One);waitFor(t.afterStrikes);three();waitFor(t.afterSecondM1s)
-    local job,why=Dash.start(chosen,function() return active and generation==id end);if not job then error(why,0) end;Dash.await(job,function() return active and generation==id end)
+    key(chosen,true);key(Enum.KeyCode.Q,true);waitFor(.035);key(Enum.KeyCode.Q,false);if t.dashHold>.035 then waitFor(t.dashHold-.035) end;key(chosen,false);waitFor(t.afterDash)
     local began=os.clock();tap(Enum.KeyCode.Three);local remaining=t.blackFlashDelay-(os.clock()-began);if remaining>0 then waitFor(remaining) end;tap(Enum.KeyCode.Three);waitFor(t.afterBlackFlash)
     key(Enum.KeyCode.Space,true);waitFor(t.aerialLead);tap(Enum.KeyCode.Two);key(Enum.KeyCode.Space,false)
    end)
@@ -1010,10 +962,10 @@ model tests do not constitute live-game or Luau-runtime verification.
 do
  local function InstallModule()
   local CAS=game:GetService("ContextActionService")
-  local CFG={Repeats=4,FollowupDelay=.400,KeyPulse=.035,HitTimeout=.800,
-   AttackRange=7,BodyBehind=.75,SideMin=6,SideAim=6.35,SideCooldown=2,
+  local CFG={Repeats=4,FollowupDelay=.400,KeyPulse=.035,HitTimeout=.800,FollowupTolerance=.075,ReadinessTimeout=.100,
+   AttackRange=7,BodyBehind=.75,SideMin=6,SideAim=6.35,SideCooldown=2,SideHold=.500,
    JumpRange=6,JumpRetry=1.25,PostJumpMin=5,PostJumpAim=5.25,
-   CameraResponse=14,MovementResponse=18,
+   CameraTurn=90,CameraHold=.200,CameraEase=.120,CameraResponse=14,MovementResponse=18,
    SourceName="JJSVerifiedCombat"}
   local ACTION="JJSBlackflashV2Activate"
   local CAMERA_BIND="JJSBlackflashV2Camera"
@@ -1251,7 +1203,9 @@ do
   end
   local function attackReady()
    local _,_,root=rig()
-   return root~=nil and S.root~=nil and S.root.Parent~=nil and S.humanoid~=nil and S.humanoid.Health>0
+   return root~=nil and S.model~=nil and S.model:IsDescendantOf(workspace)
+    and S.root~=nil and S.root:IsDescendantOf(S.model)
+    and S.humanoid~=nil and S.humanoid:IsDescendantOf(S.model) and S.humanoid.Health>0
     and(root.Position-S.root.Position).Magnitude<=CFG.AttackRange and bodyBehind(S.root)>=CFG.BodyBehind
   end
   local function closest()
@@ -1335,26 +1289,55 @@ do
    if vector.Magnitude>1 then vector=vector.Unit end
    setMovement("orbit",vector,side.key)
   end
+  local function cameraFlick()
+   local camera=workspace.CurrentCamera;if not camera then return end
+   local degrees=S.sideKey==Enum.KeyCode.D and-CFG.CameraTurn or CFG.CameraTurn
+   if S.autoCameraAngle and S.root then
+    local from=unitOrZero(flat(camera.CFrame.LookVector));local toward=unitOrZero(flat(S.root.Position-camera.CFrame.Position))
+    if from.Magnitude>0 and toward.Magnitude>0 then degrees=math.deg(math.atan2(from:Cross(toward).Y,math.clamp(from:Dot(toward),-1,1))) end
+   end
+   S.flickFrom=camera.CFrame.Rotation;S.flickTo=CFrame.Angles(0,math.rad(degrees),0)*S.flickFrom
+   S.flickStarted=os.clock();S.flickUntil=S.flickStarted+CFG.CameraHold
+  end
+
   -- Re-check lifecycle and geometry after an adapter callback returns.
   local function sourceReady(action)
    if not S.active or not S.source then return false end
    local source,token,target=S.source,S.generation,S.model
-   local ok,ready=pcall(source.isReady,action,target)
+   local done,ok,result=false,false,nil
+   local deadline=os.clock()+CFG.ReadinessTimeout
+   if action=="BlackflashFollowup" then
+    deadline=math.min(deadline,S.pairStarted+CFG.FollowupDelay+CFG.FollowupTolerance)
+   end
+   local worker=task.spawn(function()
+    ok,result=pcall(source.isReady,action,target);done=true
+   end)
+   while not done do
+    if not S.active or S.generation~=token or S.model~=target or S.source~=source or rawget(_G,CFG.SourceName)~=source or typing() then
+     pcall(task.cancel,worker);return false
+    end
+    if os.clock()>deadline then
+     pcall(task.cancel,worker)
+     stop("Stopped: readiness adapter timed out; no late attack input sent.");return false
+    end
+    RS.Heartbeat:Wait()
+   end
    if not S.active or S.generation~=token or S.model~=target or S.source~=source or rawget(_G,CFG.SourceName)~=source or typing() then return false end
-   if not ok then stop("Stopped: readiness adapter failed: "..tostring(ready));return false end
-   if ready~=true then say("Waiting for actual action readiness: "..action);return false end
+   if os.clock()>deadline then stop("Stopped: readiness returned too late.");return false end
+   if not ok then stop("Stopped: readiness adapter failed: "..tostring(result));return false end
+   if result~=true then say("Waiting for actual action readiness: "..action);return false end
    return attackReady()
   end
   local function beginPair()
    if not attackReady() or not sourceReady("BlackflashStart") then return false end
-   releaseMovement();gate:begin(S.model,CFG.FollowupDelay+CFG.HitTimeout+.2)
+   releaseMovement();gate:cancel()
    S.pairStarted=os.clock();S.stage="FIRST_DOWN";S.deadline=S.pairStarted+CFG.KeyPulse
    CAS:UnbindAction(ACTION);key(Enum.KeyCode.Three,true)
    say(("Pair %d/%d - waiting for your hit"):format(S.pairCount+1,CFG.Repeats));return true
   end
   local function beginLMB()
    if not attackReady() or not sourceReady("LMB") then return false end
-   releaseMovement();gate:begin(S.model,CFG.HitTimeout+.2)
+   releaseMovement();gate:begin(S.model,CFG.KeyPulse+CFG.HitTimeout)
    S.mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0)
    S.stage="MOUSE_DOWN";S.deadline=os.clock()+CFG.KeyPulse;return true
   end
@@ -1407,10 +1390,8 @@ do
     return
    end
    if dash and now>=S.nextDash then
-    releaseMovement();S.sideKey=dash.key;local token=S.generation
-    local job=Dash.start(dash.key,function() return S.active and S.generation==token end)
-    if not job then return end
-    S.sharedDash=job;S.nextDash=now+CFG.SideCooldown;S.stage="DASH";return
+    S.sideKey=dash.key;setMovement("side",dash.direction,dash.key)
+    S.nextDash=now+CFG.SideCooldown;S.stage="DASH";S.pairStarted=now;key(Enum.KeyCode.Q,true);return
    end
    if walk then orbit(root,away,distance,walk)
    elseif distance>CFG.JumpRange then setMovement("approach",-away) else beginFallbackJump(root,humanoid) end
@@ -1433,15 +1414,20 @@ do
      key(Enum.KeyCode.Three,false);S.stage="WAIT_SECOND";S.deadline=S.pairStarted+CFG.FollowupDelay
     elseif stage=="WAIT_SECOND" then
      if now<S.deadline then return end
+     if now>S.pairStarted+CFG.FollowupDelay+CFG.FollowupTolerance then
+      stop("Stopped: follow-up missed its scheduling window; no late second 3.");return
+     end
      if not attackReady() or not sourceReady("BlackflashFollowup") then
       if S.active then stop("Stopped: follow-up body/range/readiness check failed.") end
       return
      end
-     key(Enum.KeyCode.Three,true);S.stage="SECOND_DOWN";S.deadline=now+CFG.KeyPulse;return
+     -- Only acknowledgements from the follow-up window can unlock this pair.
+     gate:begin(S.model,CFG.KeyPulse+CFG.HitTimeout)
+     local pressedAt=os.clock()
+     key(Enum.KeyCode.Three,true);S.stage="SECOND_DOWN";S.deadline=pressedAt+CFG.KeyPulse;return
     elseif stage=="SECOND_DOWN" then
      if now<S.deadline then return end
      key(Enum.KeyCode.Three,false);S.stage="WAIT_HIT"
-     if gate.ticket then gate.ticket.deadline=workspace:GetServerTimeNow()+CFG.HitTimeout end
      bindCapture()
     elseif stage=="WAIT_HIT" or stage=="WAIT_LMB_HIT" then
      local ticket=gate.ticket
@@ -1460,13 +1446,16 @@ do
     elseif stage=="MOUSE_DOWN" then
      if now<S.deadline then return end
      VIM:SendMouseButtonEvent(0,0,0,false,game,0);S.mouseDown=false;S.stage="WAIT_LMB_HIT"
-     if gate.ticket then gate.ticket.deadline=workspace:GetServerTimeNow()+CFG.HitTimeout end
     elseif stage=="DASH" then
-     local job=S.sharedDash
-     if not job or job.done then
-      S.sharedDash=nil
-      if job and job.error then stop("Stopped: "..job.error);return end
-      if attackReady() then S.failedDashes=0 else S.failedDashes+=1 end
+     if now-S.pairStarted>=CFG.KeyPulse then key(Enum.KeyCode.Q,false) end
+     local distance=flat(root.Position-S.root.Position).Magnitude
+     local succeeded=attackReady()
+     if succeeded or distance<CFG.SideMin or distance>CFG.AttackRange or now-S.pairStarted>=CFG.SideHold then
+      releaseMovement();cameraFlick()
+      if succeeded then S.failedDashes=0 else
+       S.failedDashes+=1;S.sideKey=S.sideKey==Enum.KeyCode.A and Enum.KeyCode.D or Enum.KeyCode.A
+       S.sidePreferenceUntil=now+.7
+      end
       S.stage="SETUP"
      end
      return
@@ -1497,11 +1486,17 @@ do
     else stop("Stopped: unknown chain state "..tostring(stage));return end
    end
   end
-  local stepping=false
+  local steppingToken=nil
   tick=function()
-   if stepping or not S.active or S.stage=="CONNECTING" then return end
-   stepping=true;local ok,err=xpcall(step,TRACE);stepping=false
-   if not ok then stop("Stopped: "..tostring(err));REPORT("Blackflash V2/V3 runtime",err) end
+   if not S.active or S.stage=="CONNECTING" then return end
+   local token=S.generation
+   if steppingToken==token then return end
+   steppingToken=token
+   local ok,err=xpcall(step,TRACE)
+   if steppingToken==token then steppingToken=nil end
+   if not ok and S.active and S.generation==token then
+    stop("Stopped: "..tostring(err));REPORT("Blackflash V2/V3 runtime",err)
+   end
   end
 
   -- Activation
@@ -1514,7 +1509,7 @@ do
    if not rig() then say("Character unavailable.");return end
    local source=rawget(_G,CFG.SourceName)
    if type(source)~="table" or type(source.subscribe)~="function" or type(source.isReady)~="function" then
-    say("BLOCKED: JJSVerifiedCombat is missing. Hit-confirmed chains require a real game adapter; no attack inputs sent.")
+    say("BLOCKED: JJSVerifiedCombat is not configured. No attack inputs sent. A real attributed-hit adapter is required.")
     return
    end
 
@@ -1539,6 +1534,9 @@ do
    local function current()
     return S.active and S.generation==token and S.source==source
    end
+   task.delay(2,function()
+    if current() and S.stage=="CONNECTING" then stop("Stopped: hit subscription timed out.") end
+   end)
    local ok,connection=pcall(source.subscribe,function(event)
     if not current() then return end
     if rawget(_G,CFG.SourceName)~=source then
@@ -1662,6 +1660,9 @@ do
   toggle(routeBox,"Route Calculator / Auto Side",function() return S.calculator end,function(value)
    S.calculator=value;S.route=nil
   end)
+  toggle(routeBox,"Auto camera angle (override fixed 90)",function() return S.autoCameraAngle end,function(value)
+   S.autoCameraAngle=value
+  end)
   make("TextLabel",box2,{Size=UDim2.new(1,0,0,156),BackgroundTransparency=1,
    Text="A real JJSVerifiedCombat adapter is mandatory. Four input pairs; only your attributed damaging hit unlocks the next pair. Animation and generic health changes do not count. Miss/timeout stops the run. Both 3 key-downs require >=75% estimated body-box volume behind the target and <=7 actual studs. S+Q never bypasses this rule. Follow-up stays 400 ms; there is no artificial between-repeat sleep. Game readiness still applies.",
    TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box2)+2})
@@ -1669,7 +1670,7 @@ do
    Text="V3: four hit-confirmed pairs, then a body/range/readiness-checked LMB. LMB must also receive your attributed hit before the next cycle. No fixed cycle pause. Target stays locked for the run. Death, despawn, miss, lost focus or off releases inputs. Press AND release 3 for a new run. V3 takes priority when both enabled.",
    TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box3)+2})
   make("TextLabel",routeBox,{Size=UDim2.new(1,0,0,112),BackgroundTransparency=1,
-   Text="Side dash first: open 6-7 stud spacing where possible; walk/orbit during Q cooldown. Jump-over is only blocked/stuck recovery, with takeoff <=6 actual studs. Post-jump backoff >=5 remains. Eased movement and facing; fixed 300 ms dash hold, then smooth 80 degree camera flick. Route/body values are estimates, not server confirmations.",
+   Text="Side dash first: open 6-7 stud spacing where possible; walk/orbit during Q cooldown. Jump-over is only blocked/stuck recovery, with takeoff <=6 actual studs. Post-jump backoff >=5 remains. Eased movement and facing; default 90 degree camera turn, 200 ms hold. Route/body values are estimates, not server confirmations.",
    TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(routeBox)+2})
 
   connect(RS.Heartbeat,function() tick() end)
@@ -1701,11 +1702,15 @@ do
   end)
 
   local function cameraStep(dt)
-   if gui:GetAttribute("MasterDashActive") or not S.active or S.stage=="CONNECTING" or typing() or not S.root or not S.root.Parent then return end
+   if not S.active or S.stage=="CONNECTING" or typing() or not S.root or not S.root.Parent then return end
    local camera=workspace.CurrentCamera;if not camera then return end
    local desired=nil
    if S.mixFacing then
     desired=CFrame.lookAt(camera.CFrame.Position,camera.CFrame.Position+S.mixFacing).Rotation
+   elseif os.clock()<S.flickUntil and S.flickFrom and S.flickTo then
+    local alpha=math.clamp((os.clock()-S.flickStarted)/CFG.CameraEase,0,1)
+    alpha=alpha*alpha*(3-2*alpha)
+    camera.CFrame=CFrame.new(camera.CFrame.Position)*S.flickFrom:Lerp(S.flickTo,alpha);return
    else
     local aim=S.root.Position+Vector3.new(0,1,0)
     if(aim-camera.CFrame.Position).Magnitude>.05 then desired=CFrame.lookAt(camera.CFrame.Position,aim).Rotation end
@@ -1713,7 +1718,7 @@ do
    if desired then camera.CFrame=CFrame.new(camera.CFrame.Position)*camera.CFrame.Rotation:Lerp(desired,1-math.exp(-CFG.CameraResponse*dt)) end
   end
   local function facingStep(dt)
-   if gui:GetAttribute("MasterDashActive") or not S.active or S.stage=="CONNECTING" or typing() or not S.root or not S.root.Parent then return end
+   if not S.active or S.stage=="CONNECTING" or typing() or not S.root or not S.root.Parent then return end
    local _,humanoid,root=rig();if not humanoid then return end
    if S.ownedHumanoid~=humanoid then
     if S.ownedHumanoid and S.ownedHumanoid.Parent then S.ownedHumanoid.AutoRotate=S.oldAutoRotate end
@@ -1763,6 +1768,10 @@ do
   connect(UIS.WindowFocusReleased,function()
    S.armed=false
    if S.active then stop("Window lost focus - inputs released. Press/release 3 again.") end
+  end)
+  connect(UIS.TextBoxFocused,function()
+   S.armed=false
+   if S.active then stop("Stopped: text entry focused; inputs released.") end
   end)
   connect(LP.CharacterRemoving,function()
    S.armed=false
@@ -1821,15 +1830,24 @@ connect(UIS.InputBegan,function(i)
    if hum and hum.Health>0 then hum.Jump=true end
   end
  end
- if i.KeyCode==Enum.KeyCode.Three and blackflashV2Trigger and blackflashV2Trigger() then return end
- if i.KeyCode==Enum.KeyCode.Three and not busy then
-  local now=os.clock()
-  lastThreeTime=now
-  if todoEnabled then task.spawn(runTodo); return end
-  task.spawn(run)
-  if chainEnabled and now>=chainCooldownUntil then task.spawn(runChain) end
+ if i.KeyCode==Enum.KeyCode.Three then
+  if legacyOwnsInput and legacyOwnsInput() then return end
+  if blackflashV2Trigger and blackflashV2Trigger() then legacyArmed=false;return end
+  if busy or todoBusy or manualSequenceBusy then return end
+  legacyArmed=true;lastThreeTime=os.clock()
  end
 end)
+connect(UIS.InputEnded,function(i)
+ if i.KeyCode~=Enum.KeyCode.Three then return end
+ if legacyOwnsInput and legacyOwnsInput() then return end
+ local armed=legacyArmed;legacyArmed=false
+ if not armed or not running or UIS:GetFocusedTextBox() or busy or todoBusy or manualSequenceBusy then return end
+ -- Explicit priority replaces two competing task.spawn calls.
+ if todoEnabled then task.spawn(runTodo)
+ elseif chainEnabled and os.clock()>=chainCooldownUntil then runChain(lastThreeTime)
+ elseif enabled then run(lastThreeTime) end
+end)
+
 local dragging,start,pos,touch
 connect(top.InputBegan,function(i)
  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true; start=i.Position; pos=main.Position; touch=i end
@@ -2074,10 +2092,9 @@ end)()
   aimMode="target"
   task.spawn(function()
    local ok,err=pcall(function()
-    info.Text="Three opening punches"
-    waitFor(token,CFG.CloseTimeout/1000,closeEnough);threeClicks(token)
-    waitFor(token,math.max(0,CFG.M1Gap-CFG.KeyPulse)/1000)
-    info.Text="Rapid Punches";pulse(token,Enum.KeyCode.Three);waitFor(token,CFG.PunchesWait/1000)
+    info.Text="Locked: "..target.Name.." | Rapid Punches"
+    waitFor(token,CFG.CloseTimeout/1000,closeEnough)
+    pulse(token,Enum.KeyCode.Three);waitFor(token,CFG.PunchesWait/1000)
     info.Text="Reversal Red";pulse(token,Enum.KeyCode.Two);waitFor(token,CFG.RedWait/1000)
     info.Text="Lapse Blue; waiting for launch"
     local _,_,_,tr=rigs();local launchY=tr.Position.Y
@@ -2101,7 +2118,7 @@ end)()
  end
  local renderName="JJSGojoQuickComboAim"
  RS:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+10,function()
-  if not active or gui:GetAttribute("MasterDashActive") then return end
+  if not active then return end
   local ok,err=pcall(function()
    if not valid(generation) then cleanup("Stopped: focus/target/character changed");return end
    local _,root,_,tr=rigs();local camera=workspace.CurrentCamera
@@ -2116,7 +2133,7 @@ end)()
   end)
   if not ok then cleanup("Stopped: camera error");REPORT("Gojo camera",err) end
  end)
- local reserved={Three=true,Two=true,One=true,Four=true,R=true,Q=true,W=true,A=true,S=true,D=true,Space=true,Escape=true,Unknown=true,RightShift=true,K=true,L=true,B=true,N=true,X=true,G=true,J=true,F6=true,F7=true,F8=true}
+ local reserved={Three=true,Two=true,One=true,Four=true,R=true,Q=true,W=true,A=true,S=true,D=true,Space=true,Escape=true,Unknown=true,RightShift=true,K=true,L=true,B=true,N=true,X=true}
  connect(UIS.InputBegan,function(input,processed)
   if input.UserInputType~=Enum.UserInputType.Keyboard or UIS:GetFocusedTextBox() then return end
   if binding then
@@ -2132,393 +2149,4 @@ end)()
  connect(LP.CharacterRemoving,function() if active then cleanup("Stopped: respawn") end end)
  local function shutdown() enabled=false;binding=false;cleanup("Off");RS:UnbindFromRenderStep(renderName) end
  connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end)()
-
--- Added character modules. Local timing is a fallback, not measured recovery.
-;(function()
- local function finite(x) return type(x)=="number" and x==x and x>-math.huge and x<math.huge end
- local BODY_NAMES={Head=true,Torso=true,UpperTorso=true,LowerTorso=true,
-   ["Left Arm"]=true,["Right Arm"]=true,["Left Leg"]=true,["Right Leg"]=true,
-   LeftUpperArm=true,LeftLowerArm=true,LeftHand=true,RightUpperArm=true,RightLowerArm=true,RightHand=true,
-   LeftUpperLeg=true,LeftLowerLeg=true,LeftFoot=true,RightUpperLeg=true,RightLowerLeg=true,RightFoot=true}
-
- local function partRearFraction(part,origin,normal)
-   local cf,size=part.CFrame,part.Size;local center=normal:Dot(cf.Position-origin);local widths={}
-   for _,width in ipairs({math.abs(normal:Dot(cf.RightVector))*size.X,math.abs(normal:Dot(cf.UpVector))*size.Y,math.abs(normal:Dot(cf.LookVector))*size.Z}) do
-    if width>.0001 then table.insert(widths,width) end
-   end
-   local count=#widths;local span=0
-   for _,width in ipairs(widths) do span+=width*.5 end
-   if center>=span then return 0 end
-   if center<=-span then return 1 end
-   if count==0 then return 0 end
-   local total=0;local distance=span-center;local denominator=count==3 and 6 or count==2 and 2 or 1
-   for _,width in ipairs(widths) do denominator*=width end
-   for mask=0,2^count-1 do
-    local shift,sign=0,1
-    for index=1,count do
-     if bit32.band(mask,bit32.lshift(1,index-1))~=0 then shift+=widths[index];sign=-sign end
-    end
-    total+=sign*math.max(distance-shift,0)^count
-   end
-   return math.clamp(total/denominator,0,1)
-  end
-  
- local function newHitGate(userId,clock)
-   local gate={userId=userId,clock=clock,ticket=nil,used={},ring={},ringIndex=0}
-   function gate:cancel()
-    if self.ticket then self.ticket.closed=true end
-    self.ticket=nil
-   end
-   function gate:begin(target,duration)
-    self:cancel()
-    local now=self.clock()
-    self.ticket={target=target,openedAt=now,deadline=now+duration,hit=false,closed=false}
-    return self.ticket
-   end
-   function gate:accept(event)
-    local ticket=self.ticket
-    if not ticket or ticket.closed or ticket.hit or type(event)~="table" or event.confirmed~=true then return false end
-    local now=self.clock()
-    if now>ticket.deadline or event.attackerUserId~=self.userId or event.targetModel~=ticket.target
-     or not finite(event.damage) or event.damage<=0 or not finite(event.serverTime)
-     or event.serverTime<ticket.openedAt or event.serverTime>ticket.deadline
-     or event.serverTime>now+.15 then return false end
-    local idType=type(event.hitId)
-    if idType=="string" then
-     if #event.hitId==0 or #event.hitId>128 then return false end
-    elseif idType=="number" then
-     if not finite(event.hitId) then return false end
-    else return false end
-    local key=idType..":"..tostring(event.hitId)
-    if self.used[key] then return false end
-    self.ringIndex=self.ringIndex%256+1
-    local oldKey=self.ring[self.ringIndex]
-    if oldKey then self.used[oldKey]=nil end
-    self.ring[self.ringIndex]=key;self.used[key]=true
-    ticket.hit=true;ticket.hitId=event.hitId
-    return true
-   end
-   return gate
-  end
-  
- local bindingOwner=nil;local binds={H=true,G=true,J=true,F6=true,F7=true,F8=true}
- local reserved={One=true,Two=true,Three=true,Four=true,R=true,Q=true,W=true,A=true,S=true,D=true,F=true,Space=true,Unknown=true,RightShift=true,K=true,L=true,B=true,N=true,X=true}
- local function install(spec)
-  local active,enabled=false,false;local gen=0;local bind=spec.bind
-  local held={};local mouse=false;local model,hum,root,camera,oldCamera,oldRotate,oldLock
-  local source,connection=nil,nil;local moveGoal=nil;local down=false;local side=Enum.KeyCode.D
-  local gate=newHitGate(LP.UserId,function() return workspace:GetServerTimeNow() end)
-  local cfg={Interval=spec.interval or 350,Pulse=35,M1Gap=320,CloseTimeout=2000,StrikesWait=1500,JumpToStrike=60,JumpTimeout=2000,FollowupDelay=400,HitTimeout=800,JumpDelay=160,CrushingWait=700,BlueMinimum=350,LaunchTimeout=2200,TeleportWait=850,KickWait=650,PunchesWait=1800,RedWait=550}
-  local cooldownUntil={};local cds={[Enum.KeyCode.One]=13,[Enum.KeyCode.Two]=20,[Enum.KeyCode.Three]=15,[Enum.KeyCode.Four]=18,[Enum.KeyCode.R]=15}
-  local panel=card(pages[spec.page],spec.name,spec.description);panel.LayoutOrder=spec.order
-  local info=make("TextLabel",panel,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text=spec.note,TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
-  local function stop(message)
-   gen+=1;local was=active;active=false;moveGoal=nil;gate:cancel();source=nil
-   if connection then pcall(function() connection:Disconnect() end) end;connection=nil
-   for k in pairs(held) do pcall(function() VIM:SendKeyEvent(false,k,false,game) end) end;table.clear(held)
-   if mouse then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end;mouse=false
-   if not spec.pair then
-    if hum and hum.Parent then hum:Move(Vector3.zero,false);hum.AutoRotate=oldRotate end
-    if camera and oldCamera then pcall(function() camera.CameraType=oldCamera end) end
-    if was then lockOn=oldLock end
-   end
-   if was then busy=false;manualSequenceBusy=false;gui:SetAttribute("MasterMacroActive",false) end
-   model=nil;hum=nil;root=nil;camera=nil
-   if info.Parent then info.Text=message or "Stopped" end
-   if message then gui:SetAttribute("MasterLastStatus",spec.name..": "..message) end
-  end
-  toggle(panel,"Enable "..spec.name,function() return enabled end,function(v) enabled=v;if not v then stop("Off") end end)
-  local binding=make("TextButton",panel,{Size=UDim2.new(1,0,0,28),Text="Keybind: "..bind.Name.." (click to change)",BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=nextOrder(panel)+2});corner(binding,6)
-  connect(binding.Activated,function() if bindingOwner and bindingOwner~=spec then return end;stop("Choose a key; Escape cancels");bindingOwner=spec;binding.Text="Press a key" end)
-  local settings=card(pages[spec.page],spec.name.." Settings","Timing fallback is uncalibrated. Dash/flick settings are fixed.");settings.LayoutOrder=spec.order+1;settings:SetAttribute("MasterSettingsOwner",spec.name)
-  local names=spec.pair and {"Interval","Pulse"} or spec.kind=="yuji" and {"M1Gap","JumpToStrike","StrikesWait","JumpTimeout","FollowupDelay","HitTimeout","JumpDelay","CrushingWait","CloseTimeout"} or {"M1Gap","BlueMinimum","LaunchTimeout","TeleportWait","KickWait","PunchesWait","RedWait","CloseTimeout"}
-  for _,key in ipairs(names) do local k=key;moduleSlider(settings,k,20,4000,cfg[k]," ms",function() return cfg[k] end,function(v) cfg[k]=v end) end
-  if spec.kind=="advanced" then
-   local b=make("TextButton",settings,{Size=UDim2.new(1,0,0,28),Text="Side: D (right)",BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,LayoutOrder=nextOrder(settings)+2})
-   connect(b.Activated,function() if active then return end;side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;b.Text=side==Enum.KeyCode.D and "Side: D (right)" or "Side: A (left)" end)
-  end
-  local function targetRig() return model and model:FindFirstChildOfClass("Humanoid"),model and model:FindFirstChild("HumanoidRootPart") end
-  local function valid(token)
-   if not active or gen~=token or not running or not gui.Parent or UIS:GetFocusedTextBox() or not hum or not hum.Parent or hum.Health<=0 or LP.Character~=hum.Parent then return false end
-   if spec.pair then return true end
-   local th,tr=targetRig();return th and tr and th.Health>0 and model:IsDescendantOf(workspace)
-  end
-  local function waitFor(token,seconds,predicate)
-   local deadline=os.clock()+seconds
-   repeat
-    if not valid(token) then error("cancelled / character unavailable",0) end
-    if predicate and predicate() then return end
-    if os.clock()>=deadline then if predicate then error("condition timed out; no further input",0) end;return end
-    RS.Heartbeat:Wait()
-   until false
-  end
-  local function actionReady(token,key)
-   local adapter=rawget(_G,"JJSActionFeedback")
-   if type(adapter)~="table" or type(adapter.isReady)~="function" then return end
-   waitFor(token,cfg.CloseTimeout/1000,function()
-    local ok,result=pcall(adapter.isReady,spec.character,key.Name,model)
-    if not valid(token) or rawget(_G,"JJSActionFeedback")~=adapter then error("readiness lifecycle changed",0) end
-    if not ok then error("action readiness adapter failed",0) end
-    return result==true
-   end)
-  end
-  local function pulse(token,key)
-   if not valid(token) then error("cancelled",0) end
-   if key~=Enum.KeyCode.Space and not(spec.kind=="yuji" and key==Enum.KeyCode.Three) then actionReady(token,key) end
-   if spec.kind=="advanced" and cds[key] then
-    if os.clock()<(cooldownUntil[key] or 0) then error("estimated cooldown: "..key.Name,0) end
-    cooldownUntil[key]=os.clock()+cds[key]
-   end
-   gui:SetAttribute("MasterLastAction",spec.name..": "..key.Name)
-   held[key]=true;VIM:SendKeyEvent(true,key,false,game);waitFor(token,cfg.Pulse/1000);VIM:SendKeyEvent(false,key,false,game);held[key]=nil
-  end
-  local function closeEnough() local _,tr=targetRig();return root and tr and (root.Position-tr.Position).Magnitude<=6 end
-  local function click(token)
-   waitFor(token,cfg.CloseTimeout/1000,closeEnough)
-   mouse=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(token,cfg.Pulse/1000);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouse=false
-  end
-  local function three(token) for i=1,3 do click(token);if i<3 then waitFor(token,math.max(0,cfg.M1Gap-cfg.Pulse)/1000) end end end
-  local function rearReady()
-   local _,tr=targetRig();if not tr or (root.Position-tr.Position).Magnitude>7 then return false end
-   local normal=Vector3.new(tr.CFrame.LookVector.X,0,tr.CFrame.LookVector.Z);if normal.Magnitude<.001 then return false end;normal=normal.Unit
-   if normal:Dot(root.Position-tr.Position)>=0 then return false end
-   local total,behind=0,0
-   for _,p in ipairs(LP.Character:GetChildren()) do if p:IsA("BasePart") and BODY_NAMES[p.Name] then local volume=p.Size.X*p.Size.Y*p.Size.Z;total+=volume;behind+=volume*partRearFraction(p,tr.Position,normal) end end
-   return total>0 and behind/total>=.75
-  end
-  local function connectCombat(token)
-   source=rawget(_G,"JJSVerifiedCombat")
-   if type(source)~="table" or type(source.subscribe)~="function" or type(source.isReady)~="function" then error("BLOCKED: configure real JJSVerifiedCombat adapter first",0) end
-   local current=source
-   local ok,result=pcall(current.subscribe,function(event) if valid(token) and source==current and rawget(_G,"JJSVerifiedCombat")==current then gate:accept(event) end end)
-   if not valid(token) then if ok and result then pcall(function() result:Disconnect() end) end;error("cancelled during subscription",0) end
-   if not ok then error("subscription failed: "..tostring(result),0) end
-   local good,method=pcall(function() return result and result.Disconnect end);if not good or type(method)~="function" then error("adapter must return Disconnect connection",0) end
-   connection=result;if rawget(_G,"JJSVerifiedCombat")~=current then error("adapter changed",0) end
-  end
-  local function ready(token,action)
-   local current=source;if not current or rawget(_G,"JJSVerifiedCombat")~=current then error("adapter changed",0) end
-   local ok,result=pcall(current.isReady,action,model)
-   if not valid(token) or source~=current or rawget(_G,"JJSVerifiedCombat")~=current then error("cancelled / adapter changed",0) end
-   if not ok then error("readiness callback failed",0) end;return result==true and rearReady()
-  end
-  local function jumpBehind(token)
-   waitFor(token,cfg.CloseTimeout/1000,closeEnough)
-   local _,tr=targetRig();local look=Vector3.new(tr.CFrame.LookVector.X,0,tr.CFrame.LookVector.Z);if look.Magnitude<.001 then error("target facing unavailable",0) end
-   moveGoal=tr.Position-look.Unit*4
-   local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={LP.Character,model};params.RespectCanCollide=true
-   if workspace:Raycast(root.Position,moveGoal-root.Position,params) then moveGoal=nil;error("jump route blocked",0) end
-   hum.Jump=true;pulse(token,Enum.KeyCode.Space)
-   local deadline=os.clock()+cfg.JumpTimeout/1000;local airborne=false
-   repeat
-    waitFor(token,0);if hum.FloorMaterial==Enum.Material.Air then airborne=true end
-    local _,r=targetRig();local face=Vector3.new(r.CFrame.LookVector.X,0,r.CFrame.LookVector.Z);if face.Magnitude>.001 then moveGoal=r.Position-face.Unit*4 end
-    if airborne and rearReady() then moveGoal=nil;hum:Move(Vector3.zero,false);return end
-    if os.clock()>deadline then moveGoal=nil;error("jump-behind timed out",0) end;RS.Heartbeat:Wait()
-   until false
-  end
-  local function bf(token)
-   moveGoal=nil;hum:Move(Vector3.zero,false);info.Text="Waiting for Black Flash readiness"
-   waitFor(token,cfg.CloseTimeout/1000,function() return ready(token,"BlackflashStart") end)
-   local started=os.clock();pulse(token,Enum.KeyCode.Three);waitFor(token,math.max(0,cfg.FollowupDelay/1000-(os.clock()-started)))
-   if not ready(token,"BlackflashFollowup") then error("follow-up unavailable or rear gate lost",0) end
-   local ticket=gate:begin(model,(cfg.Pulse+cfg.HitTimeout)/1000);pulse(token,Enum.KeyCode.Three)
-   info.Text="Waiting for relevant attributed pair hit";waitFor(token,cfg.HitTimeout/1000,function() return ticket.hit end);gate:cancel()
-  end
-  local function dash(token)
-   local job,why=Dash.start(side,function() return valid(token) and true or false end)
-   if not job then error(why,0) end;Dash.await(job,function() return valid(token) and true or false end)
-  end
-  local function pick()
-   local best,minimum=nil,40
-   for h in pairs(humanoids) do local m=h.Parent;local r=m and m:FindFirstChild("HumanoidRootPart");if m and m:IsA("Model") and m~=LP.Character and m:IsDescendantOf(workspace) and r and h.Health>0 then local d=(r.Position-root.Position).Magnitude;if d<minimum then minimum=d;best=m end end end
-   return best
-  end
-  local function launch()
-   if active then stop("Cancelled");return end
-   if not enabled then info.Text="Enable this module first";return end
-   if not okVIM or not VIM then info.Text="Input simulation unavailable";return end
-   if busy or todoBusy or manualSequenceBusy or gui:GetAttribute("MasterDashActive") then info.Text="Another macro is active";return end
-   if spec.kind=="advanced" then for key,deadline in pairs(cooldownUntil) do if os.clock()<deadline then info.Text=string.format("Estimated cooldown %s: %.1fs",key.Name,deadline-os.clock());return end end end
-   local c=LP.Character;hum=c and c:FindFirstChildOfClass("Humanoid");root=c and c:FindFirstChild("HumanoidRootPart")
-   if not hum or not root or hum.Health<=0 then return end
-   if not spec.pair then model=pick();if not model then info.Text="No target within 40 studs";return end end
-   gen+=1;local token=gen;active=true;busy=true;manualSequenceBusy=true;gui:SetAttribute("MasterMacroActive",true)
-   if not spec.pair then oldRotate=hum.AutoRotate;hum.AutoRotate=false;oldLock=lockOn;lockOn=false;camera=workspace.CurrentCamera;if camera then oldCamera=camera.CameraType;camera.CameraType=Enum.CameraType.Scriptable end end
-   down=false
-   task.spawn(function()
-    local ok,err=pcall(function()
-     if spec.pair then local started=os.clock();pulse(token,spec.first);waitFor(token,math.max(.01,cfg.Interval/1000-(os.clock()-started)));pulse(token,spec.second)
-     else
-      if spec.kind=="yuji" then connectCombat(token) end
-      info.Text="Three opening punches";three(token)
-      if spec.kind=="yuji" then
-       pulse(token,Enum.KeyCode.Space);waitFor(token,math.max(0,cfg.JumpToStrike-cfg.Pulse)/1000);pulse(token,Enum.KeyCode.One);waitFor(token,cfg.StrikesWait/1000)
-       jumpBehind(token);bf(token);three(token);waitFor(token,math.max(0,cfg.M1Gap-cfg.Pulse)/1000)
-       jumpBehind(token);bf(token);three(token);pulse(token,Enum.KeyCode.Space);waitFor(token,cfg.JumpDelay/1000)
-       waitFor(token,.7,function() return hum.FloorMaterial==Enum.Material.Air end)
-       down=true;RS.RenderStepped:Wait();waitFor(token,0);click(token);waitFor(token,cfg.CrushingWait/1000)
-       down=false;RS.RenderStepped:Wait();waitFor(token,0);pulse(token,Enum.KeyCode.Two)
-      else
-       waitFor(token,math.max(0,cfg.M1Gap-cfg.Pulse)/1000);local _,tr=targetRig();local initialY=tr.Position.Y
-       pulse(token,Enum.KeyCode.One);waitFor(token,cfg.BlueMinimum/1000)
-       waitFor(token,cfg.LaunchTimeout/1000,function() local th,r=targetRig();return th.FloorMaterial==Enum.Material.Air and r.Position.Y>initialY+1 end)
-       pulse(token,Enum.KeyCode.R);waitFor(token,cfg.TeleportWait/1000);dash(token)
-       waitFor(token,cfg.CloseTimeout/1000,closeEnough);pulse(token,Enum.KeyCode.Four);waitFor(token,cfg.KickWait/1000)
-       waitFor(token,cfg.CloseTimeout/1000,closeEnough);pulse(token,Enum.KeyCode.Three);waitFor(token,cfg.PunchesWait/1000)
-       pulse(token,Enum.KeyCode.Two);waitFor(token,cfg.RedWait/1000);dash(token)
-      end
-     end
-    end)
-    if gen==token then stop(ok and "Inputs complete; hits/damage not guaranteed" or "Stopped: "..tostring(err)) end
-   end)
-  end
-  local renderName="Master_"..spec.id
-  if not spec.pair then RS:BindToRenderStep(renderName,Enum.RenderPriority.Camera.Value+10,function()
-   if not active or gui:GetAttribute("MasterDashActive") then return end
-   local ok,err=pcall(function()
-    if not valid(gen) then stop("Stopped: lifecycle changed");return end
-    if spec.kind=="yuji" and source and rawget(_G,"JJSVerifiedCombat")~=source then stop("Stopped: adapter changed");return end
-    if workspace.CurrentCamera~=camera then stop("Stopped: camera changed");return end
-    local _,tr=targetRig();local delta=Vector3.new(tr.Position.X-root.Position.X,0,tr.Position.Z-root.Position.Z)
-    if moveGoal then local d=Vector3.new(moveGoal.X-root.Position.X,0,moveGoal.Z-root.Position.Z);hum:Move(d.Magnitude>.25 and d.Unit or Vector3.zero,false) end
-    if delta.Magnitude>.01 then root.CFrame=CFrame.lookAt(root.Position,root.Position+delta) end
-    if camera then local aim=down and root.Position+delta*.3-Vector3.new(0,8,0) or tr.Position+Vector3.new(0,1,0);if (aim-camera.CFrame.Position).Magnitude>.01 then camera.CFrame=CFrame.lookAt(camera.CFrame.Position,aim) end end
-   end)
-   if not ok then stop("Stopped: render error");REPORT(spec.name,err) end
-  end) end
-  connect(UIS.InputBegan,function(input,processed)
-   if input.UserInputType~=Enum.UserInputType.Keyboard or UIS:GetFocusedTextBox() then return end
-   if bindingOwner then
-    if bindingOwner~=spec then return end
-    if input.KeyCode==Enum.KeyCode.Escape then bindingOwner=nil
-    elseif reserved[input.KeyCode.Name] or (binds[input.KeyCode.Name] and input.KeyCode~=bind) then binding.Text="Reserved key";return
-    else binds[bind.Name]=nil;bind=input.KeyCode;binds[bind.Name]=true;bindingOwner=nil end
-    binding.Text="Keybind: "..bind.Name.." (click to change)";return
-   end
-   if active and input.KeyCode==Enum.KeyCode.Escape then stop("Cancelled");return end
-   if not processed and input.KeyCode==bind then launch() end
-  end)
-  connect(UIS.WindowFocusReleased,function() if active then stop("Stopped: focus lost") end end);connect(LP.CharacterRemoving,function() if active then stop("Stopped: respawn") end end)
-  local function shutdown() enabled=false;if bindingOwner==spec then bindingOwner=nil end;stop("Off");if not spec.pair then RS:UnbindFromRenderStep(renderName) end end
-  connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
- end
- install({id="YujiQuick",character="Yuji",kind="yuji",page="Yuji",name="Quick Combo",bind=Enum.KeyCode.G,order=7,description="G | 3 M1 > jump + 1 > rear BF > 3 M1 > rear BF > downslam > 2",note="Real hit adapter required. BF pairs need >=75% body behind, <=7 studs and relevant attributed hits. Perfect hits are not guaranteed."})
- install({id="GojoAdvanced",character="Gojo",kind="advanced",page="Gojo",name="Advanced Combo",bind=Enum.KeyCode.J,order=20,description="J | 3 M1 > 1 > R > side dash > 4 > 3 > 2 > side dash",note="Uncalibrated fallback waits; local cooldown estimates ignore manual skills and server readiness. No 70% damage guarantee."})
- install({id="MegumiAbyss",character="Megumi",pair=true,page="Megumi",name="The Well's Unknown Abyss",bind=Enum.KeyCode.F6,order=1,first=Enum.KeyCode.Three,second=Enum.KeyCode.Two,interval=120,description="F6 | Toad 3 > Nue 2",note="Base Ten Shadows, manual aim. 120 ms is a trial input interval, not a verified activation window."})
- install({id="MahitoBF",character="Mahito",pair=true,page="Mahito",name="Focus Strike Black Flash",bind=Enum.KeyCode.F7,order=1,first=Enum.KeyCode.Three,second=Enum.KeyCode.Three,interval=350,description="F7 | Focus Strike 3 > timed second 3",note="Appropriate Perfection mode, manual aim. 350 ms is uncalibrated; successful Black Flash is not confirmed."})
- install({id="MahitoPassenger",character="Mahito",pair=true,page="Mahito",name="Passenger of Death",bind=Enum.KeyCode.F8,order=3,first=Enum.KeyCode.Four,second=Enum.KeyCode.Three,interval=700,description="F8 | Body Repel 4 > Focus Strike 3",note="Base Perfection, manual aim. 700 ms is a trial setting; readiness and move success are not confirmed."})
-end)()
-
--- Diagnostics, compact UI, search and per-module settings drawers.
-;(function()
- local alive=true;local links={};local drawers={}
- local function listen(signal,fn) local c=signal:Connect(fn);table.insert(links,c);return c end
- local diag=card(pages.Settings,"Diagnostics","Explicit adapter/input status; no fabricated hit confirmation")
- local debugText=make("TextBox",diag,{Size=UDim2.new(1,0,0,126),BackgroundColor3=T.p2,Text="",TextEditable=false,ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,TextColor3=T.dim,TextSize=11,Font=Enum.Font.Code,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,LayoutOrder=3})
- local elapsed=0
- listen(RS.Heartbeat,function(dt)
-  elapsed+=dt;if elapsed<.25 then return end;elapsed=0
-  local a=rawget(_G,"JJSVerifiedCombat");local b=rawget(_G,"JJSActionFeedback")
-  local verified=type(a)=="table" and type(a.subscribe)=="function" and type(a.isReady)=="function"
-  local readiness=type(b)=="table" and type(b.isReady)=="function"
-  debugText.Text=table.concat({"Inputs: "..(okVIM and "service obtained (delivery not verified)" or "UNAVAILABLE"),"Hit adapter: "..(verified and "interface present; authenticity not independently verified" or "MISSING: V2/V3 + Yuji Quick Combo are blocked"),"Optional action readiness: "..(readiness and "interface present" or "absent; other skills use uncalibrated waits"),"Last action: "..tostring(gui:GetAttribute("MasterLastAction") or "none"),"Last status: "..tostring(gui:GetAttribute("MasterLastStatus") or "none"),"Last error: "..tostring(gui:GetAttribute("MasterLastError") or gui:GetAttribute("JJS_LastModuleError") or "none")},"\n")
- end)
- local function titleOf(c) for _,x in ipairs(c:GetChildren()) do if x:IsA("TextLabel") and x.LayoutOrder==0 then return x end end end
- local function cardLike(c,p) return c:IsA("Frame") and c.Parent==p and c:FindFirstChildOfClass("UIListLayout") and titleOf(c) end
- local function sorted(c)
-  local rows={};for i,o in ipairs(c:GetChildren()) do if o:IsA("GuiObject") then table.insert(rows,{object=o,index=i}) end end
-  table.sort(rows,function(a,b) if a.object.LayoutOrder==b.object.LayoutOrder then return a.index<b.index end;return a.object.LayoutOrder<b.object.LayoutOrder end);return rows
- end
- local function toggleLabel(o)
-  if not o:IsA("TextButton") or o.Text~="" then return end
-  local label=o:FindFirstChildWhichIsA("TextLabel")
-  for _,c in ipairs(o:GetChildren()) do if c:IsA("Frame") and c.Size==UDim2.fromOffset(36,18) and label then return label.Text end end
- end
- local tooltip=make("TextLabel",gui,{Name="MasterTooltip",Size=UDim2.fromOffset(330,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.panel,Text="",TextWrapped=true,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,Visible=false,ZIndex=100});corner(tooltip,8)
- make("UIPadding",tooltip,{PaddingTop=UDim.new(0,8),PaddingBottom=UDim.new(0,8),PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)})
- local hovered=nil
- local function moveTooltip()
-  if not tooltip.Visible then return end;local camera=workspace.CurrentCamera;if not camera then tooltip.Visible=false;return end
-  local inset=gui.IgnoreGuiInset and Vector2.zero or select(1,game:GetService("GuiService"):GetGuiInset());local mouse=UIS:GetMouseLocation()-inset;local viewport=camera.ViewportSize-inset
-  local width=math.max(80,math.min(330,viewport.X-16));tooltip.Size=UDim2.fromOffset(width,0)
-  tooltip.Position=UDim2.fromOffset(math.clamp(mouse.X+12,8,math.max(8,viewport.X-width-8)),math.clamp(mouse.Y+12,8,math.max(8,viewport.Y-tooltip.AbsoluteSize.Y-8)))
- end
- local function hover(label)
-  listen(label.MouseEnter,function() hovered=label;tooltip.Text=label.Text;tooltip.Visible=main.Visible and #label.Text>0;moveTooltip() end)
-  listen(label.MouseLeave,function() if hovered==label then hovered=nil;tooltip.Visible=false end end)
-  listen(label:GetPropertyChangedSignal("Text"),function() if hovered==label then tooltip.Text=label.Text;moveTooltip() end end)
- end
- local search=make("TextBox",content,{Name="ModuleSearch",Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,BorderSizePixel=0,Text="",PlaceholderText="Search modules or settings...",PlaceholderColor3=T.mut,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ClearTextOnFocus=false});corner(search,8)
- make("UIPadding",search,{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)})
- make("TextLabel",side,{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,Text="WORKSPACE",TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=-100})
- for _,b in pairs(buttons) do
-  b.Size=UDim2.new(1,0,0,30);b.TextXAlignment=Enum.TextXAlignment.Left;b.TextSize=12;make("UIPadding",b,{PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,6)})
-  local mark=make("Frame",b,{Position=UDim2.new(0,0,.5,-7),Size=UDim2.fromOffset(3,14),BackgroundColor3=T.acc,BorderSizePixel=0});corner(mark,2)
-  local function selected() mark.Visible=b.BackgroundTransparency<.5 end;selected();listen(b:GetPropertyChangedSignal("BackgroundTransparency"),selected)
- end
- for _,page in pairs(pages) do
-  page.Position=UDim2.fromOffset(0,96);page.Size=UDim2.new(1,0,1,-96);page.ScrollBarImageColor3=T.acc;page.ScrollBarThickness=4
-  local layout=page:FindFirstChildOfClass("UIListLayout");if layout then layout.Padding=UDim.new(0,6) end
-  local cards,byTitle={},{}
-  for _,c in ipairs(page:GetChildren()) do if cardLike(c,page) then table.insert(cards,c);byTitle[titleOf(c).Text]=c end end
-  local companions,skip={},{}
-  for _,c in ipairs(cards) do
-   local owner=c:GetAttribute("MasterSettingsOwner");if not owner and titleOf(c).Text=="Quick Combo Timing" then owner="Quick Combo" end
-   if owner and byTitle[owner] then companions[byTitle[owner]]=c;skip[c]=true end
-  end
-  for _,c in ipairs(cards) do if not skip[c] then
-   local title=titleOf(c);local name=title.Text
-   local p=c:FindFirstChildOfClass("UIPadding");if p then p.PaddingTop=UDim.new(0,7);p.PaddingBottom=UDim.new(0,7);p.PaddingLeft=UDim.new(0,10);p.PaddingRight=UDim.new(0,10) end
-   local layout=c:FindFirstChildOfClass("UIListLayout");if layout then layout.Padding=UDim.new(0,4) end
-   corner(c,9);title.TextSize=12;title.TextWrapped=true;title.AutomaticSize=Enum.AutomaticSize.Y;title.Size=UDim2.new(1,0,0,20)
-   local candidates={};local primary=false
-   if name~="Session" and name~="Dash Cooldowns" and name~="Diagnostics" then
-    for _,row in ipairs(sorted(c)) do
-     local o=row.object;local label=toggleLabel(o)
-     local header=o==title or (o:IsA("TextLabel") and o.LayoutOrder==1) or (o:IsA("Frame") and o.Size.Y.Offset==1)
-     if not header then
-      if label and (not primary or (name=="ESP & Tracers" and (label=="ESP" or label=="Tracers"))) then primary=true
-      elseif o:IsA("TextButton") or o:IsA("TextBox") or o:IsA("ScrollingFrame") or (o:IsA("Frame") and o:FindFirstChildWhichIsA("GuiButton",true)) then table.insert(candidates,o) end
-     end
-    end
-   end
-   local companion=companions[c];local extras={}
-   if companion then for _,row in ipairs(sorted(companion)) do local o=row.object;if not(o:IsA("TextLabel") and (o.LayoutOrder==0 or o.LayoutOrder==1)) and not(o:IsA("Frame") and o.Size.Y.Offset==1) then table.insert(extras,o) end end end
-   if #candidates>0 or #extras>0 then
-    local body=make("Frame",c,{Name="ModuleSettings",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=100000})
-    make("UIListLayout",body,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
-    local order=0;for _,o in ipairs(candidates) do order+=1;o.LayoutOrder=order;o.Parent=body end;for _,o in ipairs(extras) do order+=1;o.LayoutOrder=order;o.Parent=body end
-    if companion then companion:Destroy() end
-    make("UIPadding",title,{PaddingRight=UDim.new(0,34)})
-    local arrow=make("TextButton",title,{Name="SettingsArrow",AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(26,20),Text=">",TextColor3=T.acc,BackgroundColor3=T.p2,Font=Enum.Font.GothamBold,TextSize=15,BorderSizePixel=0});corner(arrow,6)
-    local function expand(value) body.Visible=value;arrow.Text=value and "v" or ">";c:SetAttribute("SettingsExpanded",value) end
-    expand(false);listen(arrow.Activated,function() expand(not body.Visible) end);drawers[c]={body=body,expand=expand}
-   end
-   for _,o in ipairs(c:GetChildren()) do
-    if o:IsA("TextLabel") then
-     hover(o)
-     if o.LayoutOrder==1 then o.Visible=false elseif o.LayoutOrder>2 then o.AutomaticSize=Enum.AutomaticSize.None;o.Size=UDim2.new(1,0,0,16);o.TextWrapped=false;o.TextTruncate=Enum.TextTruncate.AtEnd;o.TextSize=10 end
-    end
-   end
-   for _,o in ipairs(c:GetDescendants()) do
-    if o:IsA("TextButton") and o.Size.Y.Offset==28 and o.Size.Y.Scale==0 then o.Size=UDim2.new(o.Size.X.Scale,o.Size.X.Offset,0,24) end
-    if o:IsA("Frame") and o.Size.Y.Offset==44 and o.AutomaticSize==Enum.AutomaticSize.None then for _,bar in ipairs(o:GetChildren()) do if bar:IsA("TextButton") and bar.Text=="" and bar.Size.Y.Offset==14 then o.Size=UDim2.new(o.Size.X.Scale,o.Size.X.Offset,0,36);bar.Position=UDim2.new(bar.Position.X.Scale,bar.Position.X.Offset,0,20);bar.Size=UDim2.new(bar.Size.X.Scale,bar.Size.X.Offset,0,12) end end end
-   end
-  end end
- end
- local function filter()
-  if not alive then return end;local q=string.lower(search.Text):match("^%s*(.-)%s*$")
-  for _,page in pairs(pages) do for _,c in ipairs(page:GetChildren()) do if cardLike(c,page) then
-   local match=q=="";if not match then for _,o in ipairs(c:GetDescendants()) do if (o:IsA("TextLabel") or o:IsA("TextButton")) and string.find(string.lower(o.Text),q,1,true) then match=true;break end end end
-   c.Visible=match;local d=drawers[c]
-   if d and q~="" then for _,o in ipairs(d.body:GetDescendants()) do if (o:IsA("TextLabel") or o:IsA("TextButton")) and string.find(string.lower(o.Text),q,1,true) then d.expand(true);break end end end
-  end end end
- end
- listen(search:GetPropertyChangedSignal("Text"),filter)
- listen(UIS.InputChanged,function(input) if input.UserInputType==Enum.UserInputType.MouseMovement then moveTooltip() end end)
- listen(main:GetPropertyChangedSignal("Visible"),function() if not main.Visible then hovered=nil;tooltip.Visible=false end end)
- listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end;table.clear(links) end)
- filter()
 end)()
