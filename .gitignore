@@ -880,7 +880,7 @@ do
  local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
  local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
- local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=250,120,250;local postDashTurnDegrees=90
+ local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=250,120,250;local postDashTurnDegrees=90;local blackflashPrefireMs=200
  local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
  local POST_JUMP_MIN,POST_JUMP_AIM=5,5.25;local needPostJumpBackoff=false
  local nextDash=0;local phase="idle";local steering=Vector3.zero;local mixFacing=Vector3.zero;local strafeKey=Enum.KeyCode.D
@@ -903,7 +903,7 @@ do
  local function enabledForRun() if runVersion==3 then return enabledV3 else return enabledV2 end end
  local function setting(name)
   if runVersion==3 then return V3_FIXED[name] end
-  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs end
+  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs elseif name=="Prefire" then return blackflashPrefireMs end
  end
  local function say(text) local label=runVersion==3 and feedbackV3 or feedback;if runVersion==3 then text=text:gsub("^V2","V3") end;if label.Parent and label.Text~=text then label.Text=text end end
  local function flat(v) return Vector3.new(v.X,0,v.Z) end
@@ -983,15 +983,17 @@ do
   return offset.Unit:Dot(look.Unit)
  end
  local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.55 end
+ local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.15 end -- start BF early, before fully behind
  local function frontSide(tr) local dot=facingDot(tr);return dot~=nil and dot>=.55 end
  local function authorizedFrontVariant(tr)
   local model=tr and tr:FindFirstAncestorOfClass("Model")
   return frontSequenceArmed and model==frontSequenceModel
  end
- local function attackReady(tr,ignoreHeight)
+ local function attackReady(tr,ignoreHeight,early)
   local distance,_,h,r=spacing(tr)
   if needPostJumpBackoff or not distance or distance<ATTACK_MIN or distance>ATTACK_MAX then return false end
-  if not rearSide(tr) and not authorizedFrontVariant(tr) then return false end
+  local behind = early and (approachingRear(tr) or rearSide(tr)) or rearSide(tr)
+  if not behind and not authorizedFrontVariant(tr) then return false end
   return ignoreHeight or math.abs(r.Position.Y-tr.Position.Y)<=6
  end
  local function paramsFor(tr)
@@ -1172,36 +1174,39 @@ do
      if recoveringOver then recoverByJump(tr,h) else move("catchup",-away);say("V2: gap >7 - W toward target");if objectInRoute(r,tr,-away,3) then recoverByJump(tr,h) else RS.Heartbeat:Wait() end end
     elseif turnaroundMixups and not mixupUsed and not frontSequenceArmed and frontSide(tr) and distance>=ATTACK_MIN and distance<=ATTACK_MAX and h.FloorMaterial~=Enum.Material.Air and math.random(1,3)==1 then
      turnaroundBackdash(tr,away)
-    elseif rearSide(tr) or authorizedFrontVariant(tr) then
+    elseif rearSide(tr) or approachingRear(tr) or authorizedFrontVariant(tr) then
      recoveringOver=false
      if distance>ATTACK_MAX then move("attackApproach",-away);say("V2: approach to 2-6 attack range");RS.Heartbeat:Wait()
      elseif distance<ATTACK_MIN then releasePositioning();say("V2: too close - stopped");RS.Heartbeat:Wait()
      else
       releasePositioning()
       if h.FloorMaterial==Enum.Material.Air and not jumpPrimed then say("V2: waiting to land");RS.Heartbeat:Wait()
-      elseif not attackReady(tr,false) then RS.Heartbeat:Wait()
+      elseif not attackReady(tr,false,true) then RS.Heartbeat:Wait()
       else
-       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or ""))
-       if jumpBeforeBlackflash() then local _,current=updateTarget()
-        if attackReady(current,true) then local began=os.clock();tapThree();local remaining=math.max(0,delayMs/1000-(os.clock()-began))
-         if waitFor(remaining,true) then local _,latest=updateTarget()
-          if attackReady(latest,true) then
-           tapThree();completed+=1
-           if completed>=3 then
-            if runVersion==3 then
-             releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
-             waitFor(V3_FIXED.CycleWait/1000,false)
-             clickLMB()
-             cyclesFinished+=1;completed=0;resetRoute()
-             say("V3: cycle "..cyclesFinished.." complete - repeating against the same target")
-             return
-            else clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return end
-           end
-           resetRoute();waitFor(setting("RepeatGap")/1000,false)
-          end
-         end
-        end
+       -- Prefire: if only approaching rear (not fully behind), wait prefire lead then commit
+       if approachingRear(tr) and not rearSide(tr) and not authorizedFrontVariant(tr) then
+        local pre=math.max(0,(setting("Prefire") or 200)/1000)
+        say(string.format("V2: prefire %.0fms before full behind", pre*1000))
+        waitFor(pre,false)
        end
+       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or "").." (force complete)")
+       -- Once started, always finish both 3 taps even if position drifts / miss
+       local jumped=jumpBeforeBlackflash()
+       local began=os.clock();tapThree()
+       local remaining=math.max(0,delayMs/1000-(os.clock()-began))
+       waitFor(remaining,false) -- do NOT require attackReady mid-combo
+       tapThree();completed+=1
+       if completed>=3 then
+        if runVersion==3 then
+         releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
+         waitFor(V3_FIXED.CycleWait/1000,false)
+         clickLMB()
+         cyclesFinished+=1;completed=0;resetRoute()
+         say("V3: cycle "..cyclesFinished.." complete - repeating against the same target")
+         return
+        else clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return end
+       end
+       resetRoute();waitFor(setting("RepeatGap")/1000,false)
       end
      end
     elseif recoveringOver then recoverByJump(tr,h)
@@ -1239,7 +1244,8 @@ do
  moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
  moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
  moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. Normal attempts still require behind position. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ moduleSlider(box,"BF prefire (before full behind)",0,400,blackflashPrefireMs," ms",function() return blackflashPrefireMs end,function(v) blackflashPrefireMs=v end)
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. BF starts on approaching-behind (~200ms prefire) and always finishes both 3 taps even on miss. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
  toggle(calcBox,"Auto camera angle (override slider/fixed turn)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
  make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the V2 slider or V3 fixed 75-degree turn. Both routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
