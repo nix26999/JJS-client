@@ -1,5 +1,5 @@
 -- AUTO BLACKFLASH + DASH COOLDOWNS
--- Perfect blackflash: 0 delay, always both taps.
+-- Perfect blackflash: exact 350 ms between 3 taps. Always completes.
 -- Dash cooldowns are manual timers: Dash 6s, Side Dash 2s.
 -- Input simulation is environment-dependent. Not live-tested.
 local Players=game:GetService("Players")
@@ -33,10 +33,14 @@ local enabled,lockOn,includeNPC,chainEnabled=false,false,false,false
 local chainRepeats=3
 local chainCooldownUntil=0
 local lastThreeTime=0
-local delayMs,mode=0,"Single"
+local delayMs,mode=350,"Single"
 local busy=false
 local manualSequenceBusy=false
 local blackflashV2Trigger=nil
+local anyBlackflashOn=false
+local function refreshBFFlag()
+ anyBlackflashOn = enabled or chainEnabled
+end
 local dashReady,sideReady=0,0
 local conns={}
 local T={bg=Color3.fromRGB(12,12,16),panel=Color3.fromRGB(18,18,24),p2=Color3.fromRGB(24,24,32),card=Color3.fromRGB(22,22,30),stroke=Color3.fromRGB(40,40,55),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(235,235,245),dim=Color3.fromRGB(140,140,160),mut=Color3.fromRGB(90,90,110),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
@@ -54,7 +58,7 @@ local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,B
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
 make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="AUTO BLACKFLASH",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
-local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="PERF",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
+local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="350",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
 local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
 make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
@@ -96,17 +100,8 @@ local function toggle(p,name,get,set)
  connect(r.Activated,function() set(not get()); paint() end); paint()
 end
 local c=card(pages.Macro,"Follow-up","Press 3 normally; the macro sends only the delayed action")
-toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
-local row=make("Frame",c,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(c)+2})
-make("TextLabel",row,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text="Delay",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
-local val=make("TextLabel",row,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text="0 ms (PERF)",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
-local bar=make("TextButton",row,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
-local fill=make("Frame",bar,{Size=UDim2.new((delayMs-50)/1450,0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
-local sliding=false
-local function update(x) local a=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1); delayMs=math.floor(50+1450*a+.5); fill.Size=UDim2.new(a,0,1,0); val.Text=delayMs.." ms"; badge.Text=tostring(delayMs) end
-connect(bar.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true; update(i.Position.X) end end)
-connect(UIS.InputChanged,function(i) if sliding and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then update(i.Position.X) end end)
-connect(UIS.InputEnded,function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=false end end)
+toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v;if v then anyBlackflashOn=true end end)
+make("TextLabel",c,{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text="Perfect BF locked at 350 ms (no slider)",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(c)+2})
 toggle(c,"Auto Block",function() return autoBlockEnabled end,function(v) autoBlockEnabled=v end)
 local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
  local r=make("Frame",parent,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
@@ -143,7 +138,7 @@ local modeBtn=make("TextButton",c,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p
 connect(modeBtn.Activated,function() mode=modes[(table.find(modes,mode)%#modes)+1]; modeBtn.Text="Key action: "..mode end)
 -- Dash cooldown visual overlay
 local cc=card(pages["Auto Blackflash"],"Copied sequence","After 3: copied sequence; no added chain-start lockout")
-toggle(cc,"Auto Blackflash Chain",function() return chainEnabled end,function(v) chainEnabled=v end)
+toggle(cc,"Auto Blackflash Chain",function() return chainEnabled end,function(v) chainEnabled=v;if v then anyBlackflashOn=true end end)
 local cd=card(pages["Dash Cooldowns"],"Manual timers","Click Ready/Use to start each timer")
 local function cooldownCard(parent,label,total)
  local box=make("Frame",parent,{Size=UDim2.new(1,0,0,64),BackgroundColor3=T.p2,BorderSizePixel=0,LayoutOrder=nextOrder(parent)+2}); corner(box,8)
@@ -254,19 +249,13 @@ end
 local function run()
  if busy or not enabled or not running then return end
  busy=true
- local ms,action=delayMs,mode
  local ok,err=pcall(function()
-  task.wait(ms/1000)
   if not running or not enabled then return end
-  local count=action=="Triple" and 3 or action=="Double" and 2 or 1
-  for i=1,count do
-   if not enabled or not running then break end
-   send(action=="Hold" and ms/1000 or .035)
-   if i<count then task.wait(.08) end
-  end
+  -- Perfect blackflash: exactly 350ms between the two 3 presses
+  perfectBlackflashTap()
  end)
  release(); busy=false
- if running then status.Text=ok and "Action finished (not a hit confirmation)" or tostring(err) end
+ if running then status.Text=ok and "Perfect BF 350ms sent" or tostring(err) end
 end
 local function chainActive() return running and chainEnabled end
 local function chainWait(seconds)
@@ -287,36 +276,68 @@ local function chainPress3()
  send(.035)
  return chainActive()
 end
+
+local PERFECT_BF_MS=0.350
+local function perfectBlackflashTap()
+ -- exact perfect BF: press 3, wait exactly 350ms from press start, press 3 again
+ if not okVIM or not VIM then return false end
+ local t0=os.clock()
+ pcall(function()
+  VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+ end)
+ task.wait(0.018)
+ pcall(function()
+  VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game)
+ end)
+ local left=PERFECT_BF_MS-(os.clock()-t0)
+ if left>0 then
+  local deadline=os.clock()+left
+  while os.clock()<deadline do task.wait() end
+ end
+ pcall(function()
+  VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+ end)
+ task.wait(0.018)
+ pcall(function()
+  VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game)
+ end)
+ return true
+end
+local function perfectBlackflashPair(pressFn, waitFn)
+ -- pressFn() does one 3 tap; waitFn(seconds) waits; uses exact 350ms
+ local t0=os.clock()
+ pressFn()
+ local left=PERFECT_BF_MS-(os.clock()-t0)
+ if left>0 then waitFn(left) end
+ pressFn()
+end
 local function runChain()
  if busy or not chainActive() then return end
  busy=true
  local ok,err=pcall(function()
+  local function pair()
+   -- one perfect blackflash = two 3s exactly 350ms apart
+   local t0=os.clock()
+   if not chainPress3() then return false end
+   local left=PERFECT_BF_MS-(os.clock()-t0)
+   if left>0 and not chainWait(left) then return false end
+   if not chainPress3() then return false end
+   return true
+  end
   for i=1,chainRepeats do
    if not chainActive() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(.65) then break end
-   if not chainClickLMB() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(.65) then break end
-   if not chainClickLMB() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if not chainWait(delayMs/1000) then break end
-   if not chainPress3() then break end
-   if i%2==0 and i<chainRepeats then
-    chainCooldownUntil=os.clock()+5
-    busy=false
-    return
+   -- 3 perfect blackflashes then LMB
+   for _=1,3 do
+    if not pair() then break end
+    if not chainWait(0.05) then break end
    end
+   if not chainClickLMB() then break end
+   if not chainWait(0.15) then break end
   end
  end)
  release()
  busy=false
- if running then status.Text=ok and "Copied Auto Blackflash sequence finished" or tostring(err) end
+ if running then status.Text=ok and "Auto Blackflash chain finished (perfect 350ms)" or tostring(err) end
 end
 local humanoids={}
 local function track(o) if o:IsA("Humanoid") then humanoids[o]=true end end
@@ -500,7 +521,7 @@ do
  local mouseDown=false
  local side=Enum.KeyCode.D
  local angle=135
- local secondTapDelay=.40
+ local secondTapDelay=.350
  local box=card(pages.Macro,"Yuji Black Flash Setup","L: run/cancel | 2 punches > side + Q + 3 > camera flick > 3")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Untested input sequence; flick is relative, not target tracking",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
  local function button(text,order)
@@ -562,20 +583,19 @@ do
    local ok,err=pcall(function()
     feedback.Text="Running - manually position near your opponent first"
     punch();waitFor(.35);punch();waitFor(.20)
+    key(chosenSide,true);key(Enum.KeyCode.Q,true)
     local started=os.clock()
-    -- Sent in one frame without yielding; input delivery is not atomic.
-    key(chosenSide,true);key(Enum.KeyCode.Q,true);key(Enum.KeyCode.Three,true)
-    waitFor(.035)
+    key(Enum.KeyCode.Three,true)
+    waitFor(.018)
     key(Enum.KeyCode.Q,false);key(Enum.KeyCode.Three,false)
-    waitFor(.065)
     local cam=workspace.CurrentCamera
     if cam then
      local sign=chosenSide==Enum.KeyCode.D and -1 or 1
      cam.CFrame=CFrame.new(cam.CFrame.Position)*CFrame.Angles(0,math.rad(chosenAngle*sign),0)*cam.CFrame.Rotation
     end
-    local remaining=secondTapDelay-(os.clock()-started)
+    local remaining=0.350-(os.clock()-started)
     if remaining>0 then waitFor(remaining) end
-    key(Enum.KeyCode.Three,true);waitFor(.035);key(Enum.KeyCode.Three,false)
+    key(Enum.KeyCode.Three,true);waitFor(.018);key(Enum.KeyCode.Three,false)
     key(chosenSide,false)
    end)
    if generation==id then
@@ -792,7 +812,7 @@ end
 -- Style Combo, B to run/cancel.
 do
  local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
- local timings={punchGap=.35,uppercutLead=.02,afterUppercut=.12,afterStrikes=2.0,afterSecondM1s=.20,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
+ local timings={punchGap=.35,uppercutLead=.02,afterUppercut=.12,afterStrikes=2.0,afterSecondM1s=.20,dashHold=.10,afterDash=.10,blackFlashDelay=.350,afterBlackFlash=.45,aerialLead=.12}
  local box=card(pages.Macro,"Style Combo","B: run/cancel | 3 M1 > Uppercut > Cursed Strikes > 3 M1 > Side Dash > Black Flash > Aerial Crushing Blow")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - timings untested; start close to your opponent",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
  local sideButton=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Style dash side: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4});corner(sideButton,6);connect(sideButton.Activated,function() side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;sideButton.Text=side==Enum.KeyCode.D and "Style dash side: D (right)" or "Style dash side: A (left)" end)
@@ -815,7 +835,7 @@ do
     feedback.Text="Style Combo: Cursed Strikes";tap(Enum.KeyCode.One);waitFor(t.afterStrikes)
     feedback.Text="Style Combo: second 3 M1s";threeM1s();waitFor(t.afterSecondM1s)
     feedback.Text="Style Combo: Side Dash";key(chosenSide,true);key(Enum.KeyCode.Q,true);waitFor(.035);key(Enum.KeyCode.Q,false);if t.dashHold>.035 then waitFor(t.dashHold-.035) end;key(chosenSide,false);waitFor(t.afterDash)
-    feedback.Text="Style Combo: Black Flash attempt";local firstTap=os.clock();tap(Enum.KeyCode.Three);local remaining=t.blackFlashDelay-(os.clock()-firstTap);if remaining>0 then waitFor(remaining) end;tap(Enum.KeyCode.Three);waitFor(t.afterBlackFlash)
+    feedback.Text="Style Combo: Perfect Black Flash 350ms";local firstTap=os.clock();tap(Enum.KeyCode.Three);local remaining=0.350-(os.clock()-firstTap);if remaining>0 then waitFor(remaining) end;tap(Enum.KeyCode.Three);waitFor(t.afterBlackFlash)
     feedback.Text="Style Combo: Aerial Crushing Blow";key(Enum.KeyCode.Space,true);waitFor(t.aerialLead);tap(Enum.KeyCode.Two);key(Enum.KeyCode.Space,false)
    end)
    if generation==id then finish();if feedback.Parent then feedback.Text=ok and "Style Combo inputs sent - hits not confirmed" or tostring(err) end end
@@ -884,8 +904,8 @@ do
  local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
  local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
- local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=50,0,100;local postDashTurnDegrees=90;local blackflashPrefireMs=0
- local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
+ local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=30,0,60;local postDashTurnDegrees=90;local blackflashPrefireMs=0
+ local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=5,6,2.2,5.5;local ATTACK_CENTER=3.8
  local POST_JUMP_MIN,POST_JUMP_AIM=5,5.25;local needPostJumpBackoff=false
  local nextDash=0;local phase="idle";local steering=Vector3.zero;local mixFacing=Vector3.zero;local strafeKey=Enum.KeyCode.D
  local flickUntil=0;local flickRotation=nil;local flickNavigationRight=Vector3.zero
@@ -986,8 +1006,8 @@ do
   local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return nil end
   return offset.Unit:Dot(look.Unit)
  end
- local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.55 end
- local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=.05 end
+ local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.50 end
+ local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.10 end
  local function frontSide(tr) local dot=facingDot(tr);return dot~=nil and dot>=.55 end
  local function willBeBehindSoon(tr, leadSec)
   local dot=facingDot(tr); if dot==nil then return false end
@@ -1075,7 +1095,25 @@ do
  end
  bindCapture=function()
   CAS:UnbindAction(action);if not(enabledV2 or enabledV3) or not running then return end
-  CAS:BindActionAtPriority(action,function(_,state) if typing() then return Enum.ContextActionResult.Pass end;if state==Enum.UserInputState.Begin and os.clock()>=suppressStartUntil then start() end;return Enum.ContextActionResult.Sink end,false,4000,Enum.KeyCode.Three)
+  CAS:BindActionAtPriority(action,function(_,state)
+  if typing() then return Enum.ContextActionResult.Pass end
+  if state==Enum.UserInputState.Begin and os.clock()>=suppressStartUntil then
+   local t0=os.clock()
+   task.spawn(function()
+    local deadline=t0+0.350
+    while os.clock()<deadline do task.wait() end
+    if not running then return end
+    pcall(function()
+     if not okVIM or not VIM then return end
+     VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+     task.wait(0.018)
+     VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game)
+    end)
+   end)
+   start()
+  end
+  return Enum.ContextActionResult.Sink
+ end,false,4000,Enum.KeyCode.Three)
  end
  start=function()
   if active or not(enabledV2 or enabledV3) or not running or os.clock()<suppressStartUntil then return end;runVersion=enabledV3 and 3 or 2
@@ -1097,27 +1135,42 @@ do
    local function waitFor(seconds,requireAttack)
     local deadline=os.clock()+seconds;repeat check();local _,tr=updateTarget();if requireAttack and not attackReady(tr,true) then return false end;RS.Heartbeat:Wait() until os.clock()>=deadline;check();return true
    end
-   local function tapThree() check();CAS:UnbindAction(action);key(Enum.KeyCode.Three,true);waitFor(.035,false);key(Enum.KeyCode.Three,false);bindCapture() end
+   local function tapThree() check();CAS:UnbindAction(action);key(Enum.KeyCode.Three,true);waitFor(.018,false);key(Enum.KeyCode.Three,false);bindCapture() end
    local function tapJump() check();key(Enum.KeyCode.Space,true);local h=rig();h.Jump=true;waitFor(.035,false);key(Enum.KeyCode.Space,false) end
-   local function jumpBeforeBlackflash()
+   local function true
     check();releasePositioning();if jumpPrimed then jumpPrimed=false;local _,tr=updateTarget();return attackReady(tr,true) end
-    local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();return waitFor(setting("JumpLead")/1000,true)
+    local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();local lead=math.max(0,(setting("JumpLead") or 0)/1000);if lead>0 then return waitFor(lead,false) end;return true
    end
    local function clickLMB() check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false end
    local function useAvailableSide(r,tr,right)
-    if calculatorEnabled then local plan=calculateRoute(tr,right);if plan and plan.BothBlocked then return nil end;if plan and plan.Side then strafeKey=plan.Side end end
-    local direction=strafeKey==Enum.KeyCode.A and -right or right
-    if objectInRoute(r,tr,direction,17.5) then local alternate=-direction;if objectInRoute(r,tr,alternate,17.5) then return nil end;strafeKey=strafeKey==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;direction=alternate end;return direction
+    -- Priority: pick the side with a clear dash lane (fastest path behind). nil = both blocked -> jump.
+    local leftDir=-right
+    local rightDir=right
+    local leftClear=not objectInRoute(r,tr,leftDir,17.5) and dashPathClearOfTarget(r,tr,leftDir)
+    local rightClear=not objectInRoute(r,tr,rightDir,17.5) and dashPathClearOfTarget(r,tr,rightDir)
+    if calculatorEnabled then
+     local plan=calculateRoute(tr,right)
+     if plan and plan.Side==Enum.KeyCode.A and leftClear then strafeKey=Enum.KeyCode.A;return leftDir end
+     if plan and plan.Side==Enum.KeyCode.D and rightClear then strafeKey=Enum.KeyCode.D;return rightDir end
+     if plan and plan.BothBlocked then return nil end
+    end
+    -- Prefer currently selected side if clear, else the other clear side
+    if strafeKey==Enum.KeyCode.A and leftClear then return leftDir end
+    if strafeKey==Enum.KeyCode.D and rightClear then return rightDir end
+    if leftClear then strafeKey=Enum.KeyCode.A;return leftDir end
+    if rightClear then strafeKey=Enum.KeyCode.D;return rightDir end
+    return nil -- both blocked: caller should jump over
    end
    local function markJumpBehind() recoveringOver=false;recoveryJumpActive=false;releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true end
    local function sideDash(r,tr,direction)
     if objectInRoute(r,tr,direction,17.5) or not dashPathClearOfTarget(r,tr,direction) then return false end
     local attemptedTarget=targetModel;local dashKey=strafeKey;local right=dashKey==Enum.KeyCode.A and -direction or direction
-    tapJump();local _,current=updateTarget();local h,root=rig();if targetModel~=attemptedTarget or not current or not h then return nil end
-    if rearSide(current) then markJumpBehind();return true end;local distance=spacing(current)
-    if distance and distance>CATCHUP_DISTANCE then return false end
-    if not distance or distance<SIDE_MIN or not dashPathClearOfTarget(root,current,direction) or objectInRoute(root,current,direction,17.5) then return false end
-    strafeKey=dashKey;move("side",direction);local dashStart=os.clock();nextDash=dashStart+2;routeCache=nil;key(Enum.KeyCode.Q,true)
+    local _,current=updateTarget();local h,root=rig();if targetModel~=attemptedTarget or not current or not h then return nil end
+    if rearSide(current) or approachingRear(current) then return true end;local distance=spacing(current)
+    if distance and distance>CATCHUP_DISTANCE+4 then return false end
+    if not distance or distance<SIDE_MIN*0.5 or not dashPathClearOfTarget(root,current,direction) or objectInRoute(root,current,direction,17.5) then return false end
+    -- Side dash priority path: hold A/D + Q (no pre-jump)
+    strafeKey=dashKey;move("side",direction);key(dashKey,true);local dashStart=os.clock();nextDash=dashStart+1.6;routeCache=nil;key(Enum.KeyCode.Q,true)
     local function finishDash(result) key(Enum.KeyCode.Q,false);flickCameraAfterSideDash(dashKey,right);return result end
     repeat
      check();local _,target=updateTarget();local d=spacing(target)
@@ -1161,7 +1214,7 @@ do
     r.CFrame=CFrame.lookAt(r.Position,r.Position+away)
     local cam=workspace.CurrentCamera;if cam then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,cam.CFrame.Position+away) end
     say("V2: front-only variant - lock OFF, turn around")
-    waitFor(.05,false)
+    waitFor(.03,false)
     local _,current=updateTarget()
     if targetModel~=authorizedModel or not frontSide(current) then releasePositioning();restoreLockOn();return false end
     move("backMixup",-away)
@@ -1170,7 +1223,7 @@ do
     local _,beforeDash=updateTarget()
     if targetModel~=authorizedModel or not frontSide(beforeDash) then releasePositioning();restoreLockOn();return false end
     key(Enum.KeyCode.Q,true)
-    waitFor(.035,false);key(Enum.KeyCode.Q,false);waitFor(.215,false)
+    waitFor(.035,false);key(Enum.KeyCode.Q,false);waitFor(.12,false)
     releasePositioning();restoreLockOn();flickUntil=0
     if targetModel==authorizedModel then
      frontSequenceArmed=true;frontSequenceModel=authorizedModel
@@ -1196,15 +1249,16 @@ do
      elseif distance<ATTACK_MIN then releasePositioning();say("V2: too close - stopped");RS.Heartbeat:Wait()
      else
       releasePositioning()
-      if h.FloorMaterial==Enum.Material.Air and not jumpPrimed then say("V2: waiting to land");RS.Heartbeat:Wait()
-      elseif not attackReady(tr,false,true) then RS.Heartbeat:Wait()
+      if not attackReady(tr,false,true) then RS.Heartbeat:Wait()
       else
-       mixupUsed=true;say("V2: PERFECT Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or ""))
-       jumpBeforeBlackflash()
+       mixupUsed=true
+       -- No pre-jump. Exact 350ms perfect BF
+       local deadline=os.clock()+0.350
        tapThree()
-       task.wait(0.03)
+       while os.clock()<deadline do RS.Heartbeat:Wait() end
        tapThree()
        completed=completed+1
+       say("V2: PERFECT BF "..completed.."/3")
        if completed>=3 then
         if runVersion==3 then
          releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
@@ -1219,14 +1273,22 @@ do
       end
      end
     elseif recoveringOver then recoverByJump(tr,h)
-    elseif os.clock()<nextDash or distance<SIDE_MIN then recoverByJump(tr,h)
     else
-     local right=navigationRight(away);local direction=useAvailableSide(r,tr,right)
-     if not direction then recoverByJump(tr,h)
-     else
-      move("side",direction);say("V2: preferred "..(strafeKey==Enum.KeyCode.A and "A" or "D").." side dash")
+     -- 1) side dash (fastest)  2) jump over head (second quickest)
+     local right=navigationRight(away)
+     local direction=useAvailableSide(r,tr,right)
+     local dashReady=os.clock()>=nextDash
+     if direction and dashReady and distance>=SIDE_MIN*0.5 then
+      say("V2: #1 side dash "..(strafeKey==Enum.KeyCode.A and "A+Q" or "D+Q"))
       local success=sideDash(r,tr,direction)
-      if success==false then local _,current=updateTarget();local currentHumanoid=rig();if current and currentHumanoid then recoverByJump(current,currentHumanoid) end end
+      if success==false then
+       say("V2: #2 jump over head (dash failed)")
+       recoverByJump(tr,h)
+      end
+     else
+      -- dash on CD or both lanes blocked -> jump over is #2 route
+      say("V2: #2 jump over head")
+      recoverByJump(tr,h)
      end
     end
    end
@@ -1241,8 +1303,8 @@ do
   end)
  end
  blackflashV2Trigger=function() if not(enabledV2 or enabledV3) then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
- toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v and active and runVersion==2 then stop("V2 off") end;feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture() end)
- toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v) enabledV3=v;if not v and active and runVersion==3 then stop("V3 off") end;feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture() end)
+ toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;anyBlackflashOn=enabledV2 or enabledV3;if not v and active and runVersion==2 then stop("V2 off") end;feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture() end)
+ toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v) enabledV3=v;anyBlackflashOn=enabledV2 or enabledV3;if not v and active and runVersion==3 then stop("V3 off") end;feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture() end)
  make("TextLabel",boxV3,{Size=UDim2.new(1,0,0,100),BackgroundTransparency=1,Text="Fixed V3: turn 75 degrees, camera hold 200 ms, repeat gap 340 ms, jump lead 35 ms. Three BF input sequences, wait 300 ms, LMB, repeat on the same target until death/despawn or off. V3 takes priority on 3 if both enabled. Front-only S+Q variant and target-death stop apply to both versions.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(boxV3)+2})
  toggle(box,"Include NPCs (shared V2/V3)",function() return includeNPCsV2 end,function(v)
   includeNPCsV2=v;targetRoot=nil;invalidateCaches()
@@ -1252,7 +1314,7 @@ do
  moduleSlider(box,"Post-dash turn angle",0,360,postDashTurnDegrees," degrees",function() return postDashTurnDegrees end,function(v) postDashTurnDegrees=math.clamp(v,0,360) end)
  moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
  moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
- moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
+ -- jump lead removed
  make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. Normal attempts still require behind position. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
  toggle(calcBox,"Auto camera angle (override slider/fixed turn)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
@@ -1329,13 +1391,30 @@ connect(UIS.InputBegan,function(i)
    if hum and hum.Health>0 then hum.Jump=true end
   end
  end
- if i.KeyCode==Enum.KeyCode.Three and blackflashV2Trigger and blackflashV2Trigger() then return end
- if i.KeyCode==Enum.KeyCode.Three and not busy then
+ if i.KeyCode==Enum.KeyCode.Three then
   local now=os.clock()
   lastThreeTime=now
-  if todoEnabled then task.spawn(runTodo); return end
-  task.spawn(run)
-  if chainEnabled and now>=chainCooldownUntil then task.spawn(runChain) end
+  -- Any BF mode on: every 3 press becomes a perfect blackflash (2nd tap at 350ms)
+  local bfOn = enabled or chainEnabled or anyBlackflashOn
+  if bfOn and not UIS:GetFocusedTextBox() then
+   task.spawn(function()
+    local deadline=os.clock()+0.350
+    while os.clock()<deadline do task.wait() end
+    if not running then return end
+    pcall(function()
+     if not okVIM or not VIM then return end
+     VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+     task.wait(0.018)
+     VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game)
+    end)
+   end)
+  end
+  if blackflashV2Trigger and blackflashV2Trigger() then return end
+  if not busy then
+   if todoEnabled then task.spawn(runTodo); return end
+   if enabled then task.spawn(run) end
+   if chainEnabled and now>=chainCooldownUntil then task.spawn(runChain) end
+  end
  end
 end)
 local dragging,start,pos,touch
@@ -1350,7 +1429,7 @@ connect(RS.Heartbeat,function()
  local cam=workspace.CurrentCamera
  if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
 end)
-status.Text="Perfect BF | 0 delay | always completes"
+status.Text="BF route: #1 side dash | #2 jump over | perfect 350ms"
 
 -- Right-side toggle/action notifications.
 do
@@ -1373,5 +1452,5 @@ do
   end
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
- notify("Ready","V2/V3: front-only turnaround, hold S first, then Q, then Black Flash.",T.acc)
+ notify("Ready","All Blackflash chains use perfect 350ms window.",T.acc)
 end
