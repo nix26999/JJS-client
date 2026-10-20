@@ -983,8 +983,21 @@ do
   return offset.Unit:Dot(look.Unit)
  end
  local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.55 end
- local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.15 end -- start BF early, before fully behind
+ -- Start zone: already turning past side toward back (dot <= 0.05). Prefire then waits 200ms so inputs land ~200ms before full behind.
+ local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=.05 end
  local function frontSide(tr) local dot=facingDot(tr);return dot~=nil and dot>=.55 end
+ local function willBeBehindSoon(tr, leadSec)
+  -- crude prediction: if relative motion is rotating us toward their back within leadSec
+  local dot=facingDot(tr); if dot==nil then return false end
+  if dot<=-.55 then return true end
+  if dot>.05 then return false end
+  local _,_,_,r=spacing(tr); if not r or not tr then return false end
+  local myVel=r.AssemblyLinearVelocity; local theirVel=tr.AssemblyLinearVelocity
+  local rel=flat((tr.Position+theirVel*leadSec)-(r.Position+myVel*leadSec))
+  local look=flat(tr.CFrame.LookVector); if look.Magnitude<.01 or rel.Magnitude<.01 then return dot<=.05 end
+  local futureDot=look.Unit:Dot(rel.Unit)
+  return futureDot<=-.35 or dot<=.05
+ end
  local function authorizedFrontVariant(tr)
   local model=tr and tr:FindFirstAncestorOfClass("Model")
   return frontSequenceArmed and model==frontSequenceModel
@@ -992,7 +1005,8 @@ do
  local function attackReady(tr,ignoreHeight,early)
   local distance,_,h,r=spacing(tr)
   if needPostJumpBackoff or not distance or distance<ATTACK_MIN or distance>ATTACK_MAX then return false end
-  local behind = early and (approachingRear(tr) or rearSide(tr)) or rearSide(tr)
+  local pre=math.max(0,(setting("Prefire") or 200)/1000)
+  local behind = early and (willBeBehindSoon(tr, pre) or approachingRear(tr) or rearSide(tr)) or rearSide(tr)
   if not behind and not authorizedFrontVariant(tr) then return false end
   return ignoreHeight or math.abs(r.Position.Y-tr.Position.Y)<=6
  end
@@ -1183,10 +1197,10 @@ do
       if h.FloorMaterial==Enum.Material.Air and not jumpPrimed then say("V2: waiting to land");RS.Heartbeat:Wait()
       elseif not attackReady(tr,false,true) then RS.Heartbeat:Wait()
       else
-       -- Prefire: if only approaching rear (not fully behind), wait prefire lead then commit
-       if approachingRear(tr) and not rearSide(tr) and not authorizedFrontVariant(tr) then
-        local pre=math.max(0,(setting("Prefire") or 200)/1000)
-        say(string.format("V2: prefire %.0fms before full behind", pre*1000))
+       -- Always aim inputs 200ms (Prefire) before full behind
+       local pre=math.max(0,(setting("Prefire") or 200)/1000)
+       if not rearSide(tr) and not authorizedFrontVariant(tr) then
+        say(string.format("V2: BF in %.0fms (before full behind)", pre*1000))
         waitFor(pre,false)
        end
        mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or "").." (force complete)")
