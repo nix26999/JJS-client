@@ -873,10 +873,12 @@ do
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
--- Optimized V2: dash if available; otherwise immediate jump-over, no punch fallback.
+-- Shared movement engine for finite V2 and repeating-until-death V3.
 do
  local CAS=game:GetService("ContextActionService")
- local enabledV2,active=false,false;local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
+ local enabledV2,enabledV3,active=false,false,false;local runVersion=2
+ local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
+ local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
  local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=250,120,250;local postDashTurnDegrees=90
  local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
@@ -889,12 +891,24 @@ do
  local sharedParams=nil;local paramsModel,paramsCharacter=nil,nil
  local MOVE_KEYS={Enum.KeyCode.W,Enum.KeyCode.A,Enum.KeyCode.S,Enum.KeyCode.D};local PAUSED_FOR_TYPING={}
  local action="JJSBlackflashV2Activate";local cameraBind,faceBind="JJSBlackflashV2Camera","JJSBlackflashV2Facing"
- local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","3 starts | side dash when available; otherwise jump over immediately | no fallback punches")
- local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable the module, then press 3 to start",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
- local calcBox=card(pages["Auto Blackflash"],"V2 Route Calculator","Cached left/right orbit, obstacle and ETA estimates")
+ local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Press 3 | 3 Black Flash sequences, then LMB and stop")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable V2 and press 3",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
+ local boxV3=card(pages["Auto Blackflash"],"Blackflash Chain V3","Press 3 | 3 Black Flash sequences > wait 300 ms > LMB > loop until target dies")
+ local feedbackV3=make("TextLabel",boxV3,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable V3 and press 3; V3 takes priority if both are enabled",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[boxV3]=3
+ local calcBox=card(pages["Auto Blackflash"],"V2 / V3 Route Calculator","Cached left/right orbit, obstacle and ETA estimates")
  local calcStatus=make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,106),BackgroundTransparency=1,Text="Waiting for a live target",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3});ord[calcBox]=3
- gui:SetAttribute("BlackflashChainV2Active",false);local start,bindCapture,stop,stopForDefeat
- local function say(text) if feedback.Parent and feedback.Text~=text then feedback.Text=text end end
+ gui:SetAttribute("BlackflashChainV2Active",false);gui:SetAttribute("BlackflashChainV3Active",false)
+ local start,bindCapture,stop,stopForDefeat
+ local function enabledForRun() if runVersion==3 then return enabledV3 else return enabledV2 end end
+ local function setting(name)
+  if runVersion==3 then return V3_FIXED[name] end
+  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs end
+ end
+ local function say(text)
+  local label=runVersion==3 and feedbackV3 or feedback
+  if runVersion==3 then text=text:gsub("^V2","V3") end
+  if label.Parent and label.Text~=text then label.Text=text end
+ end
  local function flat(v) return Vector3.new(v.X,0,v.Z) end
  local function rig() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");if h and r and h.Health>0 then return h,r end end
  local function typing() return UIS:GetFocusedTextBox()~=nil end
@@ -919,7 +933,7 @@ do
  stop=function(message)
   generation+=1;local owned=active;active=false;releaseInputs();disconnectFight();invalidateCaches();phase="idle";steering=Vector3.zero;targetRoot=nil;flickUntil=0;flickRotation=nil;flickNavigationRight=Vector3.zero;needPostJumpBackoff=false
   restoreLockOn();restoreFacing();local h=rig();if h then h:Move(Vector3.zero,false) end
-  if owned then busy=false;manualSequenceBusy=false end;gui:SetAttribute("BlackflashChainV2Active",false);say(message or "Stopped - press 3 to start again")
+  if owned then busy=false;manualSequenceBusy=false end;gui:SetAttribute("BlackflashChainV2Active",false);gui:SetAttribute("BlackflashChainV3Active",false);say(message or "Stopped - press 3 to start again")
  end
  stopForDefeat=function(reason)
   if not active then return end;local name=fightModel and fightModel.Name or "target"
@@ -942,7 +956,18 @@ do
  end
  local function pauseForTyping() releaseInputs();phase="idle";steering=Vector3.zero;flickUntil=0;restoreLockOn();restoreFacing();if bindCapture then bindCapture() end;say("V2 paused while typing in a text box") end
  local function closest(force)
-  local h,r=rig();if not h then return nil end;local now=os.clock()
+  local h,r=rig();if not h then return nil end
+  -- V3 keeps the same opponent through all cycles instead of drifting to another.
+  if active and runVersion==3 and fightModel and fightHumanoid then
+   if fightHumanoid.Health<=0 or not fightModel:IsDescendantOf(workspace) then return nil end
+   local owner=Players:GetPlayerFromCharacter(fightModel)
+   if not owner and not includeNPCsV2 then return nil end
+   local root=fightModel:FindFirstChild("HumanoidRootPart") or fightModel.PrimaryPart
+   if not root or not root:IsA("BasePart") then return nil end
+   if cachedCandidate and cachedCandidate.Model==fightModel and cachedCandidate.Humanoid==fightHumanoid then return cachedCandidate,root end
+   return {DisplayName=owner and owner.DisplayName or fightModel.Name,IsNPC=owner==nil,Model=fightModel,Humanoid=fightHumanoid},root
+  end
+  local now=os.clock()
   if not force and targetCacheReady and now-targetCacheAt<1/30 then
    if not cachedCandidate then return nil end
    if cachedRoot and cachedRoot.Parent and cachedCandidate.Humanoid.Health>0 and cachedCandidate.Model:IsDescendantOf(workspace) then return cachedCandidate,cachedRoot end
@@ -1011,9 +1036,9 @@ do
  end
  local function flickCameraAfterSideDash(dashKey,right)
   local cam=workspace.CurrentCamera;if not cam or typing() then return end
-  local degrees=dashKey==Enum.KeyCode.D and -postDashTurnDegrees or postDashTurnDegrees
+  local configuredAngle=setting("Turn");local degrees=dashKey==Enum.KeyCode.D and -configuredAngle or configuredAngle
   if calculatorEnabled and autoCameraAngle and targetRoot then degrees=signedYaw(cam.CFrame.LookVector,targetRoot.Position-cam.CFrame.Position) end
-  if math.abs(degrees)<.01 then return end;flickRotation=CFrame.Angles(0,math.rad(degrees),0)*cam.CFrame.Rotation;flickUntil=os.clock()+cameraFlickHoldMs/1000;flickNavigationRight=right;cam.CFrame=CFrame.new(cam.CFrame.Position)*flickRotation
+  if math.abs(degrees)<.01 then return end;flickRotation=CFrame.Angles(0,math.rad(degrees),0)*cam.CFrame.Rotation;flickUntil=os.clock()+setting("CameraHold")/1000;flickNavigationRight=right;cam.CFrame=CFrame.new(cam.CFrame.Position)*flickRotation
  end
  local function enforceMovementPriority()
   if not active or typing() or not targetRoot then return end;local distance,offset=spacing(targetRoot);if not distance then return end
@@ -1027,23 +1052,25 @@ do
   elseif phase=="side" and(rearSide(targetRoot) or distance<SIDE_MIN) then releasePositioning() end
  end
  bindCapture=function()
-  CAS:UnbindAction(action);if not enabledV2 or not running then return end
+  CAS:UnbindAction(action);if not(enabledV2 or enabledV3) or not running then return end
   CAS:BindActionAtPriority(action,function(_,state) if typing() then return Enum.ContextActionResult.Pass end;if state==Enum.UserInputState.Begin and os.clock()>=suppressStartUntil then start() end;return Enum.ContextActionResult.Sink end,false,4000,Enum.KeyCode.Three)
  end
  start=function()
-  if active or not enabledV2 or not running or os.clock()<suppressStartUntil then return end
+  if active or not(enabledV2 or enabledV3) or not running or os.clock()<suppressStartUntil then return end
+  runVersion=enabledV3 and 3 or 2
   if busy or todoBusy or manualSequenceBusy then say("Wait for the other macro to finish");return end
   if not okVIM or not VIM then say("Input simulation unavailable");return end;if not rig() then say("Character unavailable");return end
-  disconnectFight();invalidateCaches();active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;strafeKey=Enum.KeyCode.D;flickUntil=0;needPostJumpBackoff=false;gui:SetAttribute("BlackflashChainV2Active",true);local id=generation
+  disconnectFight();invalidateCaches();active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;strafeKey=Enum.KeyCode.D;flickUntil=0;needPostJumpBackoff=false
+  gui:SetAttribute("BlackflashChainV2Active",true);gui:SetAttribute("BlackflashChainV3Active",runVersion==3);local id=generation
   task.spawn(function()
-   local completed=0;local targetModel=nil;local mixupUsed=false;local jumpPrimed=false;local primeTime=0
+   local completed,cyclesFinished=0,0;local targetModel=nil;local mixupUsed=false;local jumpPrimed=false;local primeTime=0
    local recoveringOver=false;local recoveryJumpActive=false
-   local function valid() if active and not ensureFightAlive() then error("V2 stopped after target defeat",0) end;if not running or not enabledV2 or not active or generation~=id or not rig() then error("V2 stopped",0) end end
+   local function valid() if active and not ensureFightAlive() then error("Chain stopped after target defeat",0) end;if not running or not enabledForRun() or not active or generation~=id or not rig() then error("Chain stopped",0) end end
    local function check() valid();if typing() then error(PAUSED_FOR_TYPING,0) end end
    local function resetRoute() mixupUsed=false;strafeKey=Enum.KeyCode.D;jumpPrimed=false;needPostJumpBackoff=false;recoveringOver=false;recoveryJumpActive=false end
    local function updateTarget()
-    if not ensureFightAlive() then error("V2 target defeated - press 3 again",0) end
-    local p,tr=closest();watchFight(p);if not active then error("V2 target defeated",0) end;targetRoot=tr
+    if not ensureFightAlive() then error("Target defeated - press 3 again",0) end
+    local p,tr=closest();watchFight(p);if not active then error("Target defeated",0) end;targetRoot=tr
     if p and p.Model~=targetModel then targetModel=p.Model;resetRoute();flickUntil=0;routeCache=nil end
     local h=rig();if jumpPrimed and h and h.FloorMaterial~=Enum.Material.Air and os.clock()-primeTime>.15 then jumpPrimed=false end;enforceMovementPriority();return p,tr
    end
@@ -1054,25 +1081,15 @@ do
    local function tapJump() check();key(Enum.KeyCode.Space,true);local h=rig();h.Jump=true;waitFor(.035,false);key(Enum.KeyCode.Space,false) end
    local function jumpBeforeBlackflash()
     check();releasePositioning();if jumpPrimed then jumpPrimed=false;local _,tr=updateTarget();return attackReady(tr,true) end
-    local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();return waitFor(jumpLeadMs/1000,true)
+    local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();return waitFor(setting("JumpLead")/1000,true)
    end
    local function clickLMB() check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false end
    local function useAvailableSide(r,tr,right)
-    if calculatorEnabled then local plan=calculateRoute(tr,right)
-     if plan and plan.BothBlocked then return nil end
-     if plan and plan.Side then strafeKey=plan.Side end
-    end
+    if calculatorEnabled then local plan=calculateRoute(tr,right);if plan and plan.BothBlocked then return nil end;if plan and plan.Side then strafeKey=plan.Side end end
     local direction=strafeKey==Enum.KeyCode.A and -right or right
-    if objectInRoute(r,tr,direction,17.5) then
-     local alternate=-direction
-     if objectInRoute(r,tr,alternate,17.5) then return nil end
-     strafeKey=strafeKey==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;direction=alternate
-    end
-    return direction
+    if objectInRoute(r,tr,direction,17.5) then local alternate=-direction;if objectInRoute(r,tr,alternate,17.5) then return nil end;strafeKey=strafeKey==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;direction=alternate end;return direction
    end
-   local function markJumpBehind()
-    recoveringOver=false;recoveryJumpActive=false;releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true
-   end
+   local function markJumpBehind() recoveringOver=false;recoveryJumpActive=false;releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true end
    local function sideDash(r,tr,direction)
     if objectInRoute(r,tr,direction,17.5) or not dashPathClearOfTarget(r,tr,direction) then return false end
     local attemptedTarget=targetModel;local dashKey=strafeKey;local right=dashKey==Enum.KeyCode.A and -direction or direction
@@ -1084,8 +1101,7 @@ do
     local function finishDash(result) key(Enum.KeyCode.Q,false);flickCameraAfterSideDash(dashKey,right);return result end
     repeat
      check();local _,target=updateTarget();local d=spacing(target)
-     if targetModel~=attemptedTarget then return finishDash(nil) end
-     if d and d>CATCHUP_DISTANCE then return finishDash(false) end
+     if targetModel~=attemptedTarget then return finishDash(nil) end;if d and d>CATCHUP_DISTANCE then return finishDash(false) end
      if not d or rearSide(target) or d<SIDE_MIN or phase~="side" then break end
      local _,_,_,movingRoot=spacing(target);if movingRoot and objectInRoute(movingRoot,target,direction,3) then return finishDash(false) end
      if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end;RS.Heartbeat:Wait()
@@ -1111,10 +1127,8 @@ do
     local _,current=updateTarget();if wasAirborne and rearSide(current) then markJumpBehind() else releasePositioning() end;return false
    end
    local function recoverByJump(tr,h)
-    check();recoveringOver=true;key(Enum.KeyCode.Q,false)
-    say("V2: immediate jump-over recovery - no fallback punches")
-    if h.FloorMaterial~=Enum.Material.Air then jumpOverTarget();RS.Heartbeat:Wait()
-    else recoveryJumpActive=true;steerOverTarget(tr);RS.Heartbeat:Wait() end
+    check();recoveringOver=true;key(Enum.KeyCode.Q,false);say("V2: immediate jump-over recovery - no fallback punches")
+    if h.FloorMaterial~=Enum.Material.Air then jumpOverTarget();RS.Heartbeat:Wait() else recoveryJumpActive=true;steerOverTarget(tr);RS.Heartbeat:Wait() end
    end
    local function turnaroundBackdash(tr,away)
     check();releasePositioning();mixupUsed=true;previousLockOn=lockOn;borrowedLock=true;lockOn=false;lockSuppressed=true
@@ -1128,15 +1142,10 @@ do
     local distance,offset,h,r=spacing(tr);local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
     if recoveringOver and recoveryJumpActive and rearSide(tr) and distance<=ATTACK_MAX then markJumpBehind() end
     if needPostJumpBackoff then
-     if distance<POST_JUMP_MIN then move("postJumpBackoff",away);say("V2: post-jump backoff to >=5 studs");RS.Heartbeat:Wait();return
-     else needPostJumpBackoff=false;releasePositioning() end
+     if distance<POST_JUMP_MIN then move("postJumpBackoff",away);say("V2: post-jump backoff to >=5 studs");RS.Heartbeat:Wait();return else needPostJumpBackoff=false;releasePositioning() end
     end
     if distance>CATCHUP_DISTANCE then
-     if recoveringOver then recoverByJump(tr,h)
-     else
-      move("catchup",-away);say("V2: gap >7 - W toward target")
-      if objectInRoute(r,tr,-away,3) then recoverByJump(tr,h) else RS.Heartbeat:Wait() end
-     end
+     if recoveringOver then recoverByJump(tr,h) else move("catchup",-away);say("V2: gap >7 - W toward target");if objectInRoute(r,tr,-away,3) then recoverByJump(tr,h) else RS.Heartbeat:Wait() end end
     elseif rearSide(tr) then
      recoveringOver=false
      if distance>ATTACK_MAX then move("attackApproach",-away);say("V2: behind - approach to 2-6");RS.Heartbeat:Wait()
@@ -1147,14 +1156,25 @@ do
       elseif not attackReady(tr,false) then RS.Heartbeat:Wait()
       elseif turnaroundMixups and not mixupUsed and not jumpPrimed and math.random(1,3)==1 then turnaroundBackdash(tr,away)
       else
-       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3")
+       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or ""))
        if jumpBeforeBlackflash() then local _,current=updateTarget()
         if attackReady(current,true) then local began=os.clock();tapThree();local remaining=math.max(0,delayMs/1000-(os.clock()-began))
          if waitFor(remaining,true) then local _,latest=updateTarget()
           if attackReady(latest,true) then
            tapThree();completed+=1
-           if completed>=3 then clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return end
-           resetRoute();waitFor(repeatGapMs/1000,false)
+           if completed>=3 then
+            if runVersion==3 then
+             releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
+             waitFor(V3_FIXED.CycleWait/1000,false)
+             clickLMB()
+             cyclesFinished+=1;completed=0;resetRoute()
+             say("V3: cycle "..cyclesFinished.." complete - repeating against the same target")
+             return
+            else
+             clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return
+            end
+           end
+           resetRoute();waitFor(setting("RepeatGap")/1000,false)
           end
          end
         end
@@ -1162,19 +1182,14 @@ do
       end
      end
     elseif recoveringOver then recoverByJump(tr,h)
-    elseif os.clock()<nextDash or distance<SIDE_MIN then
-     -- No cooldown waiting, no punch sequence: start overhead recovery now.
-     recoverByJump(tr,h)
+    elseif os.clock()<nextDash or distance<SIDE_MIN then recoverByJump(tr,h)
     else
      local right=navigationRight(away);local direction=useAvailableSide(r,tr,right)
      if not direction then recoverByJump(tr,h)
      else
       move("side",direction);say("V2: preferred "..(strafeKey==Enum.KeyCode.A and "A" or "D").." side dash")
       local success=sideDash(r,tr,direction)
-      if success==false then
-       local _,current=updateTarget();local currentHumanoid=rig()
-       if current and currentHumanoid then recoverByJump(current,currentHumanoid) end
-      end
+      if success==false then local _,current=updateTarget();local currentHumanoid=rig();if current and currentHumanoid then recoverByJump(current,currentHumanoid) end end
      end
     end
    end
@@ -1185,33 +1200,42 @@ do
      else local stepOK,stepError=pcall(step);if not stepOK then if stepError==PAUSED_FOR_TYPING then pauseForTyping();jumpPrimed=false else error(stepError,0) end end end
     end
    end)
-   if generation==id then stop(ok and "V2 stopped" or tostring(err));bindCapture() end
+   if generation==id then stop(ok and "Chain stopped" or tostring(err));bindCapture() end
   end)
  end
- blackflashV2Trigger=function() if not enabledV2 then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
- toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v then CAS:UnbindAction(action);stop("Off") else say("Ready - press 3; dash unavailable means immediate jump-over");bindCapture() end end)
- toggle(box,"Include NPCs (V2)",function() return includeNPCsV2 end,function(v) includeNPCsV2=v;targetRoot=nil;invalidateCaches() end)
- toggle(box,"Occasional turnaround S + Q",function() return turnaroundMixups end,function(v) turnaroundMixups=v end)
+ blackflashV2Trigger=function() if not(enabledV2 or enabledV3) then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
+ toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v)
+  enabledV2=v;if not v and active and runVersion==2 then stop("V2 off") end
+  feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture()
+ end)
+ toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v)
+  enabledV3=v;if not v and active and runVersion==3 then stop("V3 off") end
+  feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture()
+ end)
+ make("TextLabel",boxV3,{Size=UDim2.new(1,0,0,100),BackgroundTransparency=1,Text="Fixed V3: post-dash turn 75 degrees, camera hold 200 ms, repeat gap 340 ms, jump lead 35 ms. Three BF input sequences, wait 300 ms, LMB, repeat on the same target until death/despawn or module off. V3 takes priority on 3 when both versions are enabled. Existing V2 and other-module sliders are unchanged.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(boxV3)+2})
+ toggle(box,"Include NPCs (shared V2/V3)",function() return includeNPCsV2 end,function(v)
+  includeNPCsV2=v;targetRoot=nil;invalidateCaches()
+  if not v and active and runVersion==3 and fightModel and not Players:GetPlayerFromCharacter(fightModel) then stop("V3 stopped: NPC targeting disabled. Press 3 again.");bindCapture() end
+ end)
+ toggle(box,"Occasional turnaround S + Q (shared)",function() return turnaroundMixups end,function(v) turnaroundMixups=v end)
  moduleSlider(box,"Post-dash turn angle",0,360,postDashTurnDegrees," degrees",function() return postDashTurnDegrees end,function(v) postDashTurnDegrees=math.clamp(v,0,360) end)
  moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
  moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
  moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,120),BackgroundTransparency=1,Text="Dash available: use a side route. Dash unavailable, blocked or failed: immediately attempt overhead recovery, without fallback punches or a second-dash waiting stage. If already airborne, keep steering over the target. Back to >=5 after crossing behind. 3 BF input pairs then one final LMB/stop. Death stops until 3 again.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,110),BackgroundTransparency=1,Text="Dash available: side route. Dash unavailable, blocked or failed: immediate overhead recovery, without fallback punches. Back to >=5 after crossing behind. V2 ends after 3 BF input pairs and LMB. V3 instead waits 300 ms, clicks LMB and repeats. Target death stops either run until 3 again.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
- toggle(calcBox,"Auto camera angle (override slider)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
- make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the manual angle slider. Both side routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
+ toggle(calcBox,"Auto camera angle (override slider/fixed turn)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
+ make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the V2 slider or V3 fixed 75-degree turn. Both routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
  local lastCalc=-math.huge
  connect(RS.Heartbeat,function()
   if not running or not gui.Parent then return end;if active and not ensureFightAlive() then return end
   if os.clock()-lastCalc<.25 then return end;lastCalc=os.clock();local text
-  if not calculatorEnabled then text="Calculator off - direct D/A selection and manual camera angle"
+  if not calculatorEnabled then text="Calculator off - direct D/A selection"
   else
    local p,tr=closest();local d,offset=spacing(tr)
-   if not p or not tr then text="No live target available"
-   elseif not d or d<.5 then text="Too close to calculate orbit"
-   else
-    local plan=calculateRoute(tr,navigationRight(offset.Unit))
-    if not plan then text="Unable to estimate route for target"
+   if not p or not tr then text="No live target available" elseif not d or d<.5 then text="Too close to calculate orbit"
+   else local plan=calculateRoute(tr,navigationRight(offset.Unit))
+    if not plan then text="Unable to estimate route"
     else
      local function line(route) return string.format("%.1f deg / %.1f studs / %s",route.Degrees,route.Distance,route.Blocked and "blocked" or string.format("~%.2f s",route.Time)) end
      local recommendation=plan.Side==Enum.KeyCode.A and "LEFT (A)" or plan.Side==Enum.KeyCode.D and "RIGHT (D)" or "JUMP OVER (both blocked)"
@@ -1240,9 +1264,9 @@ do
   if remaining then local alpha=math.clamp(remaining/math.max(h.WalkSpeed*math.max(dt,1/240),.01),0,1);vector=vector*alpha;if remaining<=.05 and phase~="jumpOver" then releasePositioning();vector=Vector3.zero end end
   h:Move(vector,false);local aim=lockSuppressed and(r.Position+mixFacing) or Vector3.new(targetRoot.Position.X,r.Position.Y,targetRoot.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end
  end)
- connect(LP.CharacterRemoving,function() stop("V2 stopped: your character removed. Press 3 again.");bindCapture() end)
- connect(UIS.WindowFocusReleased,function() if active then stop("V2 stopped: window lost focus. Press 3 again.");bindCapture() end end)
- local function shutdown() enabledV2=false;CAS:UnbindAction(action);stop("Off");blackflashV2Trigger=nil;RS:UnbindFromRenderStep(cameraBind);RS:UnbindFromRenderStep(faceBind) end
+ connect(LP.CharacterRemoving,function() stop("Your character removed. Press 3 again.");bindCapture() end)
+ connect(UIS.WindowFocusReleased,function() if active then stop("Window lost focus. Press 3 again.");bindCapture() end end)
+ local function shutdown() enabledV2=false;enabledV3=false;CAS:UnbindAction(action);stop("Off");blackflashV2Trigger=nil;RS:UnbindFromRenderStep(cameraBind);RS:UnbindFromRenderStep(faceBind) end
  connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 local function cleanup()
@@ -1318,5 +1342,5 @@ do
   end
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
- notify("Ready","V2: dash unavailable means immediate jump-over, no punch fallback.",T.acc)
+ notify("Ready","Full client: V2 finite and V3 looping until target death.",T.acc)
 end
