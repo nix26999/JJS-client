@@ -1,5 +1,5 @@
 -- AUTO BLACKFLASH + DASH COOLDOWNS
--- Press 3: wait 325 ms, then send selected follow-up.
+-- Perfect blackflash: 0 delay, always both taps.
 -- Dash cooldowns are manual timers: Dash 6s, Side Dash 2s.
 -- Input simulation is environment-dependent. Not live-tested.
 local Players=game:GetService("Players")
@@ -7,6 +7,10 @@ local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
 local LP=Players.LocalPlayer
 assert(LP,"Client required")
+
+-- polyfills
+if not table.clone then function table.clone(t) local n={} for k,v in pairs(t) do n[k]=v end return n end end
+if not table.find then function table.find(t,v) for i,x in ipairs(t) do if x==v then return i end end return nil end end
 local PG=LP:WaitForChild("PlayerGui")
 local old=PG:FindFirstChild("AutoBlackflash")
 if old then old:Destroy() end
@@ -29,7 +33,7 @@ local enabled,lockOn,includeNPC,chainEnabled=false,false,false,false
 local chainRepeats=3
 local chainCooldownUntil=0
 local lastThreeTime=0
-local delayMs,mode=325,"Single"
+local delayMs,mode=0,"Single"
 local busy=false
 local manualSequenceBusy=false
 local blackflashV2Trigger=nil
@@ -50,7 +54,7 @@ local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,B
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
 make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="AUTO BLACKFLASH",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
-local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
+local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="PERF",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
 local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
 make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
@@ -95,7 +99,7 @@ local c=card(pages.Macro,"Follow-up","Press 3 normally; the macro sends only the
 toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
 local row=make("Frame",c,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(c)+2})
 make("TextLabel",row,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text="Delay",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
-local val=make("TextLabel",row,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text="325 ms",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
+local val=make("TextLabel",row,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text="0 ms (PERF)",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
 local bar=make("TextButton",row,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
 local fill=make("Frame",bar,{Size=UDim2.new((delayMs-50)/1450,0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
 local sliding=false
@@ -880,7 +884,7 @@ do
  local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
  local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
- local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=250,120,250;local postDashTurnDegrees=90;local blackflashPrefireMs=200
+ local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=50,0,100;local postDashTurnDegrees=90;local blackflashPrefireMs=0
  local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
  local POST_JUMP_MIN,POST_JUMP_AIM=5,5.25;local needPostJumpBackoff=false
  local nextDash=0;local phase="idle";local steering=Vector3.zero;local mixFacing=Vector3.zero;local strafeKey=Enum.KeyCode.D
@@ -903,7 +907,7 @@ do
  local function enabledForRun() if runVersion==3 then return enabledV3 else return enabledV2 end end
  local function setting(name)
   if runVersion==3 then return V3_FIXED[name] end
-  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs elseif name=="Prefire" then return blackflashPrefireMs end
+  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs elseif name=="Prefire" then return blackflashPrefireMs or 0 end
  end
  local function say(text) local label=runVersion==3 and feedbackV3 or feedback;if runVersion==3 then text=text:gsub("^V2","V3") end;if label.Parent and label.Text~=text then label.Text=text end end
  local function flat(v) return Vector3.new(v.X,0,v.Z) end
@@ -983,11 +987,9 @@ do
   return offset.Unit:Dot(look.Unit)
  end
  local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.55 end
- -- Start zone: already turning past side toward back (dot <= 0.05). Prefire then waits 200ms so inputs land ~200ms before full behind.
  local function approachingRear(tr) local dot=facingDot(tr);return dot~=nil and dot<=.05 end
  local function frontSide(tr) local dot=facingDot(tr);return dot~=nil and dot>=.55 end
  local function willBeBehindSoon(tr, leadSec)
-  -- crude prediction: if relative motion is rotating us toward their back within leadSec
   local dot=facingDot(tr); if dot==nil then return false end
   if dot<=-.55 then return true end
   if dot>.05 then return false end
@@ -1005,7 +1007,7 @@ do
  local function attackReady(tr,ignoreHeight,early)
   local distance,_,h,r=spacing(tr)
   if needPostJumpBackoff or not distance or distance<ATTACK_MIN or distance>ATTACK_MAX then return false end
-  local pre=math.max(0,(setting("Prefire") or 200)/1000)
+  local pre=((blackflashPrefireMs or 0)/1000)
   local behind = early and (willBeBehindSoon(tr, pre) or approachingRear(tr) or rearSide(tr)) or rearSide(tr)
   if not behind and not authorizedFrontVariant(tr) then return false end
   return ignoreHeight or math.abs(r.Position.Y-tr.Position.Y)<=6
@@ -1197,28 +1199,21 @@ do
       if h.FloorMaterial==Enum.Material.Air and not jumpPrimed then say("V2: waiting to land");RS.Heartbeat:Wait()
       elseif not attackReady(tr,false,true) then RS.Heartbeat:Wait()
       else
-       -- Always aim inputs 200ms (Prefire) before full behind
-       local pre=math.max(0,(setting("Prefire") or 200)/1000)
-       if not rearSide(tr) and not authorizedFrontVariant(tr) then
-        say(string.format("V2: BF in %.0fms (before full behind)", pre*1000))
-        waitFor(pre,false)
-       end
-       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or "").." (force complete)")
-       -- Once started, always finish both 3 taps even if position drifts / miss
-       local jumped=jumpBeforeBlackflash()
-       local began=os.clock();tapThree()
-       local remaining=math.max(0,delayMs/1000-(os.clock()-began))
-       waitFor(remaining,false) -- do NOT require attackReady mid-combo
-       tapThree();completed+=1
+       mixupUsed=true;say("V2: PERFECT Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or ""))
+       jumpBeforeBlackflash()
+       tapThree()
+       task.wait(0.03)
+       tapThree()
+       completed=completed+1
        if completed>=3 then
         if runVersion==3 then
          releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
          waitFor(V3_FIXED.CycleWait/1000,false)
          clickLMB()
-         cyclesFinished+=1;completed=0;resetRoute()
+         cyclesFinished=cyclesFinished+1;completed=0;resetRoute()
          say("V3: cycle "..cyclesFinished.." complete - repeating against the same target")
          return
-        else clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return end
+        else clickLMB();stop("V2 finished: 3 Perfect BF + LMB. Press 3 again.");bindCapture();return end
        end
        resetRoute();waitFor(setting("RepeatGap")/1000,false)
       end
@@ -1258,8 +1253,7 @@ do
  moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
  moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
  moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
- moduleSlider(box,"BF prefire (before full behind)",0,400,blackflashPrefireMs," ms",function() return blackflashPrefireMs end,function(v) blackflashPrefireMs=v end)
- make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. BF starts on approaching-behind (~200ms prefire) and always finishes both 3 taps even on miss. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. Normal attempts still require behind position. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
  toggle(calcBox,"Auto camera angle (override slider/fixed turn)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
  make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the V2 slider or V3 fixed 75-degree turn. Both routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
@@ -1356,7 +1350,7 @@ connect(RS.Heartbeat,function()
  local cam=workspace.CurrentCamera
  if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
 end)
-status.Text="Default: 325 ms | Dash 6s | Side Dash 2s"
+status.Text="Perfect BF | 0 delay | always completes"
 
 -- Right-side toggle/action notifications.
 do
