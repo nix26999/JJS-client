@@ -239,9 +239,13 @@ local function todoWait(seconds)
 end
 local function todoKey(key)
  assert(okVIM and VIM,"Input simulation unavailable")
- VIM:SendKeyEvent(true,key,false,game)
- task.wait(.035)
- VIM:SendKeyEvent(false,key,false,game)
+ local down=false
+ local ok,err=pcall(function()
+  VIM:SendKeyEvent(true,key,false,game);down=true
+  task.wait(.035)
+ end)
+ if down then pcall(function() VIM:SendKeyEvent(false,key,false,game) end) end
+ if not ok then error(err,0) end
 end
 local function runTodo()
  if todoBusy or busy or not running or not todoEnabled then return end
@@ -297,12 +301,13 @@ local function chainClickLMB()
  assert(okVIM and VIM,"Input simulation unavailable")
  -- Always attempt mouse-up, even if cancellation or an input error happens mid-click.
  local pressed=false
+ local pos=UIS:GetMouseLocation()
  local ok,err=pcall(function()
-  VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+  VIM:SendMouseButtonEvent(pos.X,pos.Y,0,true,game,0)
   pressed=true
   chainWait(.035)
  end)
- if pressed then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+ if pressed then pcall(function() VIM:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0) end) end
  if not ok then error(err,0) end
  return chainActive()
 end
@@ -331,10 +336,12 @@ local function runChain()
    if not chainPress3() then break end
    if not chainWait(delayMs/1000) then break end
    if not chainPress3() then break end
+   -- Keep the configured repeat count: the old early return ended every
+   -- three-repeat run after repeat two. Preserve the intended 5 s pause,
+   -- but wait inside this run instead of abandoning the remaining repeats.
    if i%2==0 and i<chainRepeats then
     chainCooldownUntil=os.clock()+5
-    busy=false
-    return
+    if not chainWait(5) then break end
    end
   end
  end)
@@ -394,9 +401,13 @@ RS:BindToRenderStep(bind,Enum.RenderPriority.Camera.Value+1,function(dt)
 end)
 local function clapClick()
  if not okVIM or not VIM then return end
- VIM:SendMouseButtonEvent(0,0,0,true,game,0)
- task.wait(.035)
- VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+ local pos=UIS:GetMouseLocation();local down=false
+ local ok,err=pcall(function()
+  VIM:SendMouseButtonEvent(pos.X,pos.Y,0,true,game,0);down=true
+  task.wait(.035)
+ end)
+ if down then pcall(function() VIM:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0) end) end
+ if not ok then error(err,0) end
 end
 local function runPerfectClap()
  if not perfectClapEnabled or not running then return end
@@ -432,8 +443,34 @@ local function attackerNearby()
  end
  return false
 end
+local blockThreat=false
+local nextBlockAt=0
+local blockUntil=0
 connect(RS.Heartbeat,function()
- setBlock(running and autoBlockEnabled and not gui:GetAttribute("BlackflashChainV2Active") and not gui:GetAttribute("BlackflashChainV3Active") and not gui:GetAttribute("GojoQuickComboActive") and not gui:GetAttribute("MasterMacroActive") and not gui:GetAttribute("MasterDashActive") and attackerNearby())
+ local shouldMonitor=running and autoBlockEnabled
+  and not gui:GetAttribute("BlackflashChainV2Active")
+  and not gui:GetAttribute("BlackflashChainV3Active")
+  and not gui:GetAttribute("GojoQuickComboActive")
+  and not gui:GetAttribute("MasterMacroActive")
+  and not gui:GetAttribute("MasterDashActive")
+  and attackerNearby()
+ local now=os.clock()
+ if not shouldMonitor then
+  blockThreat=false;nextBlockAt=0;blockUntil=0;setBlock(false)
+  return
+ end
+ if not blockThreat then
+  blockThreat=true;nextBlockAt=now+blockDelay/1000;blockUntil=0
+ end
+ if blockKeyDown then
+  if now>=blockUntil then
+   setBlock(false)
+   nextBlockAt=now+blockDelay/1000
+  end
+ elseif now>=nextBlockAt then
+  setBlock(true)
+  if blockKeyDown then blockUntil=now+blockHoldTime/1000 end
+ end
 end)
 connect(LP.CharacterRemoving,function()
  setBlock(false)
@@ -519,26 +556,42 @@ end)()
  local token=0
  local heldKey=nil
  local mouseHeld=false
- local panel=card(pages.Combos,"Crushing / Feverish Combo","K: play or cancel | M1 x3 > 1 > M1 x3 > Jump > wait 350 ms > 2 > Space + M1")
+ local mousePos=nil
+ local panel=card(pages.Combos,"Crushing / Feverish Combo","K: play/cancel | M1 x3 > 1 > M1 x3 > Jump > adjustable delay > 2 > Space + M1")
  local label=make("TextLabel",panel,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="Ready - timings are untested",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
  local button=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Combo (K)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4}); corner(button,6)
- local timing={punchGap=.35,afterPunches=.20,afterOne=2.0,afterTwo=.750,jumpLead=.12,beforeTwoJumpDelay=.350}
+ ord[panel]=4
+ local timing={punchGap=350,afterPunches=200,afterOne=2000,afterTwo=750,jumpLead=120,beforeTwoJumpDelay=350}
+ for _,setting in ipairs({
+  {"M1 spacing",150,650,"punchGap"},
+  {"After each M1 group",0,800,"afterPunches"},
+  {"After key 1",100,3500,"afterOne"},
+  {"Jump to key 2",0,800,"beforeTwoJumpDelay"},
+  {"Key 2 to Space + M1",100,1500,"afterTwo"},
+  {"Final jump lead",35,400,"jumpLead"},
+ }) do
+  local label,min,max,key=setting[1],setting[2],setting[3],setting[4]
+  moduleSlider(panel,label,min,max,timing[key]," ms",function() return timing[key] end,function(v) timing[key]=v end)
+ end
  local function releaseCombo()
   if okVIM and VIM then
    if heldKey then pcall(function() VIM:SendKeyEvent(false,heldKey,false,game) end) end
-   if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+   if mouseHeld then local p=mousePos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end
   end
-  heldKey=nil; mouseHeld=false
+  heldKey=nil; mouseHeld=false; mousePos=nil
  end
  local function cancel()
-  token+=1; active=false; manualSequenceBusy=false; releaseCombo()
+  local wasActive=active
+  token+=1; active=false
+  if wasActive then busy=false;manualSequenceBusy=false end
+  releaseCombo()
   if label.Parent then label.Text="Ready" end
  end
  local function toggleCombo()
   if active then cancel(); return end
   if busy or manualSequenceBusy then label.Text="Wait for the other macro to finish"; return end
   if not okVIM or not VIM then label.Text="Input simulation unavailable"; return end
-  active=true; manualSequenceBusy=true; token+=1
+  active=true; busy=true; manualSequenceBusy=true; token+=1
   local id=token
   task.spawn(function()
    local function check()
@@ -551,10 +604,11 @@ end)()
     check()
    end
    local function click()
-    check(); mouseHeld=true
-    VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+    check(); mousePos=UIS:GetMouseLocation(); mouseHeld=true
+    local p=mousePos
+    VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0)
     waitFor(.035)
-    VIM:SendMouseButtonEvent(0,0,0,false,game,0); mouseHeld=false
+    VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0); mouseHeld=false; mousePos=nil
    end
    local function key(code)
     check(); heldKey=code; VIM:SendKeyEvent(true,code,false,game)
@@ -562,20 +616,20 @@ end)()
     VIM:SendKeyEvent(false,code,false,game); heldKey=nil
    end
    local function punches()
-    for i=1,3 do click(); if i<3 then waitFor(timing.punchGap) end end
-    waitFor(timing.afterPunches)
+    for i=1,3 do click(); if i<3 then waitFor(timing.punchGap/1000) end end
+    waitFor(timing.afterPunches/1000)
    end
    local ok,err=pcall(function()
     label.Text="Running combo"
-    punches(); key(Enum.KeyCode.One); waitFor(timing.afterOne)
-    punches(); key(Enum.KeyCode.Space); waitFor(timing.beforeTwoJumpDelay)
-    key(Enum.KeyCode.Two); waitFor(timing.afterTwo)
+    punches(); key(Enum.KeyCode.One); waitFor(timing.afterOne/1000)
+    punches(); key(Enum.KeyCode.Space); waitFor(timing.beforeTwoJumpDelay/1000)
+    key(Enum.KeyCode.Two); waitFor(timing.afterTwo/1000)
     heldKey=Enum.KeyCode.Space; VIM:SendKeyEvent(true,heldKey,false,game)
-    waitFor(timing.jumpLead); click()
+    waitFor(timing.jumpLead/1000); click()
     VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game); heldKey=nil
    end)
    if token==id then
-    releaseCombo(); active=false; manualSequenceBusy=false
+    releaseCombo(); active=false; busy=false; manualSequenceBusy=false
     if label.Parent then label.Text=ok and "Inputs sent - not a hit confirmation" or tostring(err) end
    end
   end)
@@ -596,6 +650,7 @@ end)()
  local generation=0
  local held={}
  local mouseDown=false
+ local mouseDownPos=nil
  local side=Enum.KeyCode.D
  local secondTapDelay=.40
  local box=card(pages.Yuji,"Yuji Black Flash Setup","L: run/cancel | 2 punches > side + Q + 3 > camera flick > 3")
@@ -615,18 +670,21 @@ end)()
    pcall(function() VIM:SendKeyEvent(false,key,false,game) end)
   end
   held={}
-  if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
-  mouseDown=false
+  if mouseDown then local p=mouseDownPos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end
+  mouseDown=false;mouseDownPos=nil
  end
  local function cancel()
-  generation+=1;active=false;manualSequenceBusy=false;releaseAll()
+  local wasActive=active
+  generation+=1;active=false
+  if wasActive then busy=false;manualSequenceBusy=false end
+  releaseAll()
   if feedback.Parent then feedback.Text="Cancelled / ready" end
  end
  local function start()
   if active then cancel();return end
   if busy or manualSequenceBusy then feedback.Text="Wait for the existing macro to finish";return end
   if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
-  active=true;manualSequenceBusy=true;generation+=1
+  active=true;busy=true;manualSequenceBusy=true;generation+=1
   local id=generation
   local chosenSide=side
   task.spawn(function()
@@ -647,10 +705,11 @@ end)()
     if not down then held[code]=nil end
    end
    local function punch()
-    check();mouseDown=true
-    VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+    check();mouseDownPos=UIS:GetMouseLocation();mouseDown=true
+    local p=mouseDownPos
+    VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0)
     waitFor(.035)
-    VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false
+    VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);mouseDown=false;mouseDownPos=nil
    end
    local ok,err=pcall(function()
     feedback.Text="Running - manually position near your opponent first"
@@ -665,7 +724,7 @@ end)()
     Dash.await(dashJob,function() return generation==id and active end)
    end)
    if generation==id then
-    releaseAll();active=false;manualSequenceBusy=false
+    releaseAll();active=false;busy=false;manualSequenceBusy=false
     if feedback.Parent then feedback.Text=ok and "Inputs sent - no hit or cooldown reset confirmed" or tostring(err) end
    end
   end)
@@ -892,7 +951,7 @@ end)()
 end)()
 
 ;(function()
- local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
+ local active=false;local generation=0;local held={};local mouseDown=false;local mouseDownPos=nil;local side=Enum.KeyCode.D
  local timings={punchGap=.35,uppercutLead=.02,afterUppercut=.12,afterStrikes=2.0,afterSecondM1s=.20,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
  local box=card(pages.Combos,"Style Combo","B: run/cancel | 3 M1 > Uppercut > Cursed Strikes > 3 M1 > Side Dash > Black Flash > Aerial Crushing Blow")
  local info=make("TextLabel",box,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - timings untested",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
@@ -900,7 +959,7 @@ end)()
  connect(sideButton.Activated,function() side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;sideButton.Text=side==Enum.KeyCode.D and "Style dash side: D (right)" or "Style dash side: A (left)" end)
  local button=make("TextButton",box,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Style Combo (B)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5});corner(button,6)
  for _,s in ipairs({{"M1 spacing",150,650,"punchGap"},{"After uppercut",0,600,"afterUppercut"},{"After Cursed Strikes",500,3500,"afterStrikes"},{"After second 3 M1s",0,800,"afterSecondM1s"},{"Black Flash second tap",150,700,"blackFlashDelay"},{"After Black Flash",100,1200,"afterBlackFlash"},{"Aerial jump lead",35,400,"aerialLead"}}) do local name=s[4];moduleSlider(box,s[1],s[2],s[3],math.floor(timings[name]*1000+.5)," ms",function() return timings[name]*1000 end,function(v) timings[name]=v/1000 end) end
- local function release() if okVIM and VIM then for k in pairs(held) do pcall(function() VIM:SendKeyEvent(false,k,false,game) end) end;if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end end;held={};mouseDown=false end
+ local function release() if okVIM and VIM then for k in pairs(held) do pcall(function() VIM:SendKeyEvent(false,k,false,game) end) end;if mouseDown then local p=mouseDownPos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end end;held={};mouseDown=false;mouseDownPos=nil end
  local function finish() release();if active then busy=false;manualSequenceBusy=false end;active=false end
  local function cancel() generation+=1;finish();if info.Parent then info.Text="Style Combo cancelled / ready" end end
  local function start()
@@ -911,7 +970,7 @@ end)()
    local function waitFor(s) local deadline=os.clock()+s;repeat check();task.wait() until os.clock()>=deadline;check() end
    local function key(k,v) check();if v then held[k]=true end;VIM:SendKeyEvent(v,k,false,game);if not v then held[k]=nil end end
    local function tap(k) key(k,true);waitFor(.035);key(k,false) end
-   local function punch() check();mouseDown=true;local p=UIS:GetMouseLocation();VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0);waitFor(.035);VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);mouseDown=false end
+   local function punch() check();mouseDownPos=UIS:GetMouseLocation();mouseDown=true;local p=mouseDownPos;VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0);waitFor(.035);VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);mouseDown=false;mouseDownPos=nil end
    local function three() for i=1,3 do punch();if i<3 then waitFor(t.punchGap) end end end
    local ok,err=pcall(function()
     info.Text="Running Style Combo";waitFor(.05);three();waitFor(t.punchGap)
@@ -1031,7 +1090,7 @@ do
    LeftUpperLeg=true,LeftLowerLeg=true,LeftFoot=true,RightUpperLeg=true,RightLowerLeg=true,RightFoot=true}
   local S={enabledV2=false,enabledV3=false,includeNPCs=false,turnaround=false,calculator=true,autoCameraAngle=false,
    active=false,version=2,generation=0,armed=false,syntheticThree=false,stage="OFF",
-   held={},mouseDown=false,connections={},model=nil,humanoid=nil,root=nil,
+   held={},mouseDown=false,mouseDownPos=nil,connections={},model=nil,humanoid=nil,root=nil,
    ownedHumanoid=nil,oldAutoRotate=nil,moveMode="idle",desiredMove=Vector3.zero,smoothMove=Vector3.zero,
    sideKey=Enum.KeyCode.D,sidePreferenceUntil=0,nextDash=0,failedDashes=0,nextJump=0,
    jumpAirborne=false,backoff=false,pairCount=0,cycleCount=0,pairStarted=0,deadline=0,
@@ -1185,8 +1244,8 @@ do
   local function releaseAll()
    for code in pairs(S.held) do pcall(function() VIM:SendKeyEvent(false,code,false,game) end) end
    table.clear(S.held)
-   if S.mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
-   S.mouseDown=false;S.desiredMove=Vector3.zero;S.smoothMove=Vector3.zero;S.moveMode="idle"
+   if S.mouseDown then local p=S.mouseDownPos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end
+   S.mouseDown=false;S.mouseDownPos=nil;S.desiredMove=Vector3.zero;S.smoothMove=Vector3.zero;S.moveMode="idle"
    local _,humanoid=rig()
    if humanoid then humanoid:Move(Vector3.zero,false) end
    if S.ownedHumanoid and S.ownedHumanoid.Parent then S.ownedHumanoid.AutoRotate=S.oldAutoRotate end
@@ -1361,7 +1420,7 @@ do
   local function beginLMB()
    if not attackReady() or not sourceReady("LMB") then return false end
    releaseMovement();gate:begin(S.model,CFG.HitTimeout+.2)
-   S.mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+   S.mouseDownPos=UIS:GetMouseLocation();S.mouseDown=true;local p=S.mouseDownPos;VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0)
    S.stage="MOUSE_DOWN";S.deadline=os.clock()+CFG.KeyPulse;return true
   end
   local function beginFallbackJump(root,humanoid)
@@ -1465,7 +1524,7 @@ do
      return
     elseif stage=="MOUSE_DOWN" then
      if now<S.deadline then return end
-     VIM:SendMouseButtonEvent(0,0,0,false,game,0);S.mouseDown=false;S.stage="WAIT_LMB_HIT"
+     local p=S.mouseDownPos or UIS:GetMouseLocation();VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);S.mouseDown=false;S.mouseDownPos=nil;S.stage="WAIT_LMB_HIT"
      if gate.ticket then gate.ticket.deadline=workspace:GetServerTimeNow()+CFG.HitTimeout end
     elseif stage=="DASH" then
      local job=S.sharedDash
@@ -1828,16 +1887,16 @@ connect(UIS.InputBegan,function(i)
   end
  end
  if i.KeyCode==Enum.KeyCode.Three and blackflashV2Trigger and blackflashV2Trigger() then return end
- if i.KeyCode==Enum.KeyCode.Three and not busy then
+ if i.KeyCode==Enum.KeyCode.Three and not busy and not manualSequenceBusy then
   local now=os.clock()
   lastThreeTime=now
-  if todoEnabled then task.spawn(runTodo); return end
-  -- V1 owns the 3-key trigger when enabled. Starting the generic macro and
-  -- V1 together races on the shared `busy` flag, so one sequence silently loses.
+  -- Explicit priority prevents multiple 3-key macros from competing:
+  -- V2/V3 trigger > V1 chain > Todo macro > generic delayed follow-up.
   if chainEnabled then
    if now>=chainCooldownUntil then task.spawn(runChain) end
    return
   end
+  if todoEnabled then task.spawn(runTodo); return end
   task.spawn(run)
  end
 end)
@@ -1999,7 +2058,7 @@ end)()
  local generation=0
  local target,ownedHumanoid,oldRotate,oldLock,cameraRef,oldCameraType
  local aimMode="target"
- local held={};local mouseHeld=false
+ local held={};local mouseHeld=false;local mousePos=nil
  local CFG={PunchesWait=1800,RedWait=550,BlueMinimum=500,LaunchTimeout=2400,TeleportWait=1000,M1Gap=320,KickWait=1000,JumpDelay=160,Range=6,AcquireRange=40,CloseTimeout=2000,KeyPulse=35}
  local panel=card(pages.Gojo,"Quick Combo","H: start/cancel | editable keybind | base Gojo")
  local info=make("TextLabel",panel,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Idle. Timing defaults are estimates. Hits and ability readiness are not verified.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
@@ -2007,7 +2066,7 @@ end)()
   generation+=1
   local wasActive=active;active=false
   for code in pairs(held) do pcall(function() VIM:SendKeyEvent(false,code,false,game) end) end;table.clear(held)
-  if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end;mouseHeld=false
+  if mouseHeld then local p=mousePos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end;mouseHeld=false;mousePos=nil
   if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid:Move(Vector3.zero,false);ownedHumanoid.AutoRotate=oldRotate end
   if cameraRef and oldCameraType then pcall(function() cameraRef.CameraType=oldCameraType end) end
   if wasActive then lockOn=oldLock;busy=false;manualSequenceBusy=false;gui:SetAttribute("GojoQuickComboActive",false) end
@@ -2052,9 +2111,9 @@ end)()
  end
  local function click(token)
   waitFor(token,CFG.CloseTimeout/1000,closeEnough)
-  mouseHeld=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+  mousePos=UIS:GetMouseLocation();mouseHeld=true;local p=mousePos;VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0)
   waitFor(token,CFG.KeyPulse/1000)
-  VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseHeld=false
+  VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);mouseHeld=false;mousePos=nil
  end
  local function threeClicks(token)
   for index=1,3 do click(token);if index<3 then waitFor(token,math.max(0,CFG.M1Gap-CFG.KeyPulse)/1000) end end
@@ -2217,7 +2276,7 @@ end)()
  local reserved={One=true,Two=true,Three=true,Four=true,R=true,Q=true,W=true,A=true,S=true,D=true,F=true,Space=true,Unknown=true,RightShift=true,K=true,L=true,B=true,N=true,X=true}
  local function install(spec)
   local active,enabled=false,false;local gen=0;local bind=spec.bind
-  local held={};local mouse=false;local model,hum,root,camera,oldCamera,oldRotate,oldLock
+  local held={};local mouse=false;local mousePos=nil;local model,hum,root,camera,oldCamera,oldRotate,oldLock
   local source,connection=nil,nil;local moveGoal=nil;local down=false;local side=Enum.KeyCode.D
   local gate=newHitGate(LP.UserId,function() return workspace:GetServerTimeNow() end)
   local cfg={Interval=spec.interval or 350,Pulse=35,M1Gap=320,CloseTimeout=2000,StrikesWait=1500,JumpToStrike=60,JumpTimeout=2000,FollowupDelay=400,HitTimeout=800,JumpDelay=160,CrushingWait=700,BlueMinimum=350,LaunchTimeout=2200,TeleportWait=850,KickWait=650,PunchesWait=1800,RedWait=550}
@@ -2228,7 +2287,7 @@ end)()
    gen+=1;local was=active;active=false;moveGoal=nil;gate:cancel();source=nil
    if connection then pcall(function() connection:Disconnect() end) end;connection=nil
    for k in pairs(held) do pcall(function() VIM:SendKeyEvent(false,k,false,game) end) end;table.clear(held)
-   if mouse then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end;mouse=false
+   if mouse then local p=mousePos or UIS:GetMouseLocation();pcall(function() VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0) end) end;mouse=false;mousePos=nil
    if not spec.pair then
     if hum and hum.Parent then hum:Move(Vector3.zero,false);hum.AutoRotate=oldRotate end
     if camera and oldCamera then pcall(function() camera.CameraType=oldCamera end) end
@@ -2287,7 +2346,7 @@ end)()
   local function closeEnough() local _,tr=targetRig();return root and tr and (root.Position-tr.Position).Magnitude<=6 end
   local function click(token)
    waitFor(token,cfg.CloseTimeout/1000,closeEnough)
-   mouse=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(token,cfg.Pulse/1000);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouse=false
+   mousePos=UIS:GetMouseLocation();mouse=true;local p=mousePos;VIM:SendMouseButtonEvent(p.X,p.Y,0,true,game,0);waitFor(token,cfg.Pulse/1000);VIM:SendMouseButtonEvent(p.X,p.Y,0,false,game,0);mouse=false;mousePos=nil
   end
   local function three(token) for i=1,3 do click(token);if i<3 then waitFor(token,math.max(0,cfg.M1Gap-cfg.Pulse)/1000) end end end
   local function rearReady()
