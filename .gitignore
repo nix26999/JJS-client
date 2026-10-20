@@ -904,7 +904,7 @@ do
  local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
  local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
  local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
- local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=30,0,60;local postDashTurnDegrees=90;local blackflashPrefireMs=0
+ local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=30,0,0;local postDashTurnDegrees=75;local blackflashPrefireMs=0
  local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=5,6,2.2,5.5;local ATTACK_CENTER=3.8
  local POST_JUMP_MIN,POST_JUMP_AIM=5,5.25;local needPostJumpBackoff=false
  local nextDash=0;local phase="idle";local steering=Vector3.zero;local mixFacing=Vector3.zero;local strafeKey=Enum.KeyCode.D
@@ -1171,7 +1171,7 @@ do
     if not distance or distance<SIDE_MIN*0.5 or not dashPathClearOfTarget(root,current,direction) or objectInRoute(root,current,direction,17.5) then return false end
     -- Side dash priority path: hold A/D + Q (no pre-jump)
     strafeKey=dashKey;move("side",direction);key(dashKey,true);local dashStart=os.clock();nextDash=dashStart+1.6;routeCache=nil;key(Enum.KeyCode.Q,true)
-    local function finishDash(result) key(Enum.KeyCode.Q,false);flickCameraAfterSideDash(dashKey,right);return result end
+    local function finishDash(result) key(Enum.KeyCode.Q,false);key(dashKey,false);releasePositioning();flickCameraAfterSideDash(dashKey,right);return result end
     repeat
      check();local _,target=updateTarget();local d=spacing(target)
      if targetModel~=attemptedTarget then return finishDash(nil) end;if d and d>CATCHUP_DISTANCE then return finishDash(false) end
@@ -1311,9 +1311,9 @@ do
   if not v and active and runVersion==3 and fightModel and not Players:GetPlayerFromCharacter(fightModel) then stop("V3 stopped: NPC targeting disabled. Press 3 again.");bindCapture() end
  end)
  toggle(box,"Front-only turnaround S + Q (shared)",function() return turnaroundMixups end,function(v) turnaroundMixups=v end)
- moduleSlider(box,"Post-dash turn angle",0,360,postDashTurnDegrees," degrees",function() return postDashTurnDegrees end,function(v) postDashTurnDegrees=math.clamp(v,0,360) end)
- moduleSlider(box,"Post-dash camera hold",50,750,cameraFlickHoldMs," ms",function() return cameraFlickHoldMs end,function(v) cameraFlickHoldMs=v end)
- moduleSlider(box,"V2 repeat gap",50,2000,repeatGapMs," ms",function() return repeatGapMs end,function(v) repeatGapMs=v end)
+ 
+ 
+ 
  -- jump lead removed
  make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. Normal attempts still require behind position. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
  toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
