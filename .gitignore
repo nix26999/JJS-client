@@ -1,14 +1,15 @@
--- AUTOBLACKFLASH / ONE COMPLETE FILE / RANDOM VOICES + CACHED AUDIO DUCKING
--- ASCII-only. Not live-tested. Executor gethui() / virtual input access required.
--- Full UI/search/drag, macro, rear-gated chain, ordered 3.5s streak, sounds and kill FX.
--- Six ordinary sayings randomly choose one of FIVE supplied sounds per popup.
--- Jackpot and Obito retain their own custom sound IDs. Preview is silent.
--- Optimized audio controller is integrated below: no per-voice whole-game scan,
--- no mass ambient-volume Tween allocation. Voice volume 8; game multiplier .12.
--- D+Q side dash, hold D until rear check; ONE 90-degree flick immediately after Q.
--- Rear/range/ground eligibility stable 200ms before each pair; 350ms follow-up target.
--- Detection is a timing/nearby-health-loss heuristic, NOT verified Black Flash attribution.
--- Kill finisher: 16 frames at 14 FPS; confirmed-only server signal by default.
+-- AUTOBLACKFLASH / COMPLETE TEN-COMBO MAIN / VOICES 10 / CACHED AUDIO DUCKING
+-- One complete script, not an extension. Replace previous script; do not append it.
+-- ASCII-only. Not live-tested. Requires executor gethui() and permitted virtual input.
+-- Macro, rear-gated four-round chain, UI/search/drag, 10 ordered popup stages,
+-- five random default sounds, custom Jackpot/Obito/Plus Ultra/Goku sounds,
+-- rolling 3.5s countdown, pooled sparkles, 16-frame/14-FPS kill finisher, unload.
+-- Popup voices volume 10. Active game audio .12 multiplier; original volumes restored.
+-- Audio cache indexed gradually, no full-game scan triggered by a popup voice.
+-- Chain activation remains 3. D+Q, hold D behind, one 90-degree flick after Q.
+-- 30% rear sampling, <=8 studs, grounded/height check and 200ms stable gate.
+-- Actual Black Flash/hit attribution is not verified by client timing/health loss.
+-- Confirmed-only kill FX requires the earlier package's server confirmation event.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
@@ -19,8 +20,8 @@ local SoundService=game:GetService("SoundService")
 local VIM;pcall(function() VIM=game:GetService("VirtualInputManager") end)
 local LP=assert(Players.LocalPlayer,"Client required");assert(RS:IsClient(),"Client required")
 local UI_ROOT=assert(gethui and gethui(),"Executor gethui() unavailable")
-local old=UI_ROOT:FindFirstChild("AutoBlackflash")
-if old then local e=old:FindFirstChild("Shutdown");if e then pcall(function() e:Fire() end) end;if old.Parent then old:Destroy() end end
+local previous=UI_ROOT:FindFirstChild("AutoBlackflash")
+if previous then local e=previous:FindFirstChild("Shutdown");if e then pcall(function() e:Fire() end) end;if previous.Parent then previous:Destroy() end end
 local ACTION,MOVE_ACTION="AutoBlackflash_RearChain","AutoBlackflash_JumpRear"
 CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
 local running,focused,cleanedUp=true,true,false
@@ -37,15 +38,8 @@ local impactLayer,impactConnection,impactToken=nil,nil,0
 local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
 local paintMacro,paintChain,chainStatus,killStatus
 local streakIndex,streakAt=0,nil
-local STREAK_WINDOW=3.5
-local POPUP_SOUND_POOL={
- "rbxassetid://136561900676276",
- "rbxassetid://102193609064728",
- "rbxassetid://91407972204653",
- "rbxassetid://103999634941081",
- "rbxassetid://73800823808958",
-}
-local popupRecords={}
+local STREAK_WINDOW,VOICE_VOLUME=3.5,10
+local POPUP_SOUND_POOL={"rbxassetid://136561900676276","rbxassetid://102193609064728","rbxassetid://91407972204653","rbxassetid://103999634941081","rbxassetid://73800823808958"}
 local SEQUENCE={
  {text="Great!",duration=1.4},
  {text="Amazing!",duration=1.4},
@@ -55,7 +49,10 @@ local SEQUENCE={
  {text="Absolute Cinema",duration=3},
  {text="JackPot!!!",color=Color3.fromRGB(144,238,144),duration=4,sound="rbxassetid://75172919311574"},
  {text="Is that you obito",color=Color3.fromRGB(255,150,30),hold=5,sound="rbxassetid://104726272659969"},
+ {text="Plus Ultra!",color=Color3.fromRGB(178,90,255),duration=7,sound="rbxassetid://124466268126231",sparkles="purple"},
+ {text="SON GOKU!",color=Color3.fromRGB(255,255,255),duration=10,sound="rbxassetid://140292383910392",sparkles="gold"},
 }
+local popupRecords={}
 local function connect(s,f) local c=s:Connect(f);table.insert(connections,c);return c end
 local function make(class,parent,props) local o=Instance.new(class);for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent;return o end
 local T={bg=Color3.fromRGB(13,16,24),panel=Color3.fromRGB(18,22,33),p2=Color3.fromRGB(27,32,47),card=Color3.fromRGB(21,26,39),stroke=Color3.fromRGB(48,55,75),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(237,240,250),mut=Color3.fromRGB(131,143,166)}
@@ -66,9 +63,8 @@ end
 local gui=make("ScreenGui",UI_ROOT,{Name="AutoBlackflash",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 local shutdown=make("BindableEvent",gui,{Name="Shutdown"})
 local targetRef=make("ObjectValue",gui,{Name="BlackflashChainV2Target"})
-gui:SetAttribute("BlackflashChainV2Enabled",false)
-gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",14);gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode)
-gui:SetAttribute("PopupStreakWindowSeconds",STREAK_WINDOW)
+gui:SetAttribute("BlackflashChainV2Enabled",false);gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",14)
+gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);gui:SetAttribute("PopupStreakWindowSeconds",STREAK_WINDOW);gui:SetAttribute("PopupSequenceLength",#SEQUENCE)
 local root=make("Frame",gui,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1})
 local main=make("Frame",root,{Name="Window",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(760,540),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true});corner(main,12);make("UIStroke",main,{Color=T.stroke,Thickness=1})
 local scale=make("UIScale",main,{Scale=1})
@@ -85,7 +81,7 @@ local desc=text(content,"Black Flash controls",UDim2.fromOffset(16,32),UDim2.new
 local search=make("TextBox",content,{Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,Text="",PlaceholderText="Search modules or settings...",TextColor3=T.txt,PlaceholderColor3=T.mut,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12});corner(search)
 local empty=text(content,"No modules or categories match this search.",UDim2.fromOffset(16,150),UDim2.new(1,-32,0,40),12);empty.Visible=false;empty.ZIndex=5
 local pages,buttons,sections={},{},{}
-local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ordered popup streak, random sounds and kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
+local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ten popup stages, random voices, sparkles and kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
 local selected="Yuji"
 local filter,selectPage
 local lastGroup
@@ -103,7 +99,7 @@ local function card(page,name,description)
  local c=make("Frame",pages[page],{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=order(pages[page])});corner(c,10);make("UIStroke",c,{Color=T.stroke})
  make("UIPadding",c,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)});make("UIListLayout",c,{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder})
  local heading=text(c,name,nil,UDim2.new(1,0,0,22),13);heading.LayoutOrder=0;heading.Font=Enum.Font.GothamBold
- local sub=text(c,description,nil,UDim2.new(1,0,0,52),10);sub.LayoutOrder=1;sub.TextColor3=T.mut
+ local sub=text(c,description,nil,UDim2.new(1,0,0,56),10);sub.LayoutOrder=1;sub.TextColor3=T.mut
  sections[c]={page=page,query=string.lower(name.." "..description)};return c
 end
 local function note(p,message,height) local t=text(p,message,nil,UDim2.new(1,0,0,height or 42),10);t.TextColor3=T.mut;t.LayoutOrder=order(p)+2;return t end
@@ -115,35 +111,59 @@ local function toggle(p,name,get,set)
 end
 local function actionButton(p,name) local b=make("TextButton",p,{Text=name,Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=order(p)+2});corner(b,6);return b end
 for _,cat in ipairs(cats) do if cat[1]~="Yuji" and cat[1]~="Visuals" and cat[1]~="Settings" then card(cat[1],"No modules added",cat[2]) end end
-local streakTimerLabel=text(gui,"STREAK 0/8 | 0.00s",UDim2.fromScale(.5,.065),UDim2.fromOffset(310,28),13)
+local streakTimerLabel=text(gui,"STREAK 0/10 | 0.00s",UDim2.fromScale(.5,.065),UDim2.fromOffset(330,28),13)
 streakTimerLabel.Name="PopupStreakTimer";streakTimerLabel.AnchorPoint=Vector2.new(.5,0);streakTimerLabel.TextXAlignment=Enum.TextXAlignment.Center;streakTimerLabel.Font=Enum.Font.GothamBold;streakTimerLabel.ZIndex=83
 make("UIStroke",streakTimerLabel,{Color=Color3.new(0,0,0),Thickness=2})
-local function updateStreakDisplay(remaining)
- gui:SetAttribute("PopupStreakIndex",streakIndex);gui:SetAttribute("PopupStreakRemaining",remaining)
- streakTimerLabel.Visible=popupEnabled;streakTimerLabel.Text=string.format("STREAK %d/8 | %.2fs",streakIndex,remaining)
+local function updateStreakDisplay(left)
+ gui:SetAttribute("PopupStreakIndex",streakIndex);gui:SetAttribute("PopupStreakRemaining",left)
+ streakTimerLabel.Visible=popupEnabled;streakTimerLabel.Text=string.format("STREAK %d/%d | %.2fs",streakIndex,#SEQUENCE,left)
 end
 local function resetStreak() streakIndex=0;streakAt=nil;updateStreakDisplay(0) end
-connect(RS.Heartbeat,function()
- if not running or not streakAt then return end
- local remaining=math.max(0,STREAK_WINDOW-(os.clock()-streakAt))
- if remaining<=0 then resetStreak() else updateStreakDisplay(remaining) end
-end)
 resetStreak()
-local function removeSound(sound) if sounds[sound] then sounds[sound]=nil;pcall(function() sound:Destroy() end) end end
+local sparkRoot=make("Frame",gui,{Name="Combo910Sparkles",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ZIndex=84})
+local sparklePool={}
+local sparkleRng=Random.new()
+for i=1,16 do
+ local o=make("Frame",sparkRoot,{Name="Spark"..i,AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(2,2),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=84})
+ sparklePool[i]={object=o,phase=sparkleRng:NextNumber(),angle=sparkleRng:NextNumber(0,math.pi*2),life=sparkleRng:NextNumber(.55,1.1),radius=sparkleRng:NextNumber(.6,1)}
+end
+local sparkleTarget,sparkleKind,sparkleStart=nil,nil,0
+local function hideSparkles() sparkleTarget=nil;for _,p in ipairs(sparklePool) do p.object.Visible=false end end
+local sparkleElapsed=0
+connect(RS.Heartbeat,function(dt)
+ if not running then return end
+ sparkleElapsed+=dt;if sparkleElapsed<.05 then return end;sparkleElapsed=0
+ if streakAt then local left=math.max(0,STREAK_WINDOW-(os.clock()-streakAt));if left<=0 then resetStreak() else updateStreakDisplay(left) end end
+ if not sparkleTarget or not sparkleTarget.Parent or not popupEnabled then for _,p in ipairs(sparklePool) do p.object.Visible=false end;return end
+ local pos,size=sparkleTarget.AbsolutePosition,sparkleTarget.AbsoluteSize
+ local age=os.clock()-sparkleStart;local fade=1-sparkleTarget.TextTransparency;local count=sparkleKind=="purple" and 5 or 16
+ for i,p in ipairs(sparklePool) do
+  local o=p.object
+  if i>count or fade<=0 then o.Visible=false else
+   local t=(age/p.life+p.phase)%1;local a=p.angle+age*(sparkleKind=="purple" and .18 or .38)
+   local x=pos.X+size.X*.5+math.cos(a)*size.X*(.36+.10*p.radius)
+   local y=pos.Y+size.Y*.5+math.sin(a)*size.Y*(.28+.16*p.radius)-t*(sparkleKind=="purple" and 5 or 13)
+   local brightness=math.sin(t*math.pi)*fade;local pixels=sparkleKind=="purple" and (1.5+brightness) or (2+brightness*2.5)
+   o.Visible=brightness>.08;o.Position=UDim2.fromOffset(x,y);o.Size=UDim2.fromOffset(pixels,pixels*(sparkleKind=="purple" and 1.6 or 1));o.Rotation=45+age*(sparkleKind=="purple" and 18 or 55);o.BackgroundTransparency=1-brightness*.9
+   o.BackgroundColor3=sparkleKind=="purple" and SEQUENCE[9].color or (i%2==0 and Color3.fromRGB(255,175,20) or Color3.fromRGB(255,215,0))
+  end
+ end
+end)
+local function removeSound(s) if sounds[s] then sounds[s]=nil;pcall(function() s:Destroy() end) end end
 local function playVoice(id)
- local sound=make("Sound",SoundService,{Name="AutoBlackflashStreakVoice",SoundId=id,Volume=8,PlaybackSpeed=1,Looped=false});sounds[sound]=true
- local ended;ended=sound.Ended:Connect(function() if ended then ended:Disconnect() end;removeSound(sound) end)
- sound.Destroying:Once(function() if ended then ended:Disconnect() end end)
- local ok,err=pcall(function() sound:Play() end);if not ok then warn("Popup sound failed: "..tostring(err));removeSound(sound) end
- task.delay(20,function() removeSound(sound) end)
+ local s=make("Sound",SoundService,{Name="AutoBlackflashStreakVoice",SoundId=id,Volume=VOICE_VOLUME,PlaybackSpeed=1,Looped=false});sounds[s]=true
+ local ended;ended=s.Ended:Connect(function() if ended then ended:Disconnect() end;removeSound(s) end)
+ s.Destroying:Once(function() if ended then ended:Disconnect() end end)
+ local ok,err=pcall(function() s:Play() end);if not ok then warn("Popup sound failed: "..tostring(err));removeSound(s) end
+ task.delay(20,function() removeSound(s) end)
 end
 local function reflowPopups()
- local height=math.max(1,root.AbsoluteSize.Y);local gap=math.clamp(height*.10,48,80)
+ local gap=math.clamp(math.max(1,root.AbsoluteSize.Y)*.10,48,80)
  for i,r in ipairs(popupRecords) do if r.holder.Parent then TS:Create(r.holder,TweenInfo.new(.15),{Position=UDim2.new(.5,0,.12,(i-1)*gap)}):Play() end end
 end
 local function clearPopups()
  for _,r in ipairs(popupRecords) do if r.holder.Parent then r.holder:Destroy() end end;table.clear(popupRecords)
- for sound in pairs(sounds) do removeSound(sound) end;resetStreak()
+ for s in pairs(sounds) do removeSound(s) end;resetStreak();hideSparkles()
 end
 local popupRng=Random.new()
 local function showPopup(preview)
@@ -160,13 +180,11 @@ local function showPopup(preview)
  local ps=make("UIScale",holder,{Scale=.65})
  local phrase=text(holder,entry.text,UDim2.fromOffset(12,0),UDim2.new(1,-24,0,58),44);phrase.TextXAlignment=Enum.TextXAlignment.Center;phrase.TextScaled=true;phrase.Font=Enum.Font.GothamBlack;phrase.ZIndex=82;phrase.TextColor3=color
  make("UITextSizeConstraint",phrase,{MinTextSize=16,MaxTextSize=54});make("UIStroke",phrase,{Color=Color3.new(0,0,0),Thickness=4})
- local tag=text(holder,preview and "PREVIEW - NOT A HIT" or string.format("Estimated hit / %d/8",index),UDim2.fromOffset(0,59),UDim2.new(1,0,0,18),10);tag.TextXAlignment=Enum.TextXAlignment.Center;tag.ZIndex=82;make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
+ local tag=text(holder,preview and "PREVIEW - NOT A HIT" or string.format("Estimated hit / %d/%d",index,#SEQUENCE),UDim2.fromOffset(0,59),UDim2.new(1,0,0,18),10);tag.TextXAlignment=Enum.TextXAlignment.Center;tag.ZIndex=82;make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
  local record={holder=holder};table.insert(popupRecords,1,record);reflowPopups();TS:Create(ps,TweenInfo.new(.16,Enum.EasingStyle.Back),{Scale=1}):Play()
  for i=1,2 do local ring=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.35),Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,ZIndex=80});corner(ring,999);local outline=make("UIStroke",ring,{Color=i==1 and Color3.fromRGB(255,24,45) or Color3.fromRGB(8,0,4),Thickness=3});TS:Create(ring,TweenInfo.new(.32),{Size=UDim2.fromOffset(300+i*60,70)}):Play();TS:Create(outline,TweenInfo.new(.32),{Transparency=1}):Play() end
- if not preview then
-  local soundId=entry.sound or POPUP_SOUND_POOL[popupRng:NextInteger(1,#POPUP_SOUND_POOL)]
-  playVoice(soundId)
- end
+ if entry.sparkles and not preview then sparkleTarget=phrase;sparkleKind=entry.sparkles;sparkleStart=os.clock() end
+ if not preview then playVoice(entry.sound or POPUP_SOUND_POOL[popupRng:NextInteger(1,#POPUP_SOUND_POOL)]) end
  gui:SetAttribute("LastBlackflashPopupPhrase",entry.text)
  task.delay(hold,function()
   if not running or not holder.Parent then return end
@@ -179,22 +197,22 @@ local macroCard=card("Yuji","Black Flash Follow-up","Tap/release 3; follow-up ta
 local macroSettings=make("Frame",macroCard,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=20});make("UIListLayout",macroSettings,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
 local settingsArrow=actionButton(macroCard,"> Macro settings");settingsArrow.LayoutOrder=2
 connect(settingsArrow.Activated,function() macroSettings.Visible=not macroSettings.Visible;settingsArrow.Text=macroSettings.Visible and "v Macro settings" or "> Macro settings" end)
-local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3. D+Q right-side dash; hold D until behind. One 90-degree flick immediately after Q. Four estimated rounds.")
+local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3. D+Q side dash, D held until behind, one 90-degree flick after Q. Four estimated rounds. No server perfect-hit guarantee.")
 chainStatus=note(chainCard,"OFF - enable, then press 3.",64)
 local function say(message) if running then chainStatus.Text=message;gui:SetAttribute("BlackflashChainStatus",message) end end
 paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v) stop(nil,false);macroEnabled=v;if v then chainEnabled=false;if paintChain then paintChain() end end end)
 paintChain=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v) stop(nil,false);chainEnabled=v;if v then macroEnabled=false;if paintMacro then paintMacro() end end;say(v and "Ready: tap 3 to lock and position." or "Chain OFF.") end)
-local popupCard=card("Visuals","Ordered Blackflash Popups","1/8 to 8/8; signals refresh 3.5s without resetting progress. First six sayings use five random voice sounds. Jackpot/Obito have custom voices.")
+local popupCard=card("Visuals","Ordered Blackflash Popups","1/10 to 10/10. Signals refresh 3.5s without resetting progress. Five random default sounds; four custom stage sounds. At 10/10 hold until timeout.")
 toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
 local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND");connect(popupPreview.Activated,function() showPopup(true) end)
-note(popupCard,"Voice volume 8. Active game audio ducks to 12%. Perfect!: yellow. BLACKFLASH/Cinema: 3s. Jackpot: green, 4s. Obito: orange, 5s hold + fade.",72)
+note(popupCard,"Voices: volume 10; game audio ducks to 12%. Stage 9: Plus Ultra!, purple, 7s + tiny purple sparks. Stage 10: SON GOKU!, white, 10s + gold/orange sparkles.",78)
 local killCard=card("Visuals","Blackflash Kill Finisher","16 frames at 14 FPS. Confirmed-only by default; lethal estimate mode is explicitly unverified.")
 toggle(killCard,"Kill Finisher: 16 frames / 14 FPS",function() return impactEnabled end,function(v) impactEnabled=v;if not v then cancelImpact() end end)
 local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
 toggle(killCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);cancelImpact();updateKillStatus() end)
 toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v end)
 killStatus=note(killCard,"",68);updateKillStatus()
-local session=card("Settings","Session","Unload cancels input, camera, movement, UI, animation, voices and cached audio controller; restores game audio.")
+local session=card("Settings","Session","Unload cancels input, camera, movement, UI, particles, animation, voices and cached audio controller; restores game audio.")
 local unloadButton=actionButton(session,"UNLOAD SCRIPT")
 local reopen=make("TextButton",gui,{Text="OPEN JJS MENU",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false});corner(reopen)
 local function show(v) main.Visible=v;reopen.Visible=not v end
@@ -340,33 +358,19 @@ local function jumpBehind(j)
  end;endMove();return false
 end
 local function positionBehind(j)
- if not approach(j) then return false end
- if rearGround(j) then return true end
+ if not approach(j) then return false end;if rearGround(j) then return true end
  if os.clock()-lastSide<2 then return jumpBehind(j) end
  say("Side dash: D + Q; immediate 90-degree flick; hold D until behind.")
- j.approaching=false
- key(j,Enum.KeyCode.W,false);key(j,Enum.KeyCode.S,false);key(j,Enum.KeyCode.A,false)
- if not waitUntil(j,os.clock()+.035) then return false end
- key(j,Enum.KeyCode.D,true)
- if not waitUntil(j,os.clock()+.05) then return false end
- key(j,Enum.KeyCode.Q,true)
- lastSide=os.clock()
- local targetRoot=rootOf(j.target)
- if not targetRoot then key(j,Enum.KeyCode.Q,false);key(j,Enum.KeyCode.D,false);return false end
- local direction=targetRoot.Position-j.camera.CFrame.Position
- local targetYaw=math.atan2(-direction.X,-direction.Z)
- local turnError=angle(j.yaw,targetYaw)
+ j.approaching=false;key(j,Enum.KeyCode.W,false);key(j,Enum.KeyCode.S,false);key(j,Enum.KeyCode.A,false)
+ if not waitUntil(j,os.clock()+.035) then return false end;key(j,Enum.KeyCode.D,true)
+ if not waitUntil(j,os.clock()+.05) then return false end;key(j,Enum.KeyCode.Q,true);lastSide=os.clock()
+ local targetRoot=rootOf(j.target);if not targetRoot then key(j,Enum.KeyCode.Q,false);key(j,Enum.KeyCode.D,false);return false end
+ local direction=targetRoot.Position-j.camera.CFrame.Position;local targetYaw=math.atan2(-direction.X,-direction.Z);local turnError=angle(j.yaw,targetYaw)
  j.flickFrom=j.yaw;j.flickDelta=(turnError>=0 and 1 or -1)*math.rad(90);j.flickStart=lastSide
- if not waitUntil(j,lastSide+.035) then return false end
- key(j,Enum.KeyCode.Q,false)
+ if not waitUntil(j,lastSide+.035) then return false end;key(j,Enum.KeyCode.Q,false)
  local deadline=lastSide+1.5
- while valid(j) and os.clock()<deadline do
-  if rearGround(j) then key(j,Enum.KeyCode.D,false);return true end
-  task.wait()
- end
- key(j,Enum.KeyCode.D,false)
- if not valid(j) then return false end
- return jumpBehind(j)
+ while valid(j) and os.clock()<deadline do if rearGround(j) then key(j,Enum.KeyCode.D,false);return true end;task.wait() end
+ key(j,Enum.KeyCode.D,false);if not valid(j) then return false end;return jumpBehind(j)
 end
 local function stableRear(j)
  local since;local deadline=os.clock()+1.2;say("Waiting 200ms continuously behind and grounded.")
@@ -438,8 +442,7 @@ connect(shutdown.Event,unload);connect(close.Activated,unload);connect(unloadBut
 selectPage=function(name,clear) if not pages[name] then return end;selected=name;if clear then search.Text="" end;if filter then filter() end end
 filter=function()
  local q=string.lower(search.Text):match("^%s*(.-)%s*$");local matches={};local any=false
- for _,cat in ipairs(cats) do
-  local name=cat[1];local category=q~="" and (string.find(string.lower(name),q,1,true) or string.find(string.lower(cat[2]),q,1,true));local found=not not category
+ for _,cat in ipairs(cats) do local name=cat[1];local category=q~="" and (string.find(string.lower(name),q,1,true) or string.find(string.lower(cat[2]),q,1,true));local found=not not category
   for item,s in pairs(sections) do if s.page==name then local match=q=="" or category or string.find(s.query,q,1,true);item.Visible=not not match;if match then found=true end end end
   matches[name]=found;if found then any=true end
  end
@@ -457,11 +460,9 @@ connect(root:GetPropertyChangedSignal("AbsoluteSize"),fit)
 connect(top.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag={input=i,start=Vector2.new(i.Position.X,i.Position.Y),origin=main.AbsolutePosition-root.AbsolutePosition} end end)
 connect(UIS.InputChanged,function(i) if not drag or (i.UserInputType~=Enum.UserInputType.MouseMovement and i~=drag.input) then return end;local delta=Vector2.new(i.Position.X,i.Position.Y)-drag.start;local p=drag.origin+delta;local ws=main.AbsoluteSize;main.Position=UDim2.fromOffset(p.X+ws.X*.5,p.Y+ws.Y*.5);clampWindow() end)
 connect(UIS.InputEnded,function(i) if drag and i==drag.input then drag=nil end end);connect(UIS.WindowFocusReleased,function() drag=nil end);fit()
-
--- Integrated AUDIO HOTFIX: one incremental cache, active audio only, bounded writes.
+-- Optimized audio controller, integrated. No per-voice full-game scans or sound tweens.
 do
- local VOICE_VOLUME,DUCK_MULTIPLIER=8,.12
- local ATTACK,RELEASE=.08,.30
+ local DUCK_MULTIPLIER,ATTACK,RELEASE=.12,.08,.30
  local INDEX_BUDGET_SECONDS,MAX_INDEX_STEPS,MAX_VOLUME_WRITES=.001,64,32
  local audioAlive,ducking=true,false
  local links,records,playingAmbient,voices,transitions={},{},{},{},{}
@@ -473,50 +474,34 @@ do
  local function volume(o) local ok,v=pcall(function() return o.Volume end);return ok and v or nil end
  local function playing(o) local ok,v=pcall(function() return o.IsPlaying end);return ok and v==true end
  local function write(o,v) return pcall(function() o.Volume=v end) end
- local function restoreImmediate(o,r)
-  transitions[o]=nil;if r.ducked and r.original~=nil then write(o,r.original) end;r.ducked=false;r.original=nil
- end
- local function transition(o,r,target,seconds,restoring)
-  local v=volume(o);if v==nil then return end
-  transitions[o]={from=v,to=target,start=os.clock(),duration=seconds,restoring=restoring,record=r}
- end
+ local function restoreImmediate(o,r) transitions[o]=nil;if r.ducked and r.original~=nil then write(o,r.original) end;r.ducked=false;r.original=nil end
+ local function transition(o,r,target,seconds,restoring) local v=volume(o);if v==nil then return end;transitions[o]={from=v,to=target,start=os.clock(),duration=seconds,restoring=restoring,record=r} end
  local function duckOne(o,r,immediate)
   if not r.ducked then local v=volume(o);if v==nil then return end;r.original=v;r.ducked=true end
-  local target=r.original*DUCK_MULTIPLIER
-  if immediate then transitions[o]=nil;write(o,target) else transition(o,r,target,ATTACK,false) end
+  local target=r.original*DUCK_MULTIPLIER;if immediate then transitions[o]=nil;write(o,target) else transition(o,r,target,ATTACK,false) end
  end
  local function refreshVoices()
-  if not audioAlive then return end
-  local any=false;for o,active in pairs(voices) do if o.Parent and active then any=true;break end end
+  if not audioAlive then return end;local any=false;for o,active in pairs(voices) do if o.Parent and active then any=true;break end end
   if any==ducking then return end;ducking=any;gui:SetAttribute("PopupAudioDuckingActive",ducking)
-  if ducking then
-   for o in pairs(playingAmbient) do local r=records[o];if r and o.Parent then duckOne(o,r,false) end end
-  else
-   for o,r in pairs(records) do if r.ducked and r.original~=nil then if r.playing then transition(o,r,r.original,RELEASE,true) else restoreImmediate(o,r) end end end
-  end
+  if ducking then for o in pairs(playingAmbient) do local r=records[o];if r and o.Parent then duckOne(o,r,false) end end
+  else for o,r in pairs(records) do if r.ducked and r.original~=nil then if r.playing then transition(o,r,r.original,RELEASE,true) else restoreImmediate(o,r) end end end end
  end
  local function forget(o)
-  local r=records[o];if not r then return end
-  if r.playConnection then r.playConnection:Disconnect() end;if r.destroyConnection then r.destroyConnection:Disconnect() end
+  local r=records[o];if not r then return end;if r.playConnection then r.playConnection:Disconnect() end;if r.destroyConnection then r.destroyConnection:Disconnect() end
   restoreImmediate(o,r);records[o]=nil;playingAmbient[o]=nil;local wasVoice=voices[o]~=nil;voices[o]=nil;if wasVoice then refreshVoices() end
  end
  local function observe(o)
   if not audioAlive or records[o] or not supported(o) or volume(o)==nil then return end
-  local r={voice=isVoice(o),playing=false,ducked=false};records[o]=r
-  if r.voice then write(o,VOICE_VOLUME);voices[o]=false end
+  local r={voice=isVoice(o),playing=false,ducked=false};records[o]=r;if r.voice then write(o,VOICE_VOLUME);voices[o]=false end
   local function changed()
-   if not audioAlive or records[o]~=r then return end
-   local active=playing(o);r.playing=active
-   if r.voice then voices[o]=active;refreshVoices()
-   elseif active then playingAmbient[o]=true;if ducking then duckOne(o,r,true) end
-   else playingAmbient[o]=nil;restoreImmediate(o,r) end
+   if not audioAlive or records[o]~=r then return end;local active=playing(o);r.playing=active
+   if r.voice then voices[o]=active;refreshVoices() elseif active then playingAmbient[o]=true;if ducking then duckOne(o,r,true) end else playingAmbient[o]=nil;restoreImmediate(o,r) end
   end
   local ok,c=pcall(function() return o:GetPropertyChangedSignal("IsPlaying"):Connect(changed) end);if ok then r.playConnection=c end
   r.destroyConnection=o.Destroying:Connect(function() forget(o) end);changed()
  end
  local function audioCleanup()
-  if not audioAlive then return end;audioAlive=false
-  for _,c in ipairs(links) do c:Disconnect() end
+  if not audioAlive then return end;audioAlive=false;for _,c in ipairs(links) do c:Disconnect() end
   for o,r in pairs(records) do if r.playConnection then r.playConnection:Disconnect() end;if r.destroyConnection then r.destroyConnection:Disconnect() end;restoreImmediate(o,r) end
   table.clear(records);table.clear(playingAmbient);table.clear(voices);table.clear(transitions);table.clear(stack)
   pcall(function() gui:SetAttribute("PopupAudioDuckingActive",false) end);if event.Parent then event:Destroy() end
@@ -526,26 +511,21 @@ do
  audioConnect(game.DescendantRemoving,function(o) if records[o] then forget(o) end end)
  local voicePoll=0
  audioConnect(RS.Heartbeat,function(dt)
-  if not audioAlive then return end
-  local begun=os.clock();local steps=0
+  if not audioAlive then return end;local begun=os.clock();local steps=0
   while #stack>0 and steps<MAX_INDEX_STEPS and os.clock()-begun<INDEX_BUDGET_SECONDS do
    steps+=1;local node=stack[#stack]
    if not node.children then if supported(node.object) then observe(node.object) end;local ok,children=pcall(function() return node.object:GetChildren() end);node.children=ok and children or {};node.index=1 end
-   local child=node.children[node.index]
-   if child then node.index+=1;if child.Parent then table.insert(stack,{object=child}) end else table.remove(stack) end
+   local child=node.children[node.index];if child then node.index+=1;if child.Parent then table.insert(stack,{object=child}) end else table.remove(stack) end
   end
   if #stack==0 and gui:GetAttribute("AudioCacheReady")~=true then gui:SetAttribute("AudioCacheReady",true) end
   local now=os.clock();local writes=0
   for o,t in pairs(transitions) do
    if writes>=MAX_VOLUME_WRITES then break end;writes+=1
    if not o.Parent or records[o]~=t.record then transitions[o]=nil
-   else local p=math.clamp((now-t.start)/t.duration,0,1);local eased=1-(1-p)*(1-p);write(o,t.from+(t.to-t.from)*eased)
-    if p>=1 then transitions[o]=nil;if t.restoring and not ducking then t.record.ducked=false;t.record.original=nil end end
-   end
+   else local p=math.clamp((now-t.start)/t.duration,0,1);local eased=1-(1-p)*(1-p);write(o,t.from+(t.to-t.from)*eased);if p>=1 then transitions[o]=nil;if t.restoring and not ducking then t.record.ducked=false;t.record.original=nil end end end
   end
   voicePoll+=dt;if voicePoll>=.1 then voicePoll=0;for o in pairs(voices) do if o.Parent then voices[o]=playing(o) end end;refreshVoices() end
  end)
- gui:SetAttribute("PopupVoiceVolume",VOICE_VOLUME);gui:SetAttribute("GameAudioDuckMultiplier",DUCK_MULTIPLIER)
- gui:SetAttribute("AudioCacheReady",false);gui:SetAttribute("AudioControllerMode","CACHED_ACTIVE_ONLY_BOUNDED")
+ gui:SetAttribute("PopupVoiceVolume",VOICE_VOLUME);gui:SetAttribute("GameAudioDuckMultiplier",DUCK_MULTIPLIER);gui:SetAttribute("AudioCacheReady",false);gui:SetAttribute("AudioControllerMode","CACHED_ACTIVE_ONLY_BOUNDED")
  for _,o in ipairs(SoundService:GetChildren()) do if supported(o) then observe(o) end end
 end
