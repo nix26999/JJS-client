@@ -141,9 +141,11 @@ connect(RS.Heartbeat,function(dt)
   local o=p.object
   if i>count or fade<=0 then o.Visible=false else
    local t=(age/p.life+p.phase)%1;local a=p.angle+age*(sparkleKind=="purple" and .18 or .38)
-   local x=pos.X+size.X*.5+math.cos(a)*size.X*(.36+.10*p.radius)
-   local y=pos.Y+size.Y*.5+math.sin(a)*size.Y*(.28+.16*p.radius)-t*(sparkleKind=="purple" and 5 or 13)
-   local brightness=math.sin(t*math.pi)*fade;local pixels=sparkleKind=="purple" and (1.5+brightness) or (2+brightness*2.5)
+   local spreadX=sparkleKind=="purple" and (.45+.18*p.radius) or (.52+.24*p.radius)
+   local x=pos.X+size.X*.5+math.cos(a)*size.X*spreadX
+   local spreadY=sparkleKind=="purple" and (.55+.30*p.radius) or (.75+.45*p.radius)
+   local y=pos.Y+size.Y*.5+math.sin(a)*size.Y*spreadY-t*(sparkleKind=="purple" and 8 or 24)
+   local brightness=math.sin(t*math.pi)*fade;local pixels=sparkleKind=="purple" and (1.5+brightness) or (4+brightness*6)
    o.Visible=brightness>.08;o.Position=UDim2.fromOffset(x,y);o.Size=UDim2.fromOffset(pixels,pixels*(sparkleKind=="purple" and 1.6 or 1));o.Rotation=45+age*(sparkleKind=="purple" and 18 or 55);o.BackgroundTransparency=1-brightness*.9
    o.BackgroundColor3=sparkleKind=="purple" and SEQUENCE[9].color or (i%2==0 and Color3.fromRGB(255,175,20) or Color3.fromRGB(255,215,0))
   end
@@ -151,6 +153,9 @@ connect(RS.Heartbeat,function(dt)
 end)
 local function removeSound(s) if sounds[s] then sounds[s]=nil;pcall(function() s:Destroy() end) end end
 local function playVoice(id)
+ -- Only one popup voice at a time: cancel the previous voice before starting the next.
+ local previousVoices={};for sound in pairs(sounds) do table.insert(previousVoices,sound) end
+ for _,sound in ipairs(previousVoices) do pcall(function() sound:Stop() end);removeSound(sound) end
  local s=make("Sound",SoundService,{Name="AutoBlackflashStreakVoice",SoundId=id,Volume=VOICE_VOLUME,PlaybackSpeed=1,Looped=false});sounds[s]=true
  local ended;ended=s.Ended:Connect(function() if ended then ended:Disconnect() end;removeSound(s) end)
  s.Destroying:Once(function() if ended then ended:Disconnect() end end)
@@ -380,6 +385,7 @@ local function start(started)
  if current or not VIM or not living() then return end
  local mode=chainEnabled and "CHAIN" or macroEnabled and "MACRO" or nil;if not mode then return end
  local target=mode=="CHAIN" and nearest() or nil;if mode=="CHAIN" and not target then say("No living target. Press 3 to retry.");return end
+ if mode=="CHAIN" and distance(target)>8 then say("Chain requires a target within 8 studs. Move closer, then press 3.");return end
  local j={mode=mode,target=target,character=LP.Character,keys={},connections={},physicalReleased=false};current=j
  local h=localHumanoid();table.insert(j.connections,h.Died:Connect(function() if current==j then stop("Player died; OFF.",true) end end))
  if target then table.insert(j.connections,target.Died:Connect(function() if current==j then stop("Target died; chain stopped. Press 3 again.",false) end end)) end
@@ -389,6 +395,7 @@ local function start(started)
    if mode=="CHAIN" then lock(j) end
    for round=1,(mode=="CHAIN" and 4 or 1) do
     if not valid(j) then return end
+    if mode=="CHAIN" and distance(j.target)>8 then say("Target moved beyond 8 studs. Chain stopped; press 3 when closer.");return end
     if mode=="CHAIN" and (not positionBehind(j) or not stableRear(j) or not rearGround(j)) then say("Positioning failed. Stopped until 3 is pressed again.");return end
     local first=started
     if mode=="CHAIN" then first=os.clock();key(j,Enum.KeyCode.Three,true);if not waitUntil(j,first+.035) then return end;key(j,Enum.KeyCode.Three,false) end
