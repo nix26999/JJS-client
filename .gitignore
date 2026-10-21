@@ -1,13 +1,13 @@
--- AUTOBLACKFLASH / COMPLETE MAIN SCRIPT / ORDERED STREAK POPUPS + SOUNDS
--- Integrated rear-gated chain, macro, UI/search, 16x14 kill finisher and cleanup.
--- ASCII-only. Not live-tested. Client input cannot guarantee perfect Black Flashes.
--- Macro: 3 -> +350ms follow-up. Chain: physical 3 is a positioning trigger;
--- both attack presses are generated after eligibility. Native key suppression is best-effort.
--- Streak rule: next qualifying estimated hit WITHIN 1 SECOND advances; longer gap resets.
--- After entry 8, the next qualifying hit begins a new streak at Great!.
--- Long popups retain their own lifetime and stack instead of replacing each other.
--- Preview does not advance streak or play voice lines. No voice re-upload or synthesis.
--- Kill FX: confirmed-only server event by default; optional lethal estimate is unverified.
+-- AUTOBLACKFLASH / FULL MAIN SCRIPT / ORDERED SOUNDS + DETECTION FIXES
+-- ASCII-only. Not live-tested. Requires executor gethui() and virtual-input access.
+-- Macro + rear-gated chain + category/search/drag UI + 16x14 kill finisher retained.
+-- FIX 1: popup enabled by default.
+-- FIX 2: a normally finished job does not discard its remaining 600ms health check;
+-- its pending candidate detaches from the job. Disable/focus/text-entry still cancel it.
+-- Streak rule: next qualifying estimated hit WITHIN 1 second advances; otherwise Great!.
+-- Default popup sound: 136561900676276. Jackpot: 75172919311574. Obito: 104726272659969.
+-- Preview stays silent and never advances a streak.
+-- Health-loss/timing events are estimates, NOT verified Black Flashes or kill attribution.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
@@ -23,7 +23,7 @@ if old then local e=old:FindFirstChild("Shutdown");if e then pcall(function() e:
 local ACTION,MOVE_ACTION="AutoBlackflash_RearChain","AutoBlackflash_JumpRear"
 CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
 local running,focused,cleanedUp=true,true,false
-local macroEnabled,chainEnabled,popupEnabled,impactEnabled=false,false,false,false
+local macroEnabled,chainEnabled,popupEnabled,impactEnabled=false,false,true,false
 local confirmationMode,reducedFlash="ConfirmedOnly",true
 local current,lastTap,pending
 local heldThree,injecting=false,false
@@ -37,6 +37,7 @@ local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
 local paintMacro,paintChain,chainStatus,killStatus
 local streakIndex,streakAt=0,nil
 local STREAK_WINDOW=1.0
+local DEFAULT_POPUP_SOUND="rbxassetid://136561900676276"
 local popupRecords={}
 local SEQUENCE={
  {text="Great!",duration=1.4},
@@ -117,26 +118,22 @@ local function playVoice(id)
  task.delay(20,function() removeSound(sound) end)
 end
 local function reflowPopups()
- local height=math.max(1,root.AbsoluteSize.Y)
- local gap=math.clamp(height*.10,48,80)
+ local height=math.max(1,root.AbsoluteSize.Y);local gap=math.clamp(height*.10,48,80)
  for i,r in ipairs(popupRecords) do if r.holder.Parent then TS:Create(r.holder,TweenInfo.new(.15),{Position=UDim2.new(.5,0,.12,(i-1)*gap)}):Play() end end
 end
 local function clearPopups()
  for _,r in ipairs(popupRecords) do if r.holder.Parent then r.holder:Destroy() end end;table.clear(popupRecords)
- for sound in pairs(sounds) do removeSound(sound) end
- resetStreak()
+ for sound in pairs(sounds) do removeSound(sound) end;resetStreak()
 end
 local popupRng=Random.new()
 local function showPopup(preview)
  if not running or (not popupEnabled and not preview) then return end
  local index
  if preview then index=1 else
-  local now=os.clock()
-  if not streakAt or now-streakAt>STREAK_WINDOW or streakIndex>=#SEQUENCE then streakIndex=1 else streakIndex+=1 end
+  local now=os.clock();if not streakAt or now-streakAt>STREAK_WINDOW or streakIndex>=#SEQUENCE then streakIndex=1 else streakIndex+=1 end
   streakAt=now;index=streakIndex;gui:SetAttribute("PopupStreakIndex",index)
  end
- local entry=SEQUENCE[index]
- local color=entry.color or Color3.fromHSV(popupRng:NextNumber(),.82,1)
+ local entry=SEQUENCE[index];local color=entry.color or Color3.fromHSV(popupRng:NextNumber(),.82,1)
  local fade=.36;local hold=entry.hold or math.max(0,(entry.duration or 1.4)-fade)
  local holder=make("Frame",gui,{Name="OrderedBlackflashPopup",AnchorPoint=Vector2.new(.5,0),Position=UDim2.fromScale(.5,.12),Size=UDim2.new(.9,0,0,80),BackgroundTransparency=1,ZIndex=80})
  make("UISizeConstraint",holder,{MaxSize=Vector2.new(650,80)})
@@ -144,15 +141,13 @@ local function showPopup(preview)
  local phrase=text(holder,entry.text,UDim2.fromOffset(12,0),UDim2.new(1,-24,0,58),44);phrase.TextXAlignment=Enum.TextXAlignment.Center;phrase.TextScaled=true;phrase.Font=Enum.Font.GothamBlack;phrase.ZIndex=82;phrase.TextColor3=color
  make("UITextSizeConstraint",phrase,{MinTextSize=16,MaxTextSize=54});make("UIStroke",phrase,{Color=Color3.new(0,0,0),Thickness=4})
  local tag=text(holder,preview and "PREVIEW - NOT A HIT" or string.format("Estimated hit / streak %d of 8",index),UDim2.fromOffset(0,59),UDim2.new(1,0,0,18),10);tag.TextXAlignment=Enum.TextXAlignment.Center;tag.ZIndex=82;make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
- local record={holder=holder};table.insert(popupRecords,1,record);reflowPopups()
- TS:Create(ps,TweenInfo.new(.16,Enum.EasingStyle.Back),{Scale=1}):Play()
- -- Short decorative red/black ring burst does not replace a long-lived popup.
+ local record={holder=holder};table.insert(popupRecords,1,record);reflowPopups();TS:Create(ps,TweenInfo.new(.16,Enum.EasingStyle.Back),{Scale=1}):Play()
  for i=1,2 do
   local ring=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.35),Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,ZIndex=80});corner(ring,999)
   local outline=make("UIStroke",ring,{Color=i==1 and Color3.fromRGB(255,24,45) or Color3.fromRGB(8,0,4),Thickness=3})
   TS:Create(ring,TweenInfo.new(.32),{Size=UDim2.fromOffset(300+i*60,70)}):Play();TS:Create(outline,TweenInfo.new(.32),{Transparency=1}):Play()
  end
- if not preview and entry.sound then playVoice(entry.sound) end
+ if not preview then playVoice(entry.sound or DEFAULT_POPUP_SOUND) end
  gui:SetAttribute("LastBlackflashPopupPhrase",entry.text)
  task.delay(hold,function()
   if not running or not holder.Parent then return end
@@ -160,9 +155,7 @@ local function showPopup(preview)
   TS:Create(ps,TweenInfo.new(fade),{Scale=.92}):Play()
  end)
  task.delay(hold+fade,function()
-  if holder.Parent then holder:Destroy() end
-  local at=table.find(popupRecords,record);if at then table.remove(popupRecords,at) end
-  if running then reflowPopups() end
+  if holder.Parent then holder:Destroy() end;local at=table.find(popupRecords,record);if at then table.remove(popupRecords,at) end;if running then reflowPopups() end
  end)
 end
 local macroCard=card("Yuji","Black Flash Follow-up","Tap/release 3; follow-up targets +350ms. Input backend required.")
@@ -176,9 +169,8 @@ paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled
 paintChain=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v) stop(nil,false);chainEnabled=v;if v then macroEnabled=false;if paintMacro then paintMacro() end end;say(v and "Ready: tap 3 to lock and position." or "Chain OFF.") end)
 local popupCard=card("Visuals","Ordered Blackflash Popups","Great! > Amazing! > Perfect! > Holy > BLACKFLASH > Absolute Cinema > JackPot!!! > Is that you obito. Next hit within 1s advances.")
 toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() end end)
-local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND")
-connect(popupPreview.Activated,function() showPopup(true) end)
-note(popupCard,"Perfect!: yellow. BLACKFLASH: red, 3s. Cinema: 3s. Jackpot: light green, 4s + audio. Obito: orange, 5s hold then fade + updated audio.",66)
+local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND");connect(popupPreview.Activated,function() showPopup(true) end)
+note(popupCard,"Default sound: 136561900676276. Perfect!: yellow. BLACKFLASH: red, 3s. Cinema: 3s. Jackpot: green, 4s + custom audio. Obito: orange, 5s hold + updated audio.",72)
 local killCard=card("Visuals","Blackflash Kill Finisher","16 frames at 14 FPS. Confirmed-only by default; lethal estimate mode is explicitly unverified.")
 toggle(killCard,"Kill Finisher: 16 frames / 14 FPS",function() return impactEnabled end,function(v) impactEnabled=v;if not v then cancelImpact() end end)
 local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
@@ -284,7 +276,16 @@ stop=function(message,disable)
   for k in pairs(j.keys) do if k==Enum.KeyCode.Three then echoUntil=os.clock()+.08 end;if not pcall(function() VIM:SendKeyEvent(false,k,false,game) end) then failed=true end end;injecting=false
   if failed then macroEnabled=false;chainEnabled=false;paintMacro();paintChain();message=(message or "Stopped").." | Release failed; OFF." end
  end
- pending,lastTap=nil,nil;targetRef.Value=nil;gui:SetAttribute("BlackflashChainV2Enabled",false);if message then say(message) end
+ -- FIX 2: preserve the original deadline and detach from a normally finished job.
+ if disable or not focused or UIS:GetFocusedTextBox() then
+  pending=nil
+ elseif pending and pending.owner==j then
+  pending.owner=nil
+ end
+ lastTap=nil
+ targetRef.Value=nil
+ gui:SetAttribute("BlackflashChainV2Enabled",false)
+ if message then say(message) end
 end
 local function angle(a,b) return math.atan2(math.sin(b-a),math.cos(b-a)) end
 local function lock(j)
