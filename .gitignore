@@ -1,454 +1,434 @@
--- AutoBlackflash: integrated external UI + macro + chain + 16-frame kill finisher.
--- Based on the client source supplied in this conversation. ASCII-only. Not live-tested.
--- Keeps category/search UI, popup preview, drag, scaling, minimize, reopen and unload.
--- Repairs the supplied chain's missing implementation and toggle forward declaration.
--- Finisher: 16 logical frames at 14 FPS (approximately 1.143 seconds).
--- Default ConfirmedOnly uses the BlackflashKillConfirmed server RemoteEvent from
--- the previous package. It does not fabricate that remote or send a client kill claim.
--- Optional EstimatedLethal mode is explicitly NOT verified attacker/Black Flash attribution.
+-- AUTOBLACKFLASH / COMPLETE MAIN SCRIPT / ORDERED STREAK POPUPS + SOUNDS
+-- Integrated rear-gated chain, macro, UI/search, 16x14 kill finisher and cleanup.
+-- ASCII-only. Not live-tested. Client input cannot guarantee perfect Black Flashes.
+-- Macro: 3 -> +350ms follow-up. Chain: physical 3 is a positioning trigger;
+-- both attack presses are generated after eligibility. Native key suppression is best-effort.
+-- Streak rule: next qualifying estimated hit WITHIN 1 SECOND advances; longer gap resets.
+-- After entry 8, the next qualifying hit begins a new streak at Great!.
+-- Long popups retain their own lifetime and stack instead of replacing each other.
+-- Preview does not advance streak or play voice lines. No voice re-upload or synthesis.
+-- Kill FX: confirmed-only server event by default; optional lethal estimate is unverified.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
+local CAS=game:GetService("ContextActionService")
 local TS=game:GetService("TweenService")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
-local VIM
-pcall(function() VIM=game:GetService("VirtualInputManager") end)
-local LP=assert(Players.LocalPlayer,"Client required")
-assert(RS:IsClient(),"Client required")
+local SoundService=game:GetService("SoundService")
+local VIM;pcall(function() VIM=game:GetService("VirtualInputManager") end)
+local LP=assert(Players.LocalPlayer,"Client required");assert(RS:IsClient(),"Client required")
 local UI_ROOT=assert(gethui and gethui(),"Executor gethui() unavailable")
-local previous=UI_ROOT:FindFirstChild("AutoBlackflash")
-if previous then
- local event=previous:FindFirstChild("Shutdown")
- if event and event:IsA("BindableEvent") then pcall(function() event:Fire() end) end
- if previous.Parent then previous:Destroy() end
-end
-local running,cleanedUp,focused=true,false,true
-local macroEnabled,macroBusy=false,false
-local chainEnabled,chainBusy=false,false
-local threeHeld,syntheticSending=false,false
-local echoUntil=0
-local currentJob
-local popupEnabled,impactFramesEnabled=false,false
-local confirmationMode="ConfirmedOnly"
-local reducedFlash=true
-local CONFIRMED_REMOTE_NAME="BlackflashKillConfirmed"
-local FRAME_COUNT,FPS=16,14
-local BLACKFLASH_MIN_GAP,BLACKFLASH_MAX_GAP,BLACKFLASH_HIT_WINDOW=.325,.4,.6
-local BLACKFLASH_NEARBY_RANGE,CHAIN_ROUNDS,CHAIN_RETRY_DELAY=10,4,.25
-local popupToken,impactToken=0,0
-local popup,activeImpactLayer,impactConnection
-local pendingBlackflash,lastTapAt
-local trackedHumanoids={}
-local notifiedEstimated=setmetatable({},{__mode="k"})
-local conns={}
-local drag,dragStart,dragOrigin
-local suppressSearch=false
-local cancelMacro,cancelChain,paintMacroToggle,paintChainToggle
-local finisherStatus
-local confirmedRemote,confirmedConnection,lastConfirmedId=nil,nil,0
-local T={bg=Color3.fromRGB(13,16,24),panel=Color3.fromRGB(18,22,33),p2=Color3.fromRGB(27,32,47),card=Color3.fromRGB(21,26,39),stroke=Color3.fromRGB(48,55,75),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(237,240,250),dim=Color3.fromRGB(166,176,197),mut=Color3.fromRGB(131,143,166)}
+local old=UI_ROOT:FindFirstChild("AutoBlackflash")
+if old then local e=old:FindFirstChild("Shutdown");if e then pcall(function() e:Fire() end) end;if old.Parent then old:Destroy() end end
+local ACTION,MOVE_ACTION="AutoBlackflash_RearChain","AutoBlackflash_JumpRear"
+CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
+local running,focused,cleanedUp=true,true,false
+local macroEnabled,chainEnabled,popupEnabled,impactEnabled=false,false,false,false
+local confirmationMode,reducedFlash="ConfirmedOnly",true
+local current,lastTap,pending
+local heldThree,injecting=false,false
+local echoUntil,lastSide=0,-math.huge
+local connections,tracked,sounds={},{},{}
+local lethalNotified=setmetatable({},{__mode="k"})
+local stop=function() end
+local cancelImpact=function() end
+local impactLayer,impactConnection,impactToken=nil,nil,0
+local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
+local paintMacro,paintChain,chainStatus,killStatus
+local streakIndex,streakAt=0,nil
+local STREAK_WINDOW=1.0
+local popupRecords={}
+local SEQUENCE={
+ {text="Great!",duration=1.4},
+ {text="Amazing!",duration=1.4},
+ {text="Perfect!",color=Color3.fromRGB(255,230,0),duration=1.4},
+ {text="Holy",duration=1.4},
+ {text="BLACKFLASH",color=Color3.fromRGB(255,20,30),duration=3},
+ {text="Absolute Cinema",duration=3},
+ {text="JackPot!!!",color=Color3.fromRGB(144,238,144),duration=4,sound="rbxassetid://75172919311574"},
+ {text="Is that you obito",color=Color3.fromRGB(255,150,30),hold=5,sound="rbxassetid://104726272659969"},
+}
+local function connect(s,f) local c=s:Connect(f);table.insert(connections,c);return c end
 local function make(class,parent,props) local o=Instance.new(class);for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent;return o end
-local function connect(signal,fn) local c=signal:Connect(fn);table.insert(conns,c);return c end
+local T={bg=Color3.fromRGB(13,16,24),panel=Color3.fromRGB(18,22,33),p2=Color3.fromRGB(27,32,47),card=Color3.fromRGB(21,26,39),stroke=Color3.fromRGB(48,55,75),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(237,240,250),mut=Color3.fromRGB(131,143,166)}
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
-local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
+local function text(p,caption,pos,size,fontSize)
+ return make("TextLabel",p,{Text=caption,Position=pos or UDim2.new(),Size=size or UDim2.new(1,0,0,30),BackgroundTransparency=1,TextColor3=T.txt,TextSize=fontSize or 12,Font=Enum.Font.Gotham,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left})
+end
 local gui=make("ScreenGui",UI_ROOT,{Name="AutoBlackflash",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 local shutdown=make("BindableEvent",gui,{Name="Shutdown"})
+local targetRef=make("ObjectValue",gui,{Name="BlackflashChainV2Target"})
 gui:SetAttribute("BlackflashChainV2Enabled",false)
-gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode)
-gui:SetAttribute("KillFinisherFrameCount",FRAME_COUNT);gui:SetAttribute("KillFinisherFPS",FPS)
-make("ObjectValue",gui,{Name="BlackflashChainV2Target"})
-local root=make("Frame",gui,{Name="Root",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0})
-local main=make("Frame",root,{Name="Window",AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(760,540),Position=UDim2.fromScale(.5,.5),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true});corner(main,12);stroke(main)
+gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",14);gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode)
+gui:SetAttribute("PopupStreakWindowSeconds",STREAK_WINDOW)
+local root=make("Frame",gui,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1})
+local main=make("Frame",root,{Name="Window",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(760,540),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true});corner(main,12);make("UIStroke",main,{Color=T.stroke,Thickness=1})
 local scale=make("UIScale",main,{Scale=1})
-local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true});corner(top,12)
-make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS / CHEAT MENU",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
-local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="350",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11});corner(badge,4)
-local minimize=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-72,.5,-14),BackgroundColor3=T.p2,Text="-",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16});corner(minimize,6)
-local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16});corner(close,6)
-local side=make("ScrollingFrame",main,{Name="Categories",Size=UDim2.new(0,168,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
+local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
+text(top,"JJS / CHEAT MENU",UDim2.fromOffset(16,0),UDim2.fromOffset(230,44),15).Font=Enum.Font.GothamBold
+local badge=text(top,"350",UDim2.fromOffset(240,12),UDim2.fromOffset(48,20),11);badge.TextColor3=T.acc
+local minimize=make("TextButton",top,{Text="-",Position=UDim2.new(1,-72,.5,-14),Size=UDim2.fromOffset(28,28),BackgroundColor3=T.p2,TextColor3=T.txt});corner(minimize,6)
+local close=make("TextButton",top,{Text="x",Position=UDim2.new(1,-36,.5,-14),Size=UDim2.fromOffset(28,28),BackgroundColor3=T.p2,TextColor3=T.txt});corner(close,6)
+local side=make("ScrollingFrame",main,{Name="Categories",Position=UDim2.fromOffset(0,44),Size=UDim2.new(0,168,1,-44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
 make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder});make("UIPadding",side,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)})
-make("TextLabel",side,{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,Text="WORKSPACE",TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=-100})
-local content=make("Frame",main,{Name="Content",Size=UDim2.new(1,-168,1,-44),Position=UDim2.fromOffset(168,44),BackgroundColor3=T.bg,BorderSizePixel=0,ClipsDescendants=true})
-local title=make("TextLabel",content,{Size=UDim2.new(1,-24,0,22),Position=UDim2.fromOffset(16,10),BackgroundTransparency=1,Text="Yuji",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left})
-local desc=make("TextLabel",content,{Size=UDim2.new(1,-24,0,18),Position=UDim2.fromOffset(16,30),BackgroundTransparency=1,Text="Black Flash macro",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextTruncate=Enum.TextTruncate.AtEnd,TextXAlignment=Enum.TextXAlignment.Left})
-local search=make("TextBox",content,{Name="ModuleSearch",Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,BorderSizePixel=0,Text="",PlaceholderText="Search modules or settings...",PlaceholderColor3=T.mut,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,ClearTextOnFocus=false});corner(search,8)
-make("UIPadding",search,{PaddingLeft=UDim.new(0,10),PaddingRight=UDim.new(0,10)})
-local emptyState=make("TextLabel",content,{Name="SearchEmptyState",Size=UDim2.new(1,-32,0,40),Position=UDim2.fromOffset(16,150),BackgroundTransparency=1,Text="No modules or categories match this search.",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=12,TextWrapped=true,Visible=false,ZIndex=5})
-local pages,buttons={},{}
-local cats={{"Yuji","Black Flash controls and chains V1-V3","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Popup and 16-frame kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
-local descriptions={};for _,cat in ipairs(cats) do descriptions[cat[1]]=cat[2] end
-local selectedPage="Yuji"
+local content=make("Frame",main,{Position=UDim2.fromOffset(168,44),Size=UDim2.new(1,-168,1,-44),BackgroundTransparency=1,ClipsDescendants=true})
+local title=text(content,"Yuji",UDim2.fromOffset(16,10),UDim2.new(1,-24,0,22),18)
+local desc=text(content,"Black Flash controls",UDim2.fromOffset(16,32),UDim2.new(1,-24,0,18),11);desc.TextColor3=T.mut
+local search=make("TextBox",content,{Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,Text="",PlaceholderText="Search modules or settings...",TextColor3=T.txt,PlaceholderColor3=T.mut,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12});corner(search)
+local empty=text(content,"No modules or categories match this search.",UDim2.fromOffset(16,150),UDim2.new(1,-32,0,40),12);empty.Visible=false;empty.ZIndex=5
+local pages,buttons,sections={},{},{}
+local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ordered popup streak, sounds and 16-frame kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
+local selected="Yuji"
 local filter,selectPage
 local lastGroup
 for i,cat in ipairs(cats) do
  local name=cat[1]
- if cat[3]~=lastGroup then lastGroup=cat[3];make("TextLabel",side,{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text=lastGroup,TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=9,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=i*10-1}) end
- local b=make("TextButton",side,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.txt or T.dim,Font=Enum.Font.GothamMedium,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=i*10});corner(b,8);buttons[name]=b
- make("UIPadding",b,{PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,6)})
- local mark=make("Frame",b,{Position=UDim2.new(0,0,.5,-7),Size=UDim2.fromOffset(3,14),BackgroundColor3=T.acc,BorderSizePixel=0});corner(mark,2)
- local function paintMark() mark.Visible=b.BackgroundTransparency<.5 end;paintMark();connect(b:GetPropertyChangedSignal("BackgroundTransparency"),paintMark)
- local p=make("ScrollingFrame",content,{Name=name,Size=UDim2.new(1,0,1,-96),Position=UDim2.fromOffset(0,96),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,ScrollBarImageColor3=T.acc,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1})
- make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)});make("UIListLayout",p,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder});pages[name]=p
+ if cat[3]~=lastGroup then lastGroup=cat[3];local t=text(side,lastGroup,nil,UDim2.new(1,0,0,18),9);t.LayoutOrder=i*10-1;t.TextColor3=T.mut end
+ local b=make("TextButton",side,{Text=name,Size=UDim2.new(1,0,0,30),LayoutOrder=i*10,BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12});corner(b);buttons[name]=b
+ local p=make("ScrollingFrame",content,{Name=name,Position=UDim2.fromOffset(0,96),Size=UDim2.new(1,0,1,-96),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1});pages[name]=p
+ make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)});make("UIListLayout",p,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
  connect(b.Activated,function() selectPage(name,true) end)
 end
-local ord,searchSections={},{}
-local function nextOrder(p) ord[p]=(ord[p] or 0)+1;return ord[p] end
-local function card(p,name,sub,terms)
- local c=make("Frame",p,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=nextOrder(p)});corner(c,10);stroke(c)
+local orders={}
+local function order(p) orders[p]=(orders[p] or 0)+1;return orders[p] end
+local function card(page,name,description)
+ local c=make("Frame",pages[page],{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=order(pages[page])});corner(c,10);make("UIStroke",c,{Color=T.stroke})
  make("UIPadding",c,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)});make("UIListLayout",c,{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder})
- local heading=make("TextLabel",c,{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0})
- make("TextLabel",c,{Size=UDim2.new(1,0,0,32),BackgroundTransparency=1,Text=sub,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1})
- make("Frame",c,{Size=UDim2.new(1,0,0,1),BackgroundColor3=T.stroke,BorderSizePixel=0,LayoutOrder=2});searchSections[c]={page=p,text=string.lower(name.." "..sub.." "..(terms or ""))};return c,heading
+ local heading=text(c,name,nil,UDim2.new(1,0,0,22),13);heading.LayoutOrder=0;heading.Font=Enum.Font.GothamBold
+ local sub=text(c,description,nil,UDim2.new(1,0,0,52),10);sub.LayoutOrder=1;sub.TextColor3=T.mut
+ sections[c]={page=page,query=string.lower(name.." "..description)};return c
 end
+local function note(p,message,height) local t=text(p,message,nil,UDim2.new(1,0,0,height or 42),10);t.TextColor3=T.mut;t.LayoutOrder=order(p)+2;return t end
 local function toggle(p,name,get,set)
- local r=make("TextButton",p,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
- make("TextLabel",r,{Size=UDim2.new(1,-50,1,0),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
- local track=make("Frame",r,{Size=UDim2.fromOffset(36,18),Position=UDim2.new(1,-36,.5,-9),BackgroundColor3=T.p2,BorderSizePixel=0});corner(track,9)
- local knob=make("Frame",track,{Size=UDim2.fromOffset(14,14),Position=UDim2.new(0,2,.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0});corner(knob,7)
- local function paint() track.BackgroundColor3=get() and T.acc or Color3.fromRGB(45,45,55);knob.Position=get() and UDim2.new(1,-16,.5,-7) or UDim2.new(0,2,.5,-7) end
- connect(r.Activated,function() set(not get());paint() end);paint();return paint
+ local b=make("TextButton",p,{Text="",Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,LayoutOrder=order(p)+2})
+ text(b,name,nil,UDim2.new(1,-55,1,0),12);local state=text(b,"OFF",UDim2.new(1,-48,0,0),UDim2.fromOffset(48,30),11)
+ local function paint() state.Text=get() and "ON" or "OFF";state.TextColor3=get() and T.acc or T.mut end
+ connect(b.Activated,function() set(not get());paint() end);paint();return paint
 end
-local function note(p,message)
- return make("TextLabel",p,{Size=UDim2.new(1,0,0,48),BackgroundTransparency=1,Text=message,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(p)+2})
+local function actionButton(p,name) local b=make("TextButton",p,{Text=name,Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=order(p)+2});corner(b,6);return b end
+for _,cat in ipairs(cats) do if cat[1]~="Yuji" and cat[1]~="Visuals" and cat[1]~="Settings" then card(cat[1],"No modules added",cat[2]) end end
+local function resetStreak() streakIndex=0;streakAt=nil;gui:SetAttribute("PopupStreakIndex",0) end
+local function removeSound(sound) if sounds[sound] then sounds[sound]=nil;pcall(function() sound:Destroy() end) end end
+local function playVoice(id)
+ local sound=make("Sound",SoundService,{Name="AutoBlackflashStreakVoice",SoundId=id,Volume=1,PlaybackSpeed=1,Looped=false});sounds[sound]=true
+ local ended;ended=sound.Ended:Connect(function() if ended then ended:Disconnect() end;removeSound(sound) end)
+ sound.Destroying:Once(function() if ended then ended:Disconnect() end end)
+ local ok,err=pcall(function() sound:Play() end);if not ok then warn("Popup sound failed: "..tostring(err));removeSound(sound) end
+ task.delay(20,function() removeSound(sound) end)
 end
-for name,page in pairs(pages) do if name~="Yuji" and name~="Settings" and name~="Visuals" then card(page,"No modules added",descriptions[name],name) end end
-local function cancelImpact()
- impactToken+=1
- if impactConnection then impactConnection:Disconnect();impactConnection=nil end
- if activeImpactLayer then activeImpactLayer:Destroy();activeImpactLayer=nil end
+local function reflowPopups()
+ local height=math.max(1,root.AbsoluteSize.Y)
+ local gap=math.clamp(height*.10,48,80)
+ for i,r in ipairs(popupRecords) do if r.holder.Parent then TS:Create(r.holder,TweenInfo.new(.15),{Position=UDim2.new(.5,0,.12,(i-1)*gap)}):Play() end end
 end
-local function updateFinisherStatus()
- if not finisherStatus or not finisherStatus.Parent then return end
- if confirmationMode=="EstimatedLethal" then
-  finisherStatus.Text="ESTIMATED LETHAL mode: lethal health loss after a timing pair. Attacker/Black Flash NOT verified."
- elseif confirmedRemote and confirmedRemote.Parent then
-  finisherStatus.Text="CONFIRMED ONLY: server signal connected. Effect runs only on BlackFlashKill events."
- else
-  finisherStatus.Text="CONFIRMED ONLY: waiting for the package's BlackflashKillConfirmed server signal. Client health alone cannot prove a Black Flash kill."
- end
+local function clearPopups()
+ for _,r in ipairs(popupRecords) do if r.holder.Parent then r.holder:Destroy() end end;table.clear(popupRecords)
+ for sound in pairs(sounds) do removeSound(sound) end
+ resetStreak()
 end
-local function playImpactFrames()
- if not running or not impactFramesEnabled then return end
- cancelImpact();local token=impactToken
- local layer=make("Frame",gui,{Name="BlackflashKillFinisher16",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});activeImpactLayer=layer
- local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
- local pieces={};local rng=Random.new(21)
- local function segment(a,b,width,born,isRed)
-  local glow=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(255,45,85),ZIndex=92})
-  local ink=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,ZIndex=93})
-  table.insert(pieces,{a=a,b=b,w=width,born=born,red=isRed,glow=glow,ink=ink})
- end
- for branch=1,9 do
-  local p=branch<=6 and Vector2.new(90,170) or Vector2.new(rng:NextNumber(800,1920),-20)
-  local a=branch<=6 and rng:NextNumber(-.1,1.3) or rng:NextNumber(1.3,3.4)
-  local width=rng:NextNumber(12,26)
-  for k=1,13 do
-   a+=rng:NextNumber(-.6,.6);local q=p+Vector2.new(math.cos(a),math.sin(a))*rng:NextNumber(50,150)
-   segment(p,q,math.max(1.5,width*(1-k/15)),(k-1)/17,false)
-   if k%3==0 then local aa=a+rng:NextNumber(-1,1);segment(p,p+Vector2.new(math.cos(aa),math.sin(aa))*rng:NextNumber(100,280),4,k/17,true) end
-   p=q
-  end
- end
- for i=1,34 do local a=2*math.pi*i/34;local dir=Vector2.new(math.cos(a),math.sin(a));local p=Vector2.new(1150,620)+dir*70;segment(p,p+dir*rng:NextNumber(200,850),rng:NextNumber(3,10),0,i%3==0) end
- local ring=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundTransparency=1,ZIndex=94});corner(ring,999)
- local ringStroke=make("UIStroke",ring,{Color=Color3.fromRGB(220,25,55),Thickness=8})
- local growth={.10,.28,.46,.62,.74,.84,.92,.97,1,1,1,1,1,1,1,1}
- local backAlpha={1,1,1,1,1,.92,.75,.55,.35,.20,.08,0,0,0,0,0}
- local function drawFrame(frame)
-  local size=layer.AbsoluteSize;local sx,sy=size.X/1920,size.Y/1080;local sf=math.min(sx,sy)
-  local fade=frame<=11 and 1 or math.max(0,(16-frame)/5)
-  local inverse=not reducedFlash and frame>=2 and frame<=4
-  bg.BackgroundColor3=inverse and Color3.new(0,0,0) or Color3.new(1,1,1)
-  bg.BackgroundTransparency=1-(reducedFlash and math.min(.16,backAlpha[frame]) or backAlpha[frame])*fade
-  for _,s in ipairs(pieces) do
-   local progress=math.clamp((growth[frame]-s.born)/.22,0,1)
-   local a=Vector2.new(s.a.X*sx,s.a.Y*sy);local b=Vector2.new(s.b.X*sx,s.b.Y*sy);local d=(b-a)*progress;local mid=a+d/2;local width=math.max(1,s.w*sf)
-   for _,o in ipairs({s.glow,s.ink}) do o.Visible=progress>0 and fade>0;o.Position=UDim2.fromOffset(mid.X,mid.Y);o.Rotation=math.deg(math.atan2(d.Y,d.X)) end
-   s.glow.Size=UDim2.fromOffset(d.Magnitude,width+8*sf);s.glow.BackgroundTransparency=1-.35*fade
-   s.ink.Size=UDim2.fromOffset(d.Magnitude,width);s.ink.BackgroundTransparency=1-fade
-   s.ink.BackgroundColor3=s.red and Color3.fromRGB(193,18,31) or (inverse and Color3.new(1,1,1) or Color3.new(0,0,0))
-  end
-  local progress=math.clamp((frame-1)/8,0,1);ring.Visible=frame>=2 and frame<=9
-  ring.Position=UDim2.fromOffset(1150*sx,620*sy);ring.Size=UDim2.fromOffset((160+1240*progress)*sx,(100+800*progress)*sy)
-  ringStroke.Thickness=math.max(1,(22*(1-progress)+3)*sf);ringStroke.Transparency=1-fade
- end
- local started=os.clock();local lastFrame=1;drawFrame(1)
- impactConnection=RS.RenderStepped:Connect(function()
-  if not running or not impactFramesEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end
-  local elapsed=os.clock()-started;if elapsed>=FRAME_COUNT/FPS then cancelImpact();return end
-  local frame=math.min(FRAME_COUNT,math.floor(elapsed*FPS)+1);if frame~=lastFrame then lastFrame=frame;drawFrame(frame) end
- end)
-end
-local phrases={"Perfect!","BLACKFLASH","HOLY","Great!","Amazing!","Absolute Cinema","Anotha One","YUJI ITDAORI!"}
-local phraseRng,lastPhrase=Random.new(),nil
-local function showBlackflashPopup(preview)
+local popupRng=Random.new()
+local function showPopup(preview)
  if not running or (not popupEnabled and not preview) then return end
- popupToken+=1;local token=popupToken;if popup then popup:Destroy();popup=nil end
- local index=phraseRng:NextInteger(1,#phrases);if index==lastPhrase then index=index%#phrases+1 end;lastPhrase=index
- local flash=make("Frame",gui,{Name="BlackflashImpactFlash",Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(220,0,24),BackgroundTransparency=reducedFlash and .9 or .62,BorderSizePixel=0,ZIndex=79})
- TS:Create(flash,TweenInfo.new(.22),{BackgroundTransparency=1}):Play()
- for i=1,28 do
-  local a=phraseRng:NextNumber(0,360);local r=phraseRng:NextInteger(150,390);local red=i%3==0
-  local shard=make("Frame",flash,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(phraseRng:NextInteger(45,190),phraseRng:NextInteger(3,10)),Rotation=a,BackgroundColor3=red and Color3.fromRGB(255,20,42) or Color3.fromRGB(5,0,2),BorderSizePixel=0,ZIndex=80})
-  TS:Create(shard,TweenInfo.new(.26,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Position=UDim2.new(.5,math.cos(math.rad(a))*r,.5,math.sin(math.rad(a))*r),BackgroundTransparency=1,Size=UDim2.fromOffset(18,1)}):Play()
+ local index
+ if preview then index=1 else
+  local now=os.clock()
+  if not streakAt or now-streakAt>STREAK_WINDOW or streakIndex>=#SEQUENCE then streakIndex=1 else streakIndex+=1 end
+  streakAt=now;index=streakIndex;gui:SetAttribute("PopupStreakIndex",index)
  end
- task.delay(.32,function() if flash.Parent then flash:Destroy() end end)
- local holder=make("Frame",gui,{Name="BlackflashPopup",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.19),Size=UDim2.fromOffset(540,128),BackgroundTransparency=1,ZIndex=80});popup=holder
- local ps=make("UIScale",holder,{Scale=.55})
- local text=make("TextLabel",holder,{Size=UDim2.new(1,-48,0,76),Position=UDim2.fromOffset(24,24),BackgroundTransparency=1,Text=phrases[index],TextColor3=Color3.fromHSV(phraseRng:NextNumber(),.82,1),Font=Enum.Font.GothamBlack,TextScaled=true,TextWrapped=true,ZIndex=82})
- make("UITextSizeConstraint",text,{MinTextSize=18,MaxTextSize=54});make("UIStroke",text,{Color=Color3.new(0,0,0),Thickness=4})
- local red,black=Color3.fromRGB(255,24,45),Color3.fromRGB(8,0,4)
- local variant=phraseRng:NextInteger(1,3)
- for i=1,(variant==2 and 3 or 2) do
-  local ring=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,ZIndex=80});corner(ring,999)
-  local outline=make("UIStroke",ring,{Color=i%2==0 and red or black,Thickness=4})
-  TS:Create(ring,TweenInfo.new(.34),{Size=UDim2.fromOffset(330+i*45,92)}):Play();TS:Create(outline,TweenInfo.new(.34),{Transparency=1,Thickness=1}):Play()
+ local entry=SEQUENCE[index]
+ local color=entry.color or Color3.fromHSV(popupRng:NextNumber(),.82,1)
+ local fade=.36;local hold=entry.hold or math.max(0,(entry.duration or 1.4)-fade)
+ local holder=make("Frame",gui,{Name="OrderedBlackflashPopup",AnchorPoint=Vector2.new(.5,0),Position=UDim2.fromScale(.5,.12),Size=UDim2.new(.9,0,0,80),BackgroundTransparency=1,ZIndex=80})
+ make("UISizeConstraint",holder,{MaxSize=Vector2.new(650,80)})
+ local ps=make("UIScale",holder,{Scale=.65})
+ local phrase=text(holder,entry.text,UDim2.fromOffset(12,0),UDim2.new(1,-24,0,58),44);phrase.TextXAlignment=Enum.TextXAlignment.Center;phrase.TextScaled=true;phrase.Font=Enum.Font.GothamBlack;phrase.ZIndex=82;phrase.TextColor3=color
+ make("UITextSizeConstraint",phrase,{MinTextSize=16,MaxTextSize=54});make("UIStroke",phrase,{Color=Color3.new(0,0,0),Thickness=4})
+ local tag=text(holder,preview and "PREVIEW - NOT A HIT" or string.format("Estimated hit / streak %d of 8",index),UDim2.fromOffset(0,59),UDim2.new(1,0,0,18),10);tag.TextXAlignment=Enum.TextXAlignment.Center;tag.ZIndex=82;make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
+ local record={holder=holder};table.insert(popupRecords,1,record);reflowPopups()
+ TS:Create(ps,TweenInfo.new(.16,Enum.EasingStyle.Back),{Scale=1}):Play()
+ -- Short decorative red/black ring burst does not replace a long-lived popup.
+ for i=1,2 do
+  local ring=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.35),Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,ZIndex=80});corner(ring,999)
+  local outline=make("UIStroke",ring,{Color=i==1 and Color3.fromRGB(255,24,45) or Color3.fromRGB(8,0,4),Thickness=3})
+  TS:Create(ring,TweenInfo.new(.32),{Size=UDim2.fromOffset(300+i*60,70)}):Play();TS:Create(outline,TweenInfo.new(.32),{Transparency=1}):Play()
  end
- for i=1,18 do
-  local a=phraseRng:NextNumber(-180,180)
-  local line=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(phraseRng:NextInteger(24,78),phraseRng:NextInteger(3,8)),Rotation=a,BackgroundColor3=i%3==0 and red or black,BorderSizePixel=0,ZIndex=81})
-  TS:Create(line,TweenInfo.new(.3,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Position=UDim2.new(.5,phraseRng:NextInteger(-245,245),.5,phraseRng:NextInteger(-54,54)),BackgroundTransparency=1,Size=UDim2.fromOffset(12,1)}):Play()
- end
- local tag=make("TextLabel",holder,{Size=UDim2.new(1,0,0,18),Position=UDim2.new(0,0,1,-8),BackgroundTransparency=1,Text=preview and "PREVIEW - NOT A HIT" or "Estimated hit",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,ZIndex=82});make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
- TS:Create(ps,TweenInfo.new(.13,Enum.EasingStyle.Back),{Scale=1.12}):Play()
- task.delay(.13,function() if popup==holder and token==popupToken then TS:Create(ps,TweenInfo.new(.12),{Scale=1}):Play() end end)
- task.delay(1.02,function() if popup~=holder or token~=popupToken then return end;for _,o in ipairs(holder:GetDescendants()) do if o:IsA("TextLabel") then TS:Create(o,TweenInfo.new(.36),{TextTransparency=1}):Play() elseif o:IsA("UIStroke") then TS:Create(o,TweenInfo.new(.36),{Transparency=1}):Play() elseif o:IsA("Frame") then TS:Create(o,TweenInfo.new(.36),{BackgroundTransparency=1}):Play() end end end)
- task.delay(1.4,function() if popup==holder and token==popupToken then popup=nil;holder:Destroy() end end)
-end
-local visualCard=card(pages.Visuals,"Blackflash Popup","Random phrase and burst on an estimated timing/health event","blackflash popup phrase preview timing nearby health")
-toggle(visualCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v and popup then popupToken+=1;popup:Destroy();popup=nil end end)
-local preview=make("TextButton",visualCard,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="PREVIEW POPUP",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,BorderSizePixel=0,LayoutOrder=nextOrder(visualCard)+2});corner(preview,6)
-connect(preview.Activated,function() showBlackflashPopup(true) end)
-local impactCard=card(pages.Visuals,"Blackflash Kill Finisher","16 frames at 14 FPS - kill-triggered crack/shockwave sequence","impact frames kill lethal finisher 16 14 fps")
-toggle(impactCard,"Kill Finisher (16 frames / 14 FPS)",function() return impactFramesEnabled end,function(v) impactFramesEnabled=v;if not v then cancelImpact() end end)
-toggle(impactCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);pendingBlackflash=nil;cancelImpact();updateFinisherStatus() end)
-toggle(impactCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v end)
-finisherStatus=note(impactCard,"");finisherStatus.Size=UDim2.new(1,0,0,70)
-updateFinisherStatus()
-local function bindConfirmedRemote(object)
- if not object or object.Name~=CONFIRMED_REMOTE_NAME or not object:IsA("RemoteEvent") then return end
- if confirmedRemote==object then return end
- if confirmedConnection then confirmedConnection:Disconnect() end
- confirmedRemote=object;lastConfirmedId=0
- confirmedConnection=connect(object.OnClientEvent,function(payload)
-  if not running or confirmationMode~="ConfirmedOnly" then return end
-  if type(payload)~="table" or payload.kind~="BlackFlashKill" or type(payload.id)~="number" or payload.id~=payload.id or payload.id<=lastConfirmedId then return end
-  lastConfirmedId=payload.id
-  if impactFramesEnabled then playImpactFrames() end
+ if not preview and entry.sound then playVoice(entry.sound) end
+ gui:SetAttribute("LastBlackflashPopupPhrase",entry.text)
+ task.delay(hold,function()
+  if not running or not holder.Parent then return end
+  for _,o in ipairs(holder:GetDescendants()) do if o:IsA("TextLabel") then TS:Create(o,TweenInfo.new(fade),{TextTransparency=1}):Play() elseif o:IsA("UIStroke") then TS:Create(o,TweenInfo.new(fade),{Transparency=1}):Play() end end
+  TS:Create(ps,TweenInfo.new(fade),{Scale=.92}):Play()
  end)
- updateFinisherStatus()
-end
-bindConfirmedRemote(ReplicatedStorage:FindFirstChild(CONFIRMED_REMOTE_NAME))
-connect(ReplicatedStorage.ChildAdded,bindConfirmedRemote)
-connect(ReplicatedStorage.ChildRemoved,function(object) if object==confirmedRemote then if confirmedConnection then confirmedConnection:Disconnect();confirmedConnection=nil end;confirmedRemote=nil;updateFinisherStatus() end end)
-local function humanoidRoot(h) local m=h and h.Parent;local r=m and m:FindFirstChild("HumanoidRootPart");return r and r:IsA("BasePart") and r or nil end
-local function livingLocal()
- local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");return c and h and h.Health>0 and c:FindFirstChild("HumanoidRootPart")
-end
-local function isNearby(h)
- local a=livingLocal();local b=humanoidRoot(h);local m=h and h.Parent
- return a and b and m and m:IsA("Model") and m~=LP.Character and m:FindFirstChildOfClass("Humanoid")==h and h:IsDescendantOf(workspace) and (a.Position-b.Position).Magnitude<=BLACKFLASH_NEARBY_RANGE
-end
-local function selectedV2Humanoid()
- local ref=gui:FindFirstChild("BlackflashChainV2Target");local selected=ref and ref.Value
- if selected then return selected:IsA("Humanoid") and selected or selected:IsA("Model") and selected:FindFirstChildOfClass("Humanoid") end
-end
-local function trackHumanoid(h)
- if not h:IsA("Humanoid") or trackedHumanoids[h] then return end
- local r={health=h.Health};trackedHumanoids[h]=r
- r.connection=h.HealthChanged:Connect(function(health)
-  local before=r.health;r.health=health;local candidate=pendingBlackflash
-  if not running or not focused or UIS:GetFocusedTextBox() or health>=before or before<=0 or not candidate or os.clock()>candidate.deadline or not candidate.targets[h] or not isNearby(h) then return end
-  if candidate.character~=LP.Character then return end
-  -- Keep candidate alive for its whole window, so an earlier nonlethal health
-  -- update does not prevent observing a later lethal update in that same window.
-  if not candidate.hit then candidate.hit=true;if popupEnabled then showBlackflashPopup(false) end end
-  if confirmationMode=="EstimatedLethal" and health<=0 and not notifiedEstimated[h] then
-   notifiedEstimated[h]=true
-   if impactFramesEnabled then playImpactFrames() end
-  end
+ task.delay(hold+fade,function()
+  if holder.Parent then holder:Destroy() end
+  local at=table.find(popupRecords,record);if at then table.remove(popupRecords,at) end
+  if running then reflowPopups() end
  end)
 end
-local function untrackHumanoid(h) local r=trackedHumanoids[h];if not r then return end;r.connection:Disconnect();trackedHumanoids[h]=nil end
-connect(workspace.DescendantAdded,trackHumanoid);connect(workspace.DescendantRemoving,untrackHumanoid)
-for _,o in ipairs(workspace:GetDescendants()) do trackHumanoid(o) end
-local function noteThreeTap(now)
- now=now or os.clock();local candidate
- if lastTapAt then
-  local gap=now-lastTapAt
-  if gap>=BLACKFLASH_MIN_GAP and gap<=BLACKFLASH_MAX_GAP then
-   local targets={}
-   if gui:GetAttribute("BlackflashChainV2Enabled") then
-    local h=selectedV2Humanoid()
-    if h and h.Health>0 and isNearby(h) then targets[h]=true end
-   else for h in pairs(trackedHumanoids) do if h.Health>0 and isNearby(h) then targets[h]=true end end end
-   candidate={targets=targets,deadline=now+BLACKFLASH_HIT_WINDOW,hit=false,character=LP.Character}
-   pendingBlackflash=candidate;lastTapAt=nil
-  else lastTapAt=now end
- else lastTapAt=now end
- return candidate
-end
-local macroCard,macroHeading=card(pages.Yuji,"Black Flash Follow-up","Press 3 normally; send the follow-up after 350 ms","auto blackflash macro 3 350 ms")
-macroHeading.Size=UDim2.new(1,-34,0,20)
-local macroSettings=make("Frame",macroCard,{Name="ModuleSettings",Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=100})
-make("UIListLayout",macroSettings,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
-local arrow=make("TextButton",macroHeading,{Name="SettingsArrow",AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(26,20),Text=">",TextColor3=T.acc,BackgroundColor3=T.p2,Font=Enum.Font.GothamBold,TextSize=15,BorderSizePixel=0});corner(arrow,6)
-connect(arrow.Activated,function() macroSettings.Visible=not macroSettings.Visible;arrow.Text=macroSettings.Visible and "v" or ">" end)
-local chainCard=card(pages.Yuji,"Blackflash Chain","Tap 3; up to four pairs after estimated hits. Not server hit confirmation.","blackflash chain four rounds health estimate")
-local chainStatus
-local function stopCurrent()
- local job=currentJob;currentJob=nil
- if job then
-  if job.thread and job.thread~=coroutine.running() then pcall(task.cancel,job.thread) end
-  if job.keyDown and VIM then
-   syntheticSending=true;echoUntil=os.clock()+.1
-   pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game) end)
-   syntheticSending=false
-  end
- end
- macroBusy,chainBusy=false,false
-end
-cancelMacro=function() if currentJob and currentJob.mode=="MACRO" then stopCurrent() end end
-cancelChain=function() if currentJob and currentJob.mode=="CHAIN" then stopCurrent() end;if chainStatus then chainStatus.Text=chainEnabled and "Ready. Tap/release 3." or "OFF - estimated health loss controls continuation" end end
-paintMacroToggle=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v)
- stopCurrent();macroEnabled=v
- if v then chainEnabled=false;if paintChainToggle then paintChainToggle() end end
-end)
-paintChainToggle=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v)
- stopCurrent();chainEnabled=v
- if v then macroEnabled=false;if paintMacroToggle then paintMacroToggle() end end
-end)
-chainStatus=note(chainCard,"OFF - estimated health loss controls continuation")
-local settingsCard=card(pages.Settings,"Session","Unload the menu and disconnect its listeners","unload close cleanup")
-local unloadButton=make("TextButton",settingsCard,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="UNLOAD SCRIPT",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,BorderSizePixel=0,LayoutOrder=nextOrder(settingsCard)+2});corner(unloadButton,6)
-local reopen=make("TextButton",gui,{Name="Reopen",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,Text="OPEN JJS MENU",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false,BorderSizePixel=0});corner(reopen)
+local macroCard=card("Yuji","Black Flash Follow-up","Tap/release 3; follow-up targets +350ms. Input backend required.")
+local macroSettings=make("Frame",macroCard,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=20});make("UIListLayout",macroSettings,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
+local settingsArrow=actionButton(macroCard,"> Macro settings");settingsArrow.LayoutOrder=2
+connect(settingsArrow.Activated,function() macroSettings.Visible=not macroSettings.Visible;settingsArrow.Text=macroSettings.Visible and "v Macro settings" or "> Macro settings" end)
+local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3 to lock/position. Four rounds: 200ms stable rear gate, then 3 -> 350ms -> 3. Health-loss estimates only.")
+chainStatus=note(chainCard,"OFF - enable, then press 3.",64)
+local function say(message) if running then chainStatus.Text=message;gui:SetAttribute("BlackflashChainStatus",message) end end
+paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v) stop(nil,false);macroEnabled=v;if v then chainEnabled=false;if paintChain then paintChain() end end end)
+paintChain=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v) stop(nil,false);chainEnabled=v;if v then macroEnabled=false;if paintMacro then paintMacro() end end;say(v and "Ready: tap 3 to lock and position." or "Chain OFF.") end)
+local popupCard=card("Visuals","Ordered Blackflash Popups","Great! > Amazing! > Perfect! > Holy > BLACKFLASH > Absolute Cinema > JackPot!!! > Is that you obito. Next hit within 1s advances.")
+toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() end end)
+local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND")
+connect(popupPreview.Activated,function() showPopup(true) end)
+note(popupCard,"Perfect!: yellow. BLACKFLASH: red, 3s. Cinema: 3s. Jackpot: light green, 4s + audio. Obito: orange, 5s hold then fade + updated audio.",66)
+local killCard=card("Visuals","Blackflash Kill Finisher","16 frames at 14 FPS. Confirmed-only by default; lethal estimate mode is explicitly unverified.")
+toggle(killCard,"Kill Finisher: 16 frames / 14 FPS",function() return impactEnabled end,function(v) impactEnabled=v;if not v then cancelImpact() end end)
+local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
+toggle(killCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);cancelImpact();updateKillStatus() end)
+toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v end)
+killStatus=note(killCard,"",68);updateKillStatus()
+local session=card("Settings","Session","Unload cancels input, camera, movement, UI, animation, popup voice sounds and listeners.")
+local unloadButton=actionButton(session,"UNLOAD SCRIPT")
+local reopen=make("TextButton",gui,{Text="OPEN JJS MENU",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false});corner(reopen)
 local function show(v) main.Visible=v;reopen.Visible=not v end
 connect(minimize.Activated,function() show(false) end);connect(reopen.Activated,function() show(true) end)
-local function jobValid(job)
- return running and focused and currentJob==job and LP.Character==job.character and livingLocal() and not UIS:GetFocusedTextBox() and (job.mode=="CHAIN" and chainEnabled or job.mode=="MACRO" and macroEnabled)
-end
-local function waitUntil(job,deadline)
- while jobValid(job) do local left=deadline-os.clock();if left<=0 then return true end;task.wait(math.min(left,.015)) end;return false
-end
-local function sendThree(job,down)
- if down then job.keyDown=true end
- syntheticSending=true;echoUntil=os.clock()+.1
- local ok,err=pcall(function() VIM:SendKeyEvent(down,Enum.KeyCode.Three,false,game) end)
- syntheticSending=false
- if not ok then error(err,0) end
- if not down then job.keyDown=false end
-end
-local function startJob(started)
- if currentJob or not VIM or not livingLocal() then return end
- local mode=chainEnabled and "CHAIN" or macroEnabled and "MACRO" or nil;if not mode then return end
- local job={mode=mode,character=LP.Character,keyDown=false,physicalReleased=false};currentJob=job
- macroBusy=mode=="MACRO";chainBusy=mode=="CHAIN"
- job.thread=task.defer(function()
-  local ok,err=xpcall(function()
-   local rounds=mode=="CHAIN" and CHAIN_ROUNDS or 1
-   for round=1,rounds do
-    if not jobValid(job) then return end
-    local first=started
-    if round>1 then
-     lastTapAt=nil;first=os.clock();noteThreeTap(first);sendThree(job,true)
-     if not waitUntil(job,first+.035) then return end;sendThree(job,false)
-    end
-    if not waitUntil(job,first+.350) then return end
-    if round==1 and not job.physicalReleased then chainStatus.Text="Cancelled: release the initial 3 before 350 ms.";return end
-    local second=os.clock();local candidate=noteThreeTap(second)
-    sendThree(job,true)
-    if not waitUntil(job,second+.035) then return end;sendThree(job,false)
-    if mode=="CHAIN" then
-     chainStatus.Text=string.format("Round %d/%d: watching estimated health loss.",round,rounds)
-     if not candidate then chainStatus.Text="Stopped: timing outside estimate window.";return end
-     while jobValid(job) and not candidate.hit and os.clock()<=candidate.deadline do task.wait() end
-     if not jobValid(job) then return end
-     if not candidate.hit then chainStatus.Text="Stopped: no estimated hit. Tap 3 to retry.";return end
-     if round<rounds and not waitUntil(job,os.clock()+CHAIN_RETRY_DELAY) then return end
-    end
-   end
-   if mode=="CHAIN" then chainStatus.Text="Four estimated rounds complete. Tap 3 again." end
-  end,function(e) return debug.traceback(tostring(e),2) end)
-  if currentJob~=job then return end
-  stopCurrent()
-  if not ok then
-   macroEnabled,chainEnabled=false,false;paintMacroToggle();paintChainToggle();chainStatus.Text="Input failed; modules OFF."
-   warn("Blackflash input failed: "..tostring(err))
+cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end end
+local function playImpact()
+ if not running or not impactEnabled then return end;cancelImpact();local token=impactToken
+ local layer=make("Frame",gui,{Name="BlackflashKillFinisher16",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
+ local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
+ local random=Random.new(21);local pieces={}
+ local function seg(a,b,w,born,red)
+  local glow=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(255,45,85),ZIndex=92})
+  local ink=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,ZIndex=93});table.insert(pieces,{a=a,b=b,w=w,born=born,red=red,glow=glow,ink=ink})
+ end
+ for branch=1,9 do local p=branch<=6 and Vector2.new(90,170) or Vector2.new(random:NextNumber(800,1920),-20);local a=branch<=6 and random:NextNumber(-.1,1.3) or random:NextNumber(1.3,3.4);local width=random:NextNumber(12,26)
+  for k=1,13 do a+=random:NextNumber(-.6,.6);local q=p+Vector2.new(math.cos(a),math.sin(a))*random:NextNumber(50,150);seg(p,q,math.max(1.5,width*(1-k/15)),(k-1)/17,false);if k%3==0 then local aa=a+random:NextNumber(-1,1);seg(p,p+Vector2.new(math.cos(aa),math.sin(aa))*random:NextNumber(100,280),4,k/17,true) end;p=q end
+ end
+ for i=1,34 do local a=2*math.pi*i/34;local d=Vector2.new(math.cos(a),math.sin(a));local p=Vector2.new(1150,620)+d*70;seg(p,p+d*random:NextNumber(200,850),random:NextNumber(3,10),0,i%3==0) end
+ local ring=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundTransparency=1,ZIndex=94});corner(ring,999);local outline=make("UIStroke",ring,{Color=Color3.fromRGB(220,25,55),Thickness=8})
+ local growth={.10,.28,.46,.62,.74,.84,.92,.97,1,1,1,1,1,1,1,1};local alpha={1,1,1,1,1,.92,.75,.55,.35,.20,.08,0,0,0,0,0}
+ local function draw(frame)
+  local size=layer.AbsoluteSize;local sx,sy=size.X/1920,size.Y/1080;local sf=math.min(sx,sy);local fade=frame<=11 and 1 or math.max(0,(16-frame)/5);local inverse=not reducedFlash and frame>=2 and frame<=4
+  bg.BackgroundColor3=inverse and Color3.new(0,0,0) or Color3.new(1,1,1);bg.BackgroundTransparency=1-(reducedFlash and math.min(.16,alpha[frame]) or alpha[frame])*fade
+  for _,s in ipairs(pieces) do local progress=math.clamp((growth[frame]-s.born)/.22,0,1);local a=Vector2.new(s.a.X*sx,s.a.Y*sy);local b=Vector2.new(s.b.X*sx,s.b.Y*sy);local d=(b-a)*progress;local mid=a+d/2;local width=math.max(1,s.w*sf)
+   for _,o in ipairs({s.glow,s.ink}) do o.Visible=progress>0 and fade>0;o.Position=UDim2.fromOffset(mid.X,mid.Y);o.Rotation=math.deg(math.atan2(d.Y,d.X)) end
+   s.glow.Size=UDim2.fromOffset(d.Magnitude,width+8*sf);s.glow.BackgroundTransparency=1-.35*fade;s.ink.Size=UDim2.fromOffset(d.Magnitude,width);s.ink.BackgroundTransparency=1-fade;s.ink.BackgroundColor3=s.red and Color3.fromRGB(193,18,31) or (inverse and Color3.new(1,1,1) or Color3.new(0,0,0))
   end
+  local p=math.clamp((frame-1)/8,0,1);ring.Visible=frame>=2 and frame<=9;ring.Position=UDim2.fromOffset(1150*sx,620*sy);ring.Size=UDim2.fromOffset((160+1240*p)*sx,(100+800*p)*sy);outline.Thickness=math.max(1,(22*(1-p)+3)*sf);outline.Transparency=1-fade
+ end
+ local started=os.clock();local lastFrame=1;draw(1)
+ impactConnection=RS.RenderStepped:Connect(function() if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end;local elapsed=os.clock()-started;if elapsed>=16/14 then cancelImpact();return end;local frame=math.min(16,math.floor(elapsed*14)+1);if frame~=lastFrame then lastFrame=frame;draw(frame) end end)
+end
+local function bindKillRemote(remote)
+ if remote.Name~="BlackflashKillConfirmed" or not remote:IsA("RemoteEvent") or remote==confirmedRemote then return end
+ if confirmedConnection then confirmedConnection:Disconnect() end;confirmedRemote=remote;lastKillId=0
+ confirmedConnection=connect(remote.OnClientEvent,function(payload)
+  if not running or confirmationMode~="ConfirmedOnly" or type(payload)~="table" or payload.kind~="BlackFlashKill" or type(payload.id)~="number" or payload.id~=payload.id or payload.id<=lastKillId then return end
+  lastKillId=payload.id;playImpact()
+ end);updateKillStatus()
+end
+local existing=ReplicatedStorage:FindFirstChild("BlackflashKillConfirmed");if existing then bindKillRemote(existing) end
+connect(ReplicatedStorage.ChildAdded,bindKillRemote)
+connect(ReplicatedStorage.ChildRemoved,function(o) if o==confirmedRemote then if confirmedConnection then confirmedConnection:Disconnect() end;confirmedRemote=nil;updateKillStatus() end end)
+local function rootOf(h) local m=h and h.Parent;local r=m and m:FindFirstChild("HumanoidRootPart");return r and r:IsA("BasePart") and r or nil end
+local function localHumanoid() local c=LP.Character;return c and c:FindFirstChildOfClass("Humanoid") end
+local function localRoot() local c=LP.Character;return c and c:FindFirstChild("HumanoidRootPart") end
+local function distance(h) local a,b=localRoot(),rootOf(h);return a and b and (a.Position-b.Position).Magnitude or math.huge end
+local function living() local h=localHumanoid();return h and h.Health>0 and localRoot() end
+local function nearby(h) return h.Parent~=LP.Character and h:IsDescendantOf(workspace) and distance(h)<=10 end
+local function arm(first,second,target,owner)
+ local gap=second-first;if gap<.325 or gap>.4 then return nil end
+ local targets={};if target then if target.Health>0 and nearby(target) then targets[target]=true end else for h in pairs(tracked) do if h.Health>0 and nearby(h) then targets[h]=true end end end
+ local candidate={targets=targets,deadline=second+.6,hit=false,owner=owner,character=LP.Character};pending=candidate;return candidate
+end
+local function track(h)
+ if not h:IsA("Humanoid") or tracked[h] then return end;local r={health=h.Health};tracked[h]=r
+ r.connection=h.HealthChanged:Connect(function(health)
+  local before=r.health;r.health=health;local p=pending
+  if not running or not focused or not p or health>=before or before<=0 or os.clock()>p.deadline or not p.targets[h] or not nearby(h) or UIS:GetFocusedTextBox() or p.character~=LP.Character or (p.owner and current~=p.owner) then return end
+  if not p.hit then p.hit=true;showPopup(false) end
+  if confirmationMode=="EstimatedLethal" and health<=0 and not lethalNotified[h] then lethalNotified[h]=true;playImpact() end
  end)
 end
-connect(UIS.InputBegan,function(input,processed)
- if syntheticSending or (input.KeyCode==Enum.KeyCode.Three and os.clock()<echoUntil) then return end
- if UIS:GetFocusedTextBox() then return end
- if input.KeyCode==Enum.KeyCode.RightShift then show(not main.Visible);return end
- if processed or input.KeyCode~=Enum.KeyCode.Three or threeHeld then return end
- threeHeld=true
- if currentJob then return end
- if not focused or not livingLocal() then return end
- if macroEnabled or chainEnabled then lastTapAt=nil end
- local now=os.clock();noteThreeTap(now)
- if (macroEnabled or chainEnabled) and not VIM then warn("Virtual input unavailable");return end
- startJob(now)
+local function untrack(h) local r=tracked[h];if r then r.connection:Disconnect();tracked[h]=nil end end
+connect(workspace.DescendantAdded,track);connect(workspace.DescendantRemoving,untrack);for _,o in ipairs(workspace:GetDescendants()) do track(o) end
+local function nearest()
+ local best,d=nil,math.huge
+ for h in pairs(tracked) do if rootOf(h) and h.Health>0 and h.Parent~=LP.Character then local other=Players:GetPlayerFromCharacter(h.Parent);local same=other and not LP.Neutral and not other.Neutral and LP.Team and LP.Team==other.Team;local gap=distance(h);if not same and gap<d then best,d=h,gap end end end;return best
+end
+local function rearFraction(h)
+ local a,b=localRoot(),rootOf(h);if not a or not b then return 0 end
+ local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);if look.Magnitude<.01 then return 0 end;look=look.Unit;local count=0
+ for _,z in ipairs({-.4,.4}) do for _,x in ipairs({-.9,-.45,0,.45,.9}) do local p=a.CFrame:PointToWorldSpace(Vector3.new(x,0,z));if (p-b.Position):Dot(look)<-.1 then count+=1 end end end
+ gui:SetAttribute("BlackflashRearSamples",count);return count/10
+end
+local function rearGround(j)
+ local a,b=localRoot(),rootOf(j.target);local h=localHumanoid()
+ return a and b and h and h.FloorMaterial~=Enum.Material.Air and math.abs(a.Position.Y-b.Position.Y)<=2 and distance(j.target)<=8 and rearFraction(j.target)>=.3
+end
+local function valid(j)
+ local h=localHumanoid()
+ return running and focused and current==j and LP.Character==j.character and h and h.Health>0 and not UIS:GetFocusedTextBox() and (j.mode=="CHAIN" and chainEnabled or j.mode=="MACRO" and macroEnabled) and (j.mode~="CHAIN" or (j.target.Health>0 and j.target:IsDescendantOf(workspace) and rootOf(j.target) and workspace.CurrentCamera==j.camera))
+end
+local function waitUntil(j,deadline) while valid(j) do local left=deadline-os.clock();if left<=0 then return true end;task.wait(math.min(left,.015)) end;return false end
+local function key(j,k,down)
+ if down then j.keys[k]=true end;injecting=true;if k==Enum.KeyCode.Three then echoUntil=os.clock()+.08 end
+ local ok,err=pcall(function() VIM:SendKeyEvent(down,k,false,game) end);injecting=false;if not ok then error(err,0) end;if not down then j.keys[k]=nil end
+end
+stop=function(message,disable)
+ local j=current;current=nil
+ if disable then macroEnabled=false;chainEnabled=false;if paintMacro then paintMacro() end;if paintChain then paintChain() end end
+ if j then
+  if j.thread and j.thread~=coroutine.running() then pcall(task.cancel,j.thread) end;if j.cameraConnection then j.cameraConnection:Disconnect() end;for _,c in ipairs(j.connections) do c:Disconnect() end
+  if j.camera then pcall(function() j.camera.CameraType=j.savedType;j.camera.CameraSubject=j.savedSubject and j.savedSubject.Parent and j.savedSubject or localHumanoid() end);pcall(function() UIS.MouseBehavior=j.savedMouse end) end
+  injecting=true;local failed=false
+  for k in pairs(j.keys) do if k==Enum.KeyCode.Three then echoUntil=os.clock()+.08 end;if not pcall(function() VIM:SendKeyEvent(false,k,false,game) end) then failed=true end end;injecting=false
+  if failed then macroEnabled=false;chainEnabled=false;paintMacro();paintChain();message=(message or "Stopped").." | Release failed; OFF." end
+ end
+ pending,lastTap=nil,nil;targetRef.Value=nil;gui:SetAttribute("BlackflashChainV2Enabled",false);if message then say(message) end
+end
+local function angle(a,b) return math.atan2(math.sin(b-a),math.cos(b-a)) end
+local function lock(j)
+ local camera=assert(workspace.CurrentCamera,"Camera unavailable");local a=assert(localRoot(),"Root unavailable")
+ j.camera=camera;j.savedType=camera.CameraType;j.savedSubject=camera.CameraSubject;j.savedMouse=UIS.MouseBehavior;j.cameraDistance=math.clamp((camera.CFrame.Position-a.Position).Magnitude,4,18)
+ local look=camera.CFrame.LookVector;j.yaw=math.atan2(-look.X,-look.Z);j.pitch=math.asin(math.clamp(look.Y,-1,1));j.pivot=camera.CFrame.Position+look*j.cameraDistance
+ camera.CameraType=Enum.CameraType.Scriptable;UIS.MouseBehavior=Enum.MouseBehavior.LockCenter
+ local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={j.character,j.target.Parent}
+ j.cameraConnection=RS.RenderStepped:Connect(function(dt)
+  if current~=j then return end;local a,b=localRoot(),rootOf(j.target);if not a or not b then return end
+  UIS.MouseBehavior=Enum.MouseBehavior.LockCenter;local mouse=UIS:GetMouseDelta();j.yaw-=mouse.X*.0025;j.pitch=math.clamp(j.pitch-mouse.Y*.0025,-1.15,1.15)
+  j.pivot=j.pivot:Lerp(a.Position+Vector3.new(0,1.8,0),1-math.exp(-18*dt));local back=b.Position-b.CFrame.LookVector*.65+Vector3.new(0,.65,0);local d=back-j.pivot;if d.Magnitude<.01 then return end;d=d.Unit
+  if j.flickStart then local t=math.clamp((os.clock()-j.flickStart)/.16,0,1);j.yaw=j.flickFrom+j.flickDelta*(t*t*(3-2*t));if t>=1 then j.flickStart=nil end
+  else local desired=math.atan2(-d.X,-d.Z);j.yaw+=angle(j.yaw,desired)*(1-math.exp(-(j.approaching and 15 or 7)*dt))/(1+mouse.Magnitude*.06) end
+  j.pitch+=(math.asin(math.clamp(d.Y,-1,1))-j.pitch)*(1-math.exp(-7*dt));local rotation=CFrame.Angles(0,j.yaw,0)*CFrame.Angles(j.pitch,0,0);local proposed=j.pivot-rotation.LookVector*j.cameraDistance;local hit=workspace:Raycast(j.pivot,proposed-j.pivot,params)
+  camera.CFrame=CFrame.new(hit and hit.Position+hit.Normal*.3 or proposed)*rotation;camera.Focus=CFrame.new(back)
+ end)
+ targetRef.Value=j.target;gui:SetAttribute("BlackflashChainV2Enabled",true)
+end
+local function approach(j)
+ if distance(j.target)<=8 then return true end
+ say("Approaching target: W until within 8 studs.");j.approaching=true
+ if not waitUntil(j,os.clock()+.12) then return false end;key(j,Enum.KeyCode.W,true)
+ local best=distance(j.target);local progressAt=os.clock();local deadline=os.clock()+6
+ while valid(j) and distance(j.target)>8 and os.clock()<deadline do local d=distance(j.target);if d<best-.35 then best=d;progressAt=os.clock() end;if os.clock()-progressAt>1.5 then break end;task.wait() end
+ key(j,Enum.KeyCode.W,false);j.approaching=false;return valid(j) and distance(j.target)<=8
+end
+local function jumpBehind(j)
+ if distance(j.target)>8 and not approach(j) then return false end;say("Jump fallback: move to rear ground, not target's head.")
+ local h=localHumanoid();if not h then return false end;key(j,Enum.KeyCode.W,false);local moving=true
+ local function endMove() if not moving then return end;moving=false;RS:UnbindFromRenderStep(MOVE_ACTION);pcall(function() h:Move(Vector3.zero,false) end) end
+ table.insert(j.connections,{Disconnect=endMove});RS:UnbindFromRenderStep(MOVE_ACTION)
+ RS:BindToRenderStep(MOVE_ACTION,Enum.RenderPriority.Last.Value+1,function()
+  if not valid(j) then endMove();return end;local a,b=localRoot(),rootOf(j.target);if not a or not b then endMove();return end
+  local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);if look.Magnitude<.01 then return end
+  local d=b.Position-look.Unit*4-a.Position;d=Vector3.new(d.X,0,d.Z);h:Move(d.Magnitude>.65 and d.Unit or Vector3.zero,false)
+ end)
+ key(j,Enum.KeyCode.Space,true);h.Jump=true;if not waitUntil(j,os.clock()+.05) then endMove();return false end;key(j,Enum.KeyCode.Space,false)
+ local deadline=os.clock()+1.5;local landedAt
+ while valid(j) and os.clock()<deadline do
+  local a,b=localRoot(),rootOf(j.target);if not a or not b then break end;local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);local offset=a.Position-b.Position;local flat=Vector3.new(offset.X,0,offset.Z);local depth=look.Magnitude>.01 and -flat:Dot(look.Unit) or 0
+  if rearGround(j) and depth>=2.5 then landedAt=landedAt or os.clock();if os.clock()-landedAt>=.08 then endMove();return true end else landedAt=nil end;task.wait()
+ end;endMove();return false
+end
+local function positionBehind(j)
+ if not approach(j) then return false end;if rearGround(j) then return true end
+ if os.clock()-lastSide>=2 then
+  say("Side dash: release W, hold A/D, then Q; turn 75 degrees.")
+  local a,b=localRoot(),rootOf(j.target);if not a or not b then return false end
+  local rear=b.Position-b.CFrame.LookVector*4;local side=(rear-a.Position):Dot(j.camera.CFrame.RightVector)>=0 and Enum.KeyCode.D or Enum.KeyCode.A
+  key(j,Enum.KeyCode.W,false);key(j,Enum.KeyCode.S,false);if not waitUntil(j,os.clock()+.035) then return false end
+  key(j,side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D,false);key(j,side,true);if not waitUntil(j,os.clock()+.05) then return false end
+  key(j,Enum.KeyCode.Q,true);lastSide=os.clock();if not waitUntil(j,lastSide+.02) then return false end
+  local d=b.Position-j.camera.CFrame.Position;local error=angle(j.yaw,math.atan2(-d.X,-d.Z));j.flickFrom=j.yaw;j.flickDelta=(error>=0 and 1 or -1)*math.rad(75);j.flickStart=os.clock();local finish=j.flickStart+.16
+  if not waitUntil(j,lastSide+.035) then return false end;key(j,Enum.KeyCode.Q,false);if not waitUntil(j,finish) then return false end;key(j,side,false)
+  local settle=os.clock()+.2;while valid(j) and os.clock()<settle do if rearGround(j) then return true end;task.wait() end;if not valid(j) then return false end
+ end;return jumpBehind(j)
+end
+local function stableRear(j)
+ local since;local deadline=os.clock()+1.2;say("Waiting 200ms continuously behind and grounded.")
+ while valid(j) and os.clock()<deadline do local now=os.clock();if rearGround(j) then since=since or now;if now-since>=.2 then return true end else since=nil end;task.wait() end;return false
+end
+local function start(started)
+ if current or not VIM or not living() then return end
+ local mode=chainEnabled and "CHAIN" or macroEnabled and "MACRO" or nil;if not mode then return end
+ local target=mode=="CHAIN" and nearest() or nil;if mode=="CHAIN" and not target then say("No living target. Press 3 to retry.");return end
+ local j={mode=mode,target=target,character=LP.Character,keys={},connections={},physicalReleased=false};current=j
+ local h=localHumanoid();table.insert(j.connections,h.Died:Connect(function() if current==j then stop("Player died; OFF.",true) end end))
+ if target then table.insert(j.connections,target.Died:Connect(function() if current==j then stop("Target died; chain stopped. Press 3 again.",false) end end)) end
+ j.thread=task.defer(function()
+  local complete=false
+  local ok,err=xpcall(function()
+   if mode=="CHAIN" then lock(j) end
+   for round=1,(mode=="CHAIN" and 4 or 1) do
+    if not valid(j) then return end
+    if mode=="CHAIN" and (not positionBehind(j) or not stableRear(j) or not rearGround(j)) then say("Positioning failed. Stopped until 3 is pressed again.");return end
+    local first=started
+    if mode=="CHAIN" then first=os.clock();key(j,Enum.KeyCode.Three,true);if not waitUntil(j,first+.035) then return end;key(j,Enum.KeyCode.Three,false) end
+    say(string.format("Round %d/%d: follow-up targeted at +350ms.",round,mode=="CHAIN" and 4 or 1))
+    if not waitUntil(j,first+.350) then return end
+    if mode=="MACRO" and not j.physicalReleased then say("Release initial 3 before 350ms.");return end
+    if mode=="CHAIN" and not rearGround(j) then say("Rear/range/ground lost before follow-up; stopped.");return end
+    local second=os.clock();local gap=second-first
+    if mode=="CHAIN" and (gap<.325 or gap>.4) then say("Follow-up deadline missed; cancelled rather than sending a late pair.");return end
+    local candidate=arm(first,second,target,j);key(j,Enum.KeyCode.Three,true);gui:SetAttribute("LastBlackflashPairGapMs",gap*1000)
+    if not waitUntil(j,second+.035) then return end;key(j,Enum.KeyCode.Three,false)
+    if mode=="CHAIN" then
+     if not candidate then say("Timing not qualified; stopped.");return end
+     while valid(j) and not candidate.hit and os.clock()<=candidate.deadline do task.wait() end
+     if not valid(j) then return end;if not candidate.hit then say("No estimated target hit. Lock released; press 3 to retry.");return end
+     gui:SetAttribute("BlackflashChainRound",round);if round<4 and not waitUntil(j,os.clock()+.25) then return end
+    end
+   end;complete=true
+  end,function(e) return debug.traceback(tostring(e),2) end)
+  if current~=j then return end
+  if not ok then stop("Input/camera error: "..tostring(err),true)
+  elseif complete then stop(mode=="CHAIN" and "Four estimated rounds complete. Lock OFF; press 3 again." or "Macro ready.",false)
+  else stop(chainStatus.Text.." | Lock OFF; waiting for 3.",false) end
+ end)
+end
+CAS:BindActionAtPriority(ACTION,function(_,state)
+ if injecting or os.clock()<echoUntil or not running or not focused or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+ if state==Enum.UserInputState.End or state==Enum.UserInputState.Cancel then heldThree=false;if current and current.mode=="MACRO" then current.physicalReleased=true end;return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end
+ if state~=Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
+ if heldThree then return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end;heldThree=true
+ if current then return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end
+ if macroEnabled or chainEnabled then if not VIM then say("Virtual input backend unavailable.") else start(os.clock()) end
+ else local now=os.clock();if lastTap and now-lastTap>=.325 and now-lastTap<=.4 then arm(lastTap,now);lastTap=nil else lastTap=now end end
+ return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass
+end,false,Enum.ContextActionPriority.High.Value+100,Enum.KeyCode.Three)
+connect(UIS.InputEnded,function(i) if i.KeyCode==Enum.KeyCode.Three and not injecting and os.clock()>=echoUntil then heldThree=false;if current and current.mode=="MACRO" then current.physicalReleased=true end end end)
+connect(UIS.InputBegan,function(i,processed)
+ if UIS:GetFocusedTextBox() then return end;if i.KeyCode==Enum.KeyCode.RightShift then show(not main.Visible);return end
+ if not processed and i.KeyCode==Enum.KeyCode.Q and (UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.D)) then local now=os.clock();if now-lastSide>=2 then lastSide=now end end
 end)
-connect(UIS.InputEnded,function(input)
- if input.KeyCode==Enum.KeyCode.Three and not syntheticSending and os.clock()>=echoUntil then threeHeld=false;if currentJob then currentJob.physicalReleased=true end end
-end)
-local function resetDetection() lastTapAt=nil;pendingBlackflash=nil;threeHeld=false end
-connect(UIS.WindowFocusReleased,function() focused=false;stopCurrent();resetDetection();drag=nil;cancelImpact() end)
+connect(UIS.WindowFocusReleased,function() focused=false;heldThree=false;stop("Focus lost; press 3 again.",false);cancelImpact();resetStreak() end)
 connect(UIS.WindowFocused,function() focused=true end)
-connect(UIS.TextBoxFocused,function() stopCurrent();resetDetection() end)
-connect(LP.CharacterRemoving,function() stopCurrent();resetDetection();cancelImpact() end)
+connect(UIS.TextBoxFocused,function() heldThree=false;stop("Text entry; stopped.",false);resetStreak() end)
+connect(LP.CharacterRemoving,function() heldThree=false;stop("Character removed; OFF.",true);cancelImpact();clearPopups() end)
 local function cleanup()
- if cleanedUp then return end
- cleanedUp=true;running=false;macroEnabled=false;chainEnabled=false;popupEnabled=false;impactFramesEnabled=false;drag=nil
- stopCurrent();resetDetection();cancelImpact();popupToken+=1
- if popup then popup:Destroy();popup=nil end
- for h in pairs(trackedHumanoids) do untrackHumanoid(h) end
- for _,c in ipairs(conns) do pcall(function() c:Disconnect() end) end;table.clear(conns)
+ if cleanedUp then return end;cleanedUp=true;running=false;stop(nil,true);cancelImpact();clearPopups();CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
+ for h in pairs(tracked) do untrack(h) end;for _,c in ipairs(connections) do pcall(function() c:Disconnect() end) end;table.clear(connections)
 end
 local function unload() cleanup();if gui.Parent then gui:Destroy() end end
 connect(shutdown.Event,unload);connect(close.Activated,unload);connect(unloadButton.Activated,unload);connect(gui.Destroying,cleanup)
-local function renderPage(name)
- selectedPage=name;title.Text=name;desc.Text=descriptions[name]
- for _,cat in ipairs(cats) do local key=cat[1];local selected=key==name;pages[key].Visible=selected;buttons[key].BackgroundTransparency=selected and 0 or 1;buttons[key].TextColor3=selected and T.txt or T.dim end
-end
-selectPage=function(name,clearSearch)
- if not pages[name] then return end;selectedPage=name
- if clearSearch and search.Text~="" then suppressSearch=true;search.Text="";suppressSearch=false end
- if filter then filter() else renderPage(name) end
-end
+selectPage=function(name,clear) if not pages[name] then return end;selected=name;if clear then search.Text="" end;if filter then filter() end end
 filter=function()
- local query=string.lower(search.Text):match("^%s*(.-)%s*$");local matches={};local anyMatch=false
+ local q=string.lower(search.Text):match("^%s*(.-)%s*$");local matches={};local any=false
  for _,cat in ipairs(cats) do
-  local name=cat[1];local categoryMatch=query~="" and (string.find(string.lower(name),query,1,true) or string.find(string.lower(descriptions[name]),query,1,true))
-  local pageMatch=categoryMatch or false
-  for item,section in pairs(searchSections) do
-   if section.page==pages[name] and item.Parent==pages[name] then local match=query=="" or categoryMatch or string.find(section.text,query,1,true);item.Visible=not not match;if match then pageMatch=true end end
-  end
-  matches[name]=pageMatch;if pageMatch then anyMatch=true end
+  local name=cat[1];local category=q~="" and (string.find(string.lower(name),q,1,true) or string.find(string.lower(cat[2]),q,1,true));local found=not not category
+  for item,s in pairs(sections) do if s.page==name then local match=q=="" or category or string.find(s.query,q,1,true);item.Visible=not not match;if match then found=true end end end
+  matches[name]=found;if found then any=true end
  end
- if query~="" and not matches[selectedPage] then for _,cat in ipairs(cats) do if matches[cat[1]] then selectedPage=cat[1];break end end end
- renderPage(selectedPage);emptyState.Visible=query~="" and not anyMatch
+ if q~="" and not matches[selected] then for _,cat in ipairs(cats) do if matches[cat[1]] then selected=cat[1];break end end end
+ for _,cat in ipairs(cats) do local name=cat[1];local on=selected==name;pages[name].Visible=on;buttons[name].BackgroundTransparency=on and 0 or 1;if on then title.Text=name;desc.Text=cat[2] end end;empty.Visible=q~="" and not any
 end
-connect(search:GetPropertyChangedSignal("Text"),function() if not suppressSearch then filter() end end);filter()
+connect(search:GetPropertyChangedSignal("Text"),filter);filter()
+local drag
 local function clampWindow()
- local size=root.AbsoluteSize;local ws=main.AbsoluteSize;if size.X<=0 or size.Y<=0 or ws.X<=0 or ws.Y<=0 then return end
- local p=main.AbsolutePosition-root.AbsolutePosition;local x=math.clamp(p.X,0,math.max(0,size.X-ws.X));local y=math.clamp(p.Y,0,math.max(0,size.Y-ws.Y));main.Position=UDim2.fromOffset(x+ws.X*main.AnchorPoint.X,y+ws.Y*main.AnchorPoint.Y)
+ local size=root.AbsoluteSize;local ws=main.AbsoluteSize;if size.X<=0 or size.Y<=0 then return end
+ local p=main.AbsolutePosition-root.AbsolutePosition;main.Position=UDim2.fromOffset(math.clamp(p.X,0,math.max(0,size.X-ws.X))+ws.X*.5,math.clamp(p.Y,0,math.max(0,size.Y-ws.Y))+ws.Y*.5)
 end
-local function fitWindow()
- local size=root.AbsoluteSize;if size.X<=0 or size.Y<=0 then return end
- scale.Scale=math.max(.05,math.min(1,size.X/760,size.Y/540));clampWindow();task.defer(function() if running then clampWindow() end end)
-end
-connect(root:GetPropertyChangedSignal("AbsoluteSize"),fitWindow)
-connect(top.InputBegan,function(input)
- if drag then return end
- if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then drag=input;dragStart=Vector2.new(input.Position.X,input.Position.Y);dragOrigin=main.AbsolutePosition-root.AbsolutePosition end
-end)
-connect(UIS.InputChanged,function(input)
- if not drag or (input.UserInputType~=Enum.UserInputType.MouseMovement and input~=drag) then return end
- local size=root.AbsoluteSize;local ws=main.AbsoluteSize;local delta=Vector2.new(input.Position.X,input.Position.Y)-dragStart
- local x=math.clamp(dragOrigin.X+delta.X,0,math.max(0,size.X-ws.X));local y=math.clamp(dragOrigin.Y+delta.Y,0,math.max(0,size.Y-ws.Y));main.Position=UDim2.fromOffset(x+ws.X*main.AnchorPoint.X,y+ws.Y*main.AnchorPoint.Y)
-end)
-connect(UIS.InputEnded,function(input) if input==drag then drag=nil;dragStart=nil;dragOrigin=nil end end)
-fitWindow()
+local function fit() local size=root.AbsoluteSize;if size.X<=0 or size.Y<=0 then return end;scale.Scale=math.max(.05,math.min(1,size.X/760,size.Y/540));clampWindow();reflowPopups();task.defer(function() if running then clampWindow() end end) end
+connect(root:GetPropertyChangedSignal("AbsoluteSize"),fit)
+connect(top.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag={input=i,start=Vector2.new(i.Position.X,i.Position.Y),origin=main.AbsolutePosition-root.AbsolutePosition} end end)
+connect(UIS.InputChanged,function(i) if not drag or (i.UserInputType~=Enum.UserInputType.MouseMovement and i~=drag.input) then return end;local delta=Vector2.new(i.Position.X,i.Position.Y)-drag.start;local p=drag.origin+delta;local ws=main.AbsoluteSize;main.Position=UDim2.fromOffset(p.X+ws.X*.5,p.Y+ws.Y*.5);clampWindow() end)
+connect(UIS.InputEnded,function(i) if drag and i==drag.input then drag=nil end end);connect(UIS.WindowFocusReleased,function() drag=nil end);fit()
