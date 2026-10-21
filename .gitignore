@@ -1,14 +1,14 @@
--- AUTOBLACKFLASH / COMPLETE MAIN / ROLLING STREAK + AUDIO DUCK + D-HOLD DASH
--- ASCII-only. Not live-tested. Executor gethui() / permitted virtual input required.
--- Includes both requested additions: louder voice/audio ducking, and D held after
--- the right-side dash with ONE smooth 90-degree flick initiated immediately after Q.
--- D is released once the grounded rear/range check passes; failed attempts time out
--- and use the jump fallback. No unbounded held movement.
--- Macro + rear chain + UI/search/drag + eight ordered sayings + 16x14 kill FX retained.
--- Rolling streak: every qualifying signal increments toward 8/8 and refreshes 3.5s.
--- Inactivity resets to 0/8. At 8/8, stay there until timeout. Preview is silent.
--- Popup ON by default. Normal job completion preserves the remaining health window.
--- Health-loss/timing detection is heuristic, NOT verified Black Flash/kill attribution.
+-- AUTOBLACKFLASH / ONE COMPLETE FILE / RANDOM VOICES + CACHED AUDIO DUCKING
+-- ASCII-only. Not live-tested. Executor gethui() / virtual input access required.
+-- Full UI/search/drag, macro, rear-gated chain, ordered 3.5s streak, sounds and kill FX.
+-- Six ordinary sayings randomly choose one of FIVE supplied sounds per popup.
+-- Jackpot and Obito retain their own custom sound IDs. Preview is silent.
+-- Optimized audio controller is integrated below: no per-voice whole-game scan,
+-- no mass ambient-volume Tween allocation. Voice volume 8; game multiplier .12.
+-- D+Q side dash, hold D until rear check; ONE 90-degree flick immediately after Q.
+-- Rear/range/ground eligibility stable 200ms before each pair; 350ms follow-up target.
+-- Detection is a timing/nearby-health-loss heuristic, NOT verified Black Flash attribution.
+-- Kill finisher: 16 frames at 14 FPS; confirmed-only server signal by default.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
@@ -38,7 +38,13 @@ local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
 local paintMacro,paintChain,chainStatus,killStatus
 local streakIndex,streakAt=0,nil
 local STREAK_WINDOW=3.5
-local DEFAULT_POPUP_SOUND="rbxassetid://136561900676276"
+local POPUP_SOUND_POOL={
+ "rbxassetid://136561900676276",
+ "rbxassetid://102193609064728",
+ "rbxassetid://91407972204653",
+ "rbxassetid://103999634941081",
+ "rbxassetid://73800823808958",
+}
 local popupRecords={}
 local SEQUENCE={
  {text="Great!",duration=1.4},
@@ -79,7 +85,7 @@ local desc=text(content,"Black Flash controls",UDim2.fromOffset(16,32),UDim2.new
 local search=make("TextBox",content,{Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,Text="",PlaceholderText="Search modules or settings...",TextColor3=T.txt,PlaceholderColor3=T.mut,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12});corner(search)
 local empty=text(content,"No modules or categories match this search.",UDim2.fromOffset(16,150),UDim2.new(1,-32,0,40),12);empty.Visible=false;empty.ZIndex=5
 local pages,buttons,sections={},{},{}
-local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ordered popup streak, sounds and 16-frame kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
+local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ordered popup streak, random sounds and kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
 local selected="Yuji"
 local filter,selectPage
 local lastGroup
@@ -144,8 +150,7 @@ local function showPopup(preview)
  if not running or (not popupEnabled and not preview) then return end
  local index
  if preview then index=1 else
-  local now=os.clock()
-  if not streakAt or now-streakAt>=STREAK_WINDOW then streakIndex=0 end
+  local now=os.clock();if not streakAt or now-streakAt>=STREAK_WINDOW then streakIndex=0 end
   streakIndex=math.min(streakIndex+1,#SEQUENCE);streakAt=now;index=streakIndex;updateStreakDisplay(STREAK_WINDOW)
  end
  local entry=SEQUENCE[index];local color=entry.color or Color3.fromHSV(popupRng:NextNumber(),.82,1)
@@ -158,7 +163,10 @@ local function showPopup(preview)
  local tag=text(holder,preview and "PREVIEW - NOT A HIT" or string.format("Estimated hit / %d/8",index),UDim2.fromOffset(0,59),UDim2.new(1,0,0,18),10);tag.TextXAlignment=Enum.TextXAlignment.Center;tag.ZIndex=82;make("UIStroke",tag,{Color=Color3.new(0,0,0),Thickness=2})
  local record={holder=holder};table.insert(popupRecords,1,record);reflowPopups();TS:Create(ps,TweenInfo.new(.16,Enum.EasingStyle.Back),{Scale=1}):Play()
  for i=1,2 do local ring=make("Frame",holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.35),Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,ZIndex=80});corner(ring,999);local outline=make("UIStroke",ring,{Color=i==1 and Color3.fromRGB(255,24,45) or Color3.fromRGB(8,0,4),Thickness=3});TS:Create(ring,TweenInfo.new(.32),{Size=UDim2.fromOffset(300+i*60,70)}):Play();TS:Create(outline,TweenInfo.new(.32),{Transparency=1}):Play() end
- if not preview then playVoice(entry.sound or DEFAULT_POPUP_SOUND) end
+ if not preview then
+  local soundId=entry.sound or POPUP_SOUND_POOL[popupRng:NextInteger(1,#POPUP_SOUND_POOL)]
+  playVoice(soundId)
+ end
  gui:SetAttribute("LastBlackflashPopupPhrase",entry.text)
  task.delay(hold,function()
   if not running or not holder.Parent then return end
@@ -176,17 +184,17 @@ chainStatus=note(chainCard,"OFF - enable, then press 3.",64)
 local function say(message) if running then chainStatus.Text=message;gui:SetAttribute("BlackflashChainStatus",message) end end
 paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v) stop(nil,false);macroEnabled=v;if v then chainEnabled=false;if paintChain then paintChain() end end end)
 paintChain=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v) stop(nil,false);chainEnabled=v;if v then macroEnabled=false;if paintMacro then paintMacro() end end;say(v and "Ready: tap 3 to lock and position." or "Chain OFF.") end)
-local popupCard=card("Visuals","Ordered Blackflash Popups","1/8 to 8/8. Every estimated hit advances a step and refreshes 3.5s. Timeout resets. At 8/8, hold until timeout.")
+local popupCard=card("Visuals","Ordered Blackflash Popups","1/8 to 8/8; signals refresh 3.5s without resetting progress. First six sayings use five random voice sounds. Jackpot/Obito have custom voices.")
 toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
 local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND");connect(popupPreview.Activated,function() showPopup(true) end)
-note(popupCard,"All voices volume 8. Game audio ducks to 12% while voices play. Perfect!: yellow. BLACKFLASH/Cinema: 3s. Jackpot: green, 4s. Obito: orange, 5s hold + fade.",72)
+note(popupCard,"Voice volume 8. Active game audio ducks to 12%. Perfect!: yellow. BLACKFLASH/Cinema: 3s. Jackpot: green, 4s. Obito: orange, 5s hold + fade.",72)
 local killCard=card("Visuals","Blackflash Kill Finisher","16 frames at 14 FPS. Confirmed-only by default; lethal estimate mode is explicitly unverified.")
 toggle(killCard,"Kill Finisher: 16 frames / 14 FPS",function() return impactEnabled end,function(v) impactEnabled=v;if not v then cancelImpact() end end)
 local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
 toggle(killCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);cancelImpact();updateKillStatus() end)
 toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v end)
 killStatus=note(killCard,"",68);updateKillStatus()
-local session=card("Settings","Session","Unload cancels input, camera, movement, UI, animation, voices and audio ducking; restores game volume.")
+local session=card("Settings","Session","Unload cancels input, camera, movement, UI, animation, voices and cached audio controller; restores game audio.")
 local unloadButton=actionButton(session,"UNLOAD SCRIPT")
 local reopen=make("TextButton",gui,{Text="OPEN JJS MENU",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false});corner(reopen)
 local function show(v) main.Visible=v;reopen.Visible=not v end
@@ -343,18 +351,14 @@ local function positionBehind(j)
  if not waitUntil(j,os.clock()+.05) then return false end
  key(j,Enum.KeyCode.Q,true)
  lastSide=os.clock()
- -- Exactly one flick starts directly after Q, before any additional wait.
  local targetRoot=rootOf(j.target)
  if not targetRoot then key(j,Enum.KeyCode.Q,false);key(j,Enum.KeyCode.D,false);return false end
  local direction=targetRoot.Position-j.camera.CFrame.Position
  local targetYaw=math.atan2(-direction.X,-direction.Z)
  local turnError=angle(j.yaw,targetYaw)
- j.flickFrom=j.yaw
- j.flickDelta=(turnError>=0 and 1 or -1)*math.rad(90)
- j.flickStart=lastSide
+ j.flickFrom=j.yaw;j.flickDelta=(turnError>=0 and 1 or -1)*math.rad(90);j.flickStart=lastSide
  if not waitUntil(j,lastSide+.035) then return false end
  key(j,Enum.KeyCode.Q,false)
- -- D stays held after Q releases, until rear eligibility or timeout.
  local deadline=lastSide+1.5
  while valid(j) and os.clock()<deadline do
   if rearGround(j) then key(j,Enum.KeyCode.D,false);return true end
@@ -454,65 +458,94 @@ connect(top.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.MouseB
 connect(UIS.InputChanged,function(i) if not drag or (i.UserInputType~=Enum.UserInputType.MouseMovement and i~=drag.input) then return end;local delta=Vector2.new(i.Position.X,i.Position.Y)-drag.start;local p=drag.origin+delta;local ws=main.AbsoluteSize;main.Position=UDim2.fromOffset(p.X+ws.X*.5,p.Y+ws.Y*.5);clampWindow() end)
 connect(UIS.InputEnded,function(i) if drag and i==drag.input then drag=nil end end);connect(UIS.WindowFocusReleased,function() drag=nil end);fit()
 
--- Integrated audio controller: popup voices 8; other client-visible audio 12%.
+-- Integrated AUDIO HOTFIX: one incremental cache, active audio only, bounded writes.
 do
- local POPUP_VOLUME,GAME_MULTIPLIER=8,.12
+ local VOICE_VOLUME,DUCK_MULTIPLIER=8,.12
  local ATTACK,RELEASE=.08,.30
+ local INDEX_BUDGET_SECONDS,MAX_INDEX_STEPS,MAX_VOLUME_WRITES=.001,64,32
  local audioAlive,ducking=true,false
- local audioConnections,ambient,voices={},{},{}
- local audioShutdown=Instance.new("BindableEvent");audioShutdown.Name="AudioDuckingShutdown";audioShutdown.Parent=gui
- local function audioConnect(signal,fn) local c=signal:Connect(fn);table.insert(audioConnections,c);return c end
+ local links,records,playingAmbient,voices,transitions={},{},{},{},{}
+ local stack={{object=game}}
+ local event=Instance.new("BindableEvent");event.Name="AudioDuckingShutdown";event.Parent=gui
+ local function audioConnect(signal,callback) local c=signal:Connect(callback);table.insert(links,c);return c end
  local function supported(o) return o:IsA("Sound") or o:IsA("AudioPlayer") end
  local function isVoice(o) return o:IsA("Sound") and o.Name=="AutoBlackflashStreakVoice" and o:IsDescendantOf(SoundService) end
- local function readVolume(o) local ok,v=pcall(function() return o.Volume end);return ok and v or nil end
+ local function volume(o) local ok,v=pcall(function() return o.Volume end);return ok and v or nil end
  local function playing(o) local ok,v=pcall(function() return o.IsPlaying end);return ok and v==true end
- local function transition(o,r,target,seconds,phase)
-  if r.tween then r.tween:Cancel();r.tween=nil end;r.phase=phase
-  local ok,tw=pcall(function() return TS:Create(o,TweenInfo.new(seconds,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Volume=target}) end)
-  if not ok then pcall(function() o.Volume=target end);r.phase=phase=="restore" and "idle" or phase;return end
-  r.tween=tw
-  tw.Completed:Once(function(state) if r.tween~=tw then return end;r.tween=nil;if state==Enum.PlaybackState.Completed and phase=="restore" then r.phase="idle" end end)
-  tw:Play()
+ local function write(o,v) return pcall(function() o.Volume=v end) end
+ local function restoreImmediate(o,r)
+  transitions[o]=nil;if r.ducked and r.original~=nil then write(o,r.original) end;r.ducked=false;r.original=nil
  end
- local function duckObject(o)
-  if not audioAlive or not ducking or not o.Parent or isVoice(o) then return end
-  local v=readVolume(o);if v==nil then return end
-  local r=ambient[o];if not r then r={original=v,phase="idle"};ambient[o]=r end
-  if r.phase=="duck" then return end;if r.phase=="idle" then r.original=v end
-  transition(o,r,r.original*GAME_MULTIPLIER,ATTACK,"duck")
+ local function transition(o,r,target,seconds,restoring)
+  local v=volume(o);if v==nil then return end
+  transitions[o]={from=v,to=target,start=os.clock(),duration=seconds,restoring=restoring,record=r}
  end
- local function restore()
-  for o,r in pairs(ambient) do if o.Parent then transition(o,r,r.original,RELEASE,"restore") else if r.tween then r.tween:Cancel() end;ambient[o]=nil end end
+ local function duckOne(o,r,immediate)
+  if not r.ducked then local v=volume(o);if v==nil then return end;r.original=v;r.ducked=true end
+  local target=r.original*DUCK_MULTIPLIER
+  if immediate then transitions[o]=nil;write(o,target) else transition(o,r,target,ATTACK,false) end
  end
- local function refresh()
+ local function refreshVoices()
   if not audioAlive then return end
-  local any=false
-  for o in pairs(voices) do if not o.Parent then voices[o]=nil else if o.Volume~=POPUP_VOLUME then o.Volume=POPUP_VOLUME end;if playing(o) then any=true end end end
+  local any=false;for o,active in pairs(voices) do if o.Parent and active then any=true;break end end
   if any==ducking then return end;ducking=any;gui:SetAttribute("PopupAudioDuckingActive",ducking)
-  if ducking then for _,o in ipairs(game:GetDescendants()) do if supported(o) and not isVoice(o) then duckObject(o) end end else restore() end
+  if ducking then
+   for o in pairs(playingAmbient) do local r=records[o];if r and o.Parent then duckOne(o,r,false) end end
+  else
+   for o,r in pairs(records) do if r.ducked and r.original~=nil then if r.playing then transition(o,r,r.original,RELEASE,true) else restoreImmediate(o,r) end end end
+  end
  end
- local function inspect(o)
-  if not audioAlive or not supported(o) then return end
-  if isVoice(o) then
-   if voices[o] then return end;voices[o]=true;o.Volume=POPUP_VOLUME
-   audioConnect(o:GetPropertyChangedSignal("IsPlaying"),refresh)
-   audioConnect(o.Destroying,function() voices[o]=nil;refresh() end);refresh()
-  elseif ducking then duckObject(o) end
+ local function forget(o)
+  local r=records[o];if not r then return end
+  if r.playConnection then r.playConnection:Disconnect() end;if r.destroyConnection then r.destroyConnection:Disconnect() end
+  restoreImmediate(o,r);records[o]=nil;playingAmbient[o]=nil;local wasVoice=voices[o]~=nil;voices[o]=nil;if wasVoice then refreshVoices() end
+ end
+ local function observe(o)
+  if not audioAlive or records[o] or not supported(o) or volume(o)==nil then return end
+  local r={voice=isVoice(o),playing=false,ducked=false};records[o]=r
+  if r.voice then write(o,VOICE_VOLUME);voices[o]=false end
+  local function changed()
+   if not audioAlive or records[o]~=r then return end
+   local active=playing(o);r.playing=active
+   if r.voice then voices[o]=active;refreshVoices()
+   elseif active then playingAmbient[o]=true;if ducking then duckOne(o,r,true) end
+   else playingAmbient[o]=nil;restoreImmediate(o,r) end
+  end
+  local ok,c=pcall(function() return o:GetPropertyChangedSignal("IsPlaying"):Connect(changed) end);if ok then r.playConnection=c end
+  r.destroyConnection=o.Destroying:Connect(function() forget(o) end);changed()
  end
  local function audioCleanup()
-  if not audioAlive then return end;audioAlive=false;ducking=false
-  for _,c in ipairs(audioConnections) do c:Disconnect() end
-  for o,r in pairs(ambient) do if r.tween then r.tween:Cancel() end;pcall(function() o.Volume=r.original end) end
-  table.clear(ambient);table.clear(voices);pcall(function() gui:SetAttribute("PopupAudioDuckingActive",false) end)
-  if audioShutdown.Parent then audioShutdown:Destroy() end
+  if not audioAlive then return end;audioAlive=false
+  for _,c in ipairs(links) do c:Disconnect() end
+  for o,r in pairs(records) do if r.playConnection then r.playConnection:Disconnect() end;if r.destroyConnection then r.destroyConnection:Disconnect() end;restoreImmediate(o,r) end
+  table.clear(records);table.clear(playingAmbient);table.clear(voices);table.clear(transitions);table.clear(stack)
+  pcall(function() gui:SetAttribute("PopupAudioDuckingActive",false) end);if event.Parent then event:Destroy() end
  end
- audioConnect(audioShutdown.Event,audioCleanup);audioConnect(gui.Destroying,audioCleanup)
- audioConnect(game.DescendantAdded,function(o) if supported(o) then inspect(o);task.defer(function() if audioAlive and o.Parent then inspect(o) end end) end end)
- audioConnect(game.DescendantRemoving,function(o)
-  if voices[o] then voices[o]=nil;refresh() end
-  local r=ambient[o];if r then if r.tween then r.tween:Cancel() end;pcall(function() o.Volume=r.original end);ambient[o]=nil end
+ audioConnect(event.Event,audioCleanup);audioConnect(gui.Destroying,audioCleanup)
+ audioConnect(game.DescendantAdded,function(o) if supported(o) then observe(o);task.defer(function() if audioAlive and o.Parent then observe(o) end end) end end)
+ audioConnect(game.DescendantRemoving,function(o) if records[o] then forget(o) end end)
+ local voicePoll=0
+ audioConnect(RS.Heartbeat,function(dt)
+  if not audioAlive then return end
+  local begun=os.clock();local steps=0
+  while #stack>0 and steps<MAX_INDEX_STEPS and os.clock()-begun<INDEX_BUDGET_SECONDS do
+   steps+=1;local node=stack[#stack]
+   if not node.children then if supported(node.object) then observe(node.object) end;local ok,children=pcall(function() return node.object:GetChildren() end);node.children=ok and children or {};node.index=1 end
+   local child=node.children[node.index]
+   if child then node.index+=1;if child.Parent then table.insert(stack,{object=child}) end else table.remove(stack) end
+  end
+  if #stack==0 and gui:GetAttribute("AudioCacheReady")~=true then gui:SetAttribute("AudioCacheReady",true) end
+  local now=os.clock();local writes=0
+  for o,t in pairs(transitions) do
+   if writes>=MAX_VOLUME_WRITES then break end;writes+=1
+   if not o.Parent or records[o]~=t.record then transitions[o]=nil
+   else local p=math.clamp((now-t.start)/t.duration,0,1);local eased=1-(1-p)*(1-p);write(o,t.from+(t.to-t.from)*eased)
+    if p>=1 then transitions[o]=nil;if t.restoring and not ducking then t.record.ducked=false;t.record.original=nil end end
+   end
+  end
+  voicePoll+=dt;if voicePoll>=.1 then voicePoll=0;for o in pairs(voices) do if o.Parent then voices[o]=playing(o) end end;refreshVoices() end
  end)
- audioConnect(RS.Heartbeat,refresh)
- for _,o in ipairs(game:GetDescendants()) do if supported(o) then inspect(o) end end
- gui:SetAttribute("PopupVoiceVolume",POPUP_VOLUME);gui:SetAttribute("GameAudioDuckMultiplier",GAME_MULTIPLIER);refresh()
+ gui:SetAttribute("PopupVoiceVolume",VOICE_VOLUME);gui:SetAttribute("GameAudioDuckMultiplier",DUCK_MULTIPLIER)
+ gui:SetAttribute("AudioCacheReady",false);gui:SetAttribute("AudioControllerMode","CACHED_ACTIVE_ONLY_BOUNDED")
+ for _,o in ipairs(SoundService:GetChildren()) do if supported(o) then observe(o) end end
 end
