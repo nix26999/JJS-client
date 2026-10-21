@@ -3,13 +3,16 @@
 -- ASCII-only. Not live-tested. Requires executor gethui() and permitted virtual input.
 -- Macro, rear-gated four-round chain, UI/search/drag, 10 ordered popup stages,
 -- five random default sounds, custom Jackpot/Obito/Plus Ultra/Goku sounds,
--- rolling 3.5s countdown, pooled sparkles, 16-frame/14-FPS kill finisher, unload.
+-- rolling 3.5s countdown, pooled sparkles, 16-frame/0.8s kill finisher, unload.
 -- Popup voices volume 10. Active game audio .12 multiplier; original volumes restored.
 -- Audio cache indexed gradually, no full-game scan triggered by a popup voice.
 -- Chain activation remains 3. D+Q, flick camera at enemy during dash, hold D until behind.
 -- 30% rear sampling, <=8 studs, grounded/height check and 200ms stable gate.
 -- Actual Black Flash/hit attribution is not verified by client timing/health loss.
 -- Confirmed-only kill FX requires the earlier package's server confirmation event.
+-- Kill finisher art: optional 16-frame PNG sequence over 0.8 s (20 FPS). Full set impact_01..16.png, reduced-flash set
+-- impact_soft_01..16.png (chosen by "Reduced flashes"). Put them in the executor workspace folder. If they are
+-- missing, the built-in vector finisher plays instead. Triggers are unchanged: confirmed kill, or estimated lethal.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
@@ -17,6 +20,7 @@ local CAS=game:GetService("ContextActionService")
 local TS=game:GetService("TweenService")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
+local ContentProvider=game:GetService("ContentProvider")
 local VIM;pcall(function() VIM=game:GetService("VirtualInputManager") end)
 local LP=assert(Players.LocalPlayer,"Client required");assert(RS:IsClient(),"Client required")
 local UI_ROOT=assert(gethui and gethui(),"Executor gethui() unavailable")
@@ -35,6 +39,12 @@ local lethalNotified=setmetatable({},{__mode="k"})
 local stop=function() end
 local cancelImpact=function() end
 local impactLayer,impactConnection,impactToken=nil,nil,0
+local impactSeq,impactSeqToken,lastImpactAt=nil,0,-math.huge
+local IMPACT_FILE_FORMATS={full="impact_%02d.png",soft="impact_soft_%02d.png"}
+local IMPACT_ASSET_IDS={full={},soft={}} -- optional fallback: 16 "rbxassetid://..." strings per set
+local IMPACT_DURATION=.8 -- seconds for all 16 frames (20 FPS)
+local IMPACT_SHAKE,IMPACT_COOLDOWN=14,1.5 -- shake pixels (full-flash mode only); seconds between full-flash plays
+local setImpactImageStatus=function() end
 local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
 local paintMacro,paintChain,chainStatus,killStatus
 local streakIndex,streakAt=0,nil
@@ -63,7 +73,7 @@ end
 local gui=make("ScreenGui",UI_ROOT,{Name="AutoBlackflash",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 local shutdown=make("BindableEvent",gui,{Name="Shutdown"})
 local targetRef=make("ObjectValue",gui,{Name="BlackflashChainV2Target"})
-gui:SetAttribute("BlackflashChainV2Enabled",false);gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",14)
+gui:SetAttribute("BlackflashChainV2Enabled",false);gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",16/IMPACT_DURATION)
 gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);gui:SetAttribute("PopupStreakWindowSeconds",STREAK_WINDOW);gui:SetAttribute("PopupSequenceLength",#SEQUENCE)
 local root=make("Frame",gui,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1})
 local main=make("Frame",root,{Name="Window",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(760,540),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true});corner(main,12);make("UIStroke",main,{Color=T.stroke,Thickness=1})
@@ -253,20 +263,95 @@ local popupCard=card("Visuals","Ordered Blackflash Popups","1/10 to 10/10. Signa
 toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
 local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND");connect(popupPreview.Activated,function() showPopup(true) end)
 note(popupCard,"Voices: volume 10; game audio ducks to 12%. Stage 9: Plus Ultra!, purple, 7s + tiny purple sparks. Stage 10: SON GOKU!, white, 10s + gold/orange sparkles.",78)
-local killCard=card("Visuals","Blackflash Kill Finisher","16 frames at 14 FPS. Confirmed-only by default; lethal estimate mode is explicitly unverified.")
-toggle(killCard,"Kill Finisher: 16 frames / 14 FPS",function() return impactEnabled end,function(v) impactEnabled=v;if not v then cancelImpact() end end)
+-- Optional PNG finisher art (16 frames, 0.8 s). Only loaded while the finisher is enabled; the set follows "Reduced flashes".
+local function impactKind() return reducedFlash and "soft" or "full" end
+local function releaseImpactSeq()
+ impactSeqToken+=1
+ local seq=impactSeq;impactSeq=nil
+ if seq and seq.holder then pcall(function() seq.holder:Destroy() end) end
+end
+local function ensureImpactSeq()
+ local kind=impactKind()
+ if impactSeq and impactSeq.kind==kind then return end
+ releaseImpactSeq();local build=impactSeqToken
+ task.spawn(function()
+  local format=IMPACT_FILE_FORMATS[kind];local sources,origin={},nil
+  local gca=getcustomasset or getsynasset
+  if gca and isfile then
+   local ok=pcall(function()
+    for i=1,16 do
+     local path=string.format(format,i)
+     if not isfile(path) then error("missing "..path) end
+     local content=gca(path)
+     if type(content)~="string" or content=="" then error("bad asset "..path) end
+     sources[i]=content
+    end
+   end)
+   if ok then origin="workspace files" else sources={} end
+  end
+  if not origin then
+   local ids=IMPACT_ASSET_IDS[kind]
+   for i=1,16 do local id=ids[i];if type(id)~="string" or id=="" then sources={};break end;sources[i]=id end
+   if #sources==16 then origin="asset IDs" end
+  end
+  if build~=impactSeqToken or not running then return end
+  if not origin then setImpactImageStatus("Finisher images ("..kind.."): not found, using the built-in vector finisher. Put "..string.format(format,1).." to "..string.format(format,16).." in the executor workspace folder.");return end
+  local holder=make("Frame",gui,{Name="BlackflashKillFinisherImages",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromScale(1.06,1.06),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=90})
+  local labels={}
+  for i,source in ipairs(sources) do labels[i]=make("ImageLabel",holder,{Name="Frame"..i,Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,Image=source,ScaleType=Enum.ScaleType.Stretch,Visible=false,ZIndex=91}) end
+  pcall(function() ContentProvider:PreloadAsync(labels) end)
+  if build~=impactSeqToken or not running or not gui.Parent then holder:Destroy();return end
+  impactSeq={kind=kind,holder=holder,labels=labels}
+  setImpactImageStatus("Finisher images ("..kind.."): 16 frames loaded from "..origin..".")
+ end)
+end
+-- Time-based playback: exactly one preloaded frame visible at a time, same 0.8 s timing and fade as the vector finisher.
+local function playImageImpact(token)
+ local seq=impactSeq
+ if not seq or not seq.holder.Parent then return false end
+ local holder,labels=seq.holder,seq.labels
+ local started=os.clock();local lastFrame=0
+ local function step()
+  if not running or not impactEnabled or token~=impactToken or not holder.Parent then cancelImpact();return end
+  local elapsed=os.clock()-started
+  if elapsed>=IMPACT_DURATION then cancelImpact();return end
+  local frame=math.min(16,math.floor(elapsed*16/IMPACT_DURATION)+1)
+  if frame==lastFrame then return end
+  if lastFrame>0 then labels[lastFrame].Visible=false end
+  lastFrame=frame
+  local label=labels[frame]
+  label.ImageTransparency=1-(frame<=11 and 1 or math.max(0,(16-frame)/5))
+  label.Visible=true
+  if not reducedFlash and IMPACT_SHAKE>0 then
+   local decay=math.max(0,1-frame/10);local amp=IMPACT_SHAKE*decay*decay
+   holder.Position=UDim2.new(.5,popupRng:NextNumber(-amp,amp),.5,popupRng:NextNumber(-amp,amp))
+  end
+ end
+ holder.Visible=true;step()
+ if token~=impactToken or not holder.Visible then return true end
+ impactConnection=RS.RenderStepped:Connect(step)
+ return true
+end
+local killCard=card("Visuals","Blackflash Kill Finisher","16 frames in 0.8 s (20 FPS). Confirmed-only by default; lethal estimate mode is explicitly unverified.")
+toggle(killCard,"Kill Finisher: 16 frames / 0.8 s",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
 local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
 toggle(killCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);cancelImpact();updateKillStatus() end)
-toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v end)
+toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
 killStatus=note(killCard,"",68);updateKillStatus()
+local imageStatus=note(killCard,"Finisher images: load when the finisher is enabled (workspace PNGs, built-in vector fallback).",44)
+setImpactImageStatus=function(message) if running and imageStatus.Parent then imageStatus.Text=message end end
+local finisherPreview=actionButton(killCard,"PREVIEW KILL FINISHER - NOT A KILL")
 local session=card("Settings","Session","Unload cancels input, camera, movement, UI, particles, animation, voices and cached audio controller; restores game audio.")
 local unloadButton=actionButton(session,"UNLOAD SCRIPT")
 local reopen=make("TextButton",gui,{Text="OPEN JJS MENU",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false});corner(reopen)
 local function show(v) main.Visible=v;reopen.Visible=not v end
 connect(minimize.Activated,function() show(false) end);connect(reopen.Activated,function() show(true) end)
-cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end end
-local function playImpact()
- if not running or not impactEnabled then return end;cancelImpact();local token=impactToken
+cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end;if impactSeq then impactSeq.holder.Visible=false;impactSeq.holder.Position=UDim2.fromScale(.5,.5);for _,label in ipairs(impactSeq.labels) do label.Visible=false end end end
+local function playImpact(preview)
+ if not running or not impactEnabled then return end
+ if not preview and not reducedFlash and os.clock()-lastImpactAt<IMPACT_COOLDOWN then return end
+ lastImpactAt=os.clock();cancelImpact();local token=impactToken
+ if impactSeq and impactSeq.kind==impactKind() and playImageImpact(token) then return end
  local layer=make("Frame",gui,{Name="BlackflashKillFinisher16",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
  local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
  local random=Random.new(21);local pieces={}
@@ -290,8 +375,10 @@ local function playImpact()
   local p=math.clamp((frame-1)/8,0,1);ring.Visible=frame>=2 and frame<=9;ring.Position=UDim2.fromOffset(1150*sx,620*sy);ring.Size=UDim2.fromOffset((160+1240*p)*sx,(100+800*p)*sy);outline.Thickness=math.max(1,(22*(1-p)+3)*sf);outline.Transparency=1-fade
  end
  local started=os.clock();local lastFrame=1;draw(1)
- impactConnection=RS.RenderStepped:Connect(function() if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end;local elapsed=os.clock()-started;if elapsed>=16/14 then cancelImpact();return end;local frame=math.min(16,math.floor(elapsed*14)+1);if frame~=lastFrame then lastFrame=frame;draw(frame) end end)
+ impactConnection=RS.RenderStepped:Connect(function() if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end;local elapsed=os.clock()-started;if elapsed>=IMPACT_DURATION then cancelImpact();return end;local frame=math.min(16,math.floor(elapsed*16/IMPACT_DURATION)+1);if frame~=lastFrame then lastFrame=frame;draw(frame) end end)
 end
+-- Manual test only. Automatic playback stays gated by the confirmed-kill remote / estimated-lethal mode below.
+connect(finisherPreview.Activated,function() if not impactEnabled then setImpactImageStatus("Enable the Kill Finisher first, then preview.");return end;playImpact(true) end)
 local function bindKillRemote(remote)
  if remote.Name~="BlackflashKillConfirmed" or not remote:IsA("RemoteEvent") or remote==confirmedRemote then return end
  if confirmedConnection then confirmedConnection:Disconnect() end;confirmedRemote=remote;lastKillId=0
@@ -503,7 +590,7 @@ connect(UIS.WindowFocused,function() focused=true end)
 connect(UIS.TextBoxFocused,function() heldThree=false;stop("Text entry; stopped.",false);resetStreak() end)
 connect(LP.CharacterRemoving,function() heldThree=false;stop("Character removed; OFF.",true);cancelImpact();clearPopups() end)
 local function cleanup()
- if cleanedUp then return end;cleanedUp=true;running=false;stop(nil,true);cancelImpact();clearPopups();CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
+ if cleanedUp then return end;cleanedUp=true;running=false;stop(nil,true);cancelImpact();releaseImpactSeq();clearPopups();CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
  for h in pairs(tracked) do untrack(h) end;for _,c in ipairs(connections) do pcall(function() c:Disconnect() end) end;table.clear(connections)
 end
 local function unload() cleanup();if gui.Parent then gui:Destroy() end end
