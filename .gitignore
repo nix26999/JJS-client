@@ -6,7 +6,7 @@
 -- rolling 3.5s countdown, pooled sparkles, 16-frame/14-FPS kill finisher, unload.
 -- Popup voices volume 10. Active game audio .12 multiplier; original volumes restored.
 -- Audio cache indexed gradually, no full-game scan triggered by a popup voice.
--- Chain activation remains 3. D+Q, hold D behind, one 90-degree flick after Q.
+-- Chain activation remains 3. D+Q, flick camera at enemy during dash, hold D until behind.
 -- 30% rear sampling, <=8 studs, grounded/height check and 200ms stable gate.
 -- Actual Black Flash/hit attribution is not verified by client timing/health loss.
 -- Confirmed-only kill FX requires the earlier package's server confirmation event.
@@ -244,7 +244,7 @@ local macroCard=card("Yuji","Black Flash Follow-up","Tap/release 3; follow-up ta
 local macroSettings=make("Frame",macroCard,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=20});make("UIListLayout",macroSettings,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
 local settingsArrow=actionButton(macroCard,"> Macro settings");settingsArrow.LayoutOrder=2
 connect(settingsArrow.Activated,function() macroSettings.Visible=not macroSettings.Visible;settingsArrow.Text=macroSettings.Visible and "v Macro settings" or "> Macro settings" end)
-local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3. D+Q side dash, D held until behind, one 90-degree flick after Q. Four estimated rounds. No server perfect-hit guarantee.")
+local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3 within 8 studs. D+Q side dash; camera flicks toward the enemy during the dash, D stays held until behind. Four estimated rounds. No server perfect-hit guarantee.")
 chainStatus=note(chainCard,"OFF - enable, then press 3.",64)
 local function say(message) if running then chainStatus.Text=message;gui:SetAttribute("BlackflashChainStatus",message) end end
 paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v) stop(nil,false);macroEnabled=v;if v then chainEnabled=false;if paintChain then paintChain() end end end)
@@ -370,11 +370,21 @@ local function lock(j)
  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={j.character,j.target.Parent}
  j.cameraConnection=RS.RenderStepped:Connect(function(dt)
   if current~=j then return end;local a,b=localRoot(),rootOf(j.target);if not a or not b then return end
-  UIS.MouseBehavior=Enum.MouseBehavior.LockCenter;local mouse=UIS:GetMouseDelta();j.yaw-=mouse.X*.0025;j.pitch=math.clamp(j.pitch-mouse.Y*.0025,-1.15,1.15)
-  j.pivot=j.pivot:Lerp(a.Position+Vector3.new(0,1.8,0),1-math.exp(-18*dt));local back=b.Position-b.CFrame.LookVector*.65+Vector3.new(0,.65,0);local d=back-j.pivot;if d.Magnitude<.01 then return end;d=d.Unit
-  if j.flickStart then local t=math.clamp((os.clock()-j.flickStart)/.16,0,1);j.yaw=j.flickFrom+j.flickDelta*(t*t*(3-2*t));if t>=1 then j.flickStart=nil end
-  else local desired=math.atan2(-d.X,-d.Z);j.yaw+=angle(j.yaw,desired)*(1-math.exp(-(j.approaching and 15 or 7)*dt))/(1+mouse.Magnitude*.06) end
-  j.pitch+=(math.asin(math.clamp(d.Y,-1,1))-j.pitch)*(1-math.exp(-7*dt));local rotation=CFrame.Angles(0,j.yaw,0)*CFrame.Angles(j.pitch,0,0);local proposed=j.pivot-rotation.LookVector*j.cameraDistance;local hit=workspace:Raycast(j.pivot,proposed-j.pivot,params)
+  UIS.MouseBehavior=Enum.MouseBehavior.LockCenter;local mouse=UIS:GetMouseDelta();if not j.sideDashing then j.yaw-=mouse.X*.0025;j.pitch=math.clamp(j.pitch-mouse.Y*.0025,-1.15,1.15) end
+  j.pivot=j.pivot:Lerp(a.Position+Vector3.new(0,1.8,0),1-math.exp(-18*dt));local back=(j.sideDashing and b.Position or b.Position-b.CFrame.LookVector*.65)+Vector3.new(0,.65,0);local d=back-j.pivot;if d.Magnitude<.01 then return end;d=d.Unit
+  if j.flickStart then
+   local t=math.clamp((os.clock()-j.flickStart)/.08,0,1)
+   local desired=math.atan2(-d.X,-d.Z)
+   j.yaw=j.flickFrom+angle(j.flickFrom,desired)*(t*t*(3-2*t))
+   j.pitch=j.flickPitchFrom+(math.asin(math.clamp(d.Y,-1,1))-j.flickPitchFrom)*(t*t*(3-2*t))
+   if t>=1 then j.flickStart=nil end
+  else
+   local desired=math.atan2(-d.X,-d.Z)
+   local rate=j.sideDashing and 32 or (j.approaching and 15 or 7)
+   local resistance=j.sideDashing and 1 or (1+mouse.Magnitude*.06)
+   j.yaw+=angle(j.yaw,desired)*(1-math.exp(-rate*dt))/resistance
+   j.pitch+=(math.asin(math.clamp(d.Y,-1,1))-j.pitch)*(1-math.exp(-(j.sideDashing and 32 or 7)*dt))
+  end;local rotation=CFrame.Angles(0,j.yaw,0)*CFrame.Angles(j.pitch,0,0);local proposed=j.pivot-rotation.LookVector*j.cameraDistance;local hit=workspace:Raycast(j.pivot,proposed-j.pivot,params)
   camera.CFrame=CFrame.new(hit and hit.Position+hit.Normal*.3 or proposed)*rotation;camera.Focus=CFrame.new(back)
  end)
  targetRef.Value=j.target;gui:SetAttribute("BlackflashChainV2Enabled",true)
@@ -407,18 +417,28 @@ end
 local function positionBehind(j)
  if not approach(j) then return false end;if rearGround(j) then return true end
  if os.clock()-lastSide<2 then return jumpBehind(j) end
- say("Side dash: D + Q; immediate 90-degree flick; hold D until behind.")
+ say("Side dash: hold D + tap Q; flick camera at the enemy during dash; keep D held until behind.")
  j.approaching=false;key(j,Enum.KeyCode.W,false);key(j,Enum.KeyCode.S,false);key(j,Enum.KeyCode.A,false)
  if not waitUntil(j,os.clock()+.035) then return false end;key(j,Enum.KeyCode.D,true)
- if not waitUntil(j,os.clock()+.05) then return false end;key(j,Enum.KeyCode.Q,true);lastSide=os.clock()
- local targetRoot=rootOf(j.target);if not targetRoot then key(j,Enum.KeyCode.Q,false);key(j,Enum.KeyCode.D,false);return false end
- local direction=targetRoot.Position-j.camera.CFrame.Position;local targetYaw=math.atan2(-direction.X,-direction.Z);local turnError=angle(j.yaw,targetYaw)
- j.flickFrom=j.yaw;j.flickDelta=(turnError>=0 and 1 or -1)*math.rad(90);j.flickStart=lastSide
+ if not waitUntil(j,os.clock()+.05) then return false end
+ if not rootOf(j.target) then key(j,Enum.KeyCode.D,false);return false end
+ -- Arm the enemy-facing flick in the same input slice as Q; D remains down.
+ j.sideDashing=true
+ j.flickFrom=j.yaw;j.flickPitchFrom=j.pitch
+ j.flickStart=os.clock()
+ key(j,Enum.KeyCode.Q,true);lastSide=os.clock()
  if not waitUntil(j,lastSide+.035) then return false end;key(j,Enum.KeyCode.Q,false)
  local deadline=lastSide+1.5
- while valid(j) and os.clock()<deadline do if rearGround(j) then key(j,Enum.KeyCode.D,false);return true end;task.wait() end
- key(j,Enum.KeyCode.D,false);if not valid(j) then return false end;return jumpBehind(j)
+ while valid(j) and os.clock()<deadline do
+  if rearGround(j) and not j.flickStart then
+   key(j,Enum.KeyCode.D,false);j.sideDashing=false;return true
+  end
+  task.wait()
+ end
+ key(j,Enum.KeyCode.D,false);j.sideDashing=false;j.flickStart=nil
+ if not valid(j) then return false end;return jumpBehind(j)
 end
+
 local function stableRear(j)
  local since;local deadline=os.clock()+1.2;say("Waiting 200ms continuously behind and grounded.")
  while valid(j) and os.clock()<deadline do local now=os.clock();if rearGround(j) then since=since or now;if now-since>=.2 then return true end else since=nil end;task.wait() end;return false
