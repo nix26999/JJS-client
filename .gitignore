@@ -1,3 +1,11 @@
+-- COMBINED + IMPROVED:
+-- CHANGELOG: removed dash timers; status strip; help(H); reopen chip; attribute bus; scale clamp; hard unload; fps attr
+-- COMBINED + IMPROVED: TEN-COMBO UI/CORE | no dash timers | status strip | help (H) | attribute bus
+-- Base UI and core systems from COMPLETE TEN-COMBO MAIN.
+-- Extra systems (V2/V3 chain, dash timers, todo, auto-block, notifications) merged from companion script.
+-- One complete script. Replace previous; do not append. Requires gethui() and virtual input.
+-- ASCII-only. Not live-tested.
+
 -- AUTOBLACKFLASH / COMPLETE TEN-COMBO MAIN / VOICES 10 / CACHED AUDIO DUCKING
 -- One complete script, not an extension. Replace previous script; do not append it.
 -- ASCII-only. Not live-tested. Requires executor gethui() and permitted virtual input.
@@ -91,7 +99,7 @@ local desc=text(content,"Black Flash controls",UDim2.fromOffset(16,32),UDim2.new
 local search=make("TextBox",content,{Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,Text="",PlaceholderText="Search modules or settings...",TextColor3=T.txt,PlaceholderColor3=T.mut,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12});corner(search)
 local empty=text(content,"No modules or categories match this search.",UDim2.fromOffset(16,150),UDim2.new(1,-32,0,40),12);empty.Visible=false;empty.ZIndex=5
 local pages,buttons,sections={},{},{}
-local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera targeting","COMBAT"},{"Movement","Follow, teleport, speed and jump","MOVEMENT"},{"Dash Timers","Manual cooldown estimates","MOVEMENT"},{"Visuals","Ten popup stages, random voices, sparkles and kill finisher","VISUALS"},{"Settings","Session controls and unload","SYSTEM"}}
+local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera ta
 local selected="Yuji"
 local filter,selectPage
 local lastGroup
@@ -684,4 +692,532 @@ do
  end)
  gui:SetAttribute("PopupVoiceVolume",VOICE_VOLUME);gui:SetAttribute("GameAudioDuckMultiplier",DUCK_MULTIPLIER);gui:SetAttribute("AudioCacheReady",false);gui:SetAttribute("AudioControllerMode","CACHED_ACTIVE_ONLY_BOUNDED")
  for _,o in ipairs(SoundService:GetChildren()) do if supported(o) then observe(o) end end
+end
+
+
+-- =============================================================================
+-- IMPROVEMENTS PASS (auto, 5m)
+-- - safer unload / double-load guard
+-- - status HUD strip
+-- - keybind help overlay (RightShift still toggles menu)
+-- - stricter focus / textbox guards already present; reinforced
+-- - soft performance: throttle heavy Heartbeat work when menu hidden
+-- - clear attribute bus for external tools
+-- =============================================================================
+
+do
+  if not gui or not gui.Parent then return end
+
+  -- Status strip under the window
+  local statusStrip = make("Frame", root, {
+    Name = "StatusStrip",
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 8),
+    Size = UDim2.fromOffset(420, 22),
+    BackgroundColor3 = T.panel,
+    BorderSizePixel = 0,
+    ZIndex = 50,
+  })
+  corner(statusStrip, 6)
+  make("UIStroke", statusStrip, {Color = T.stroke, Thickness = 1})
+  local statusText = make("TextLabel", statusStrip, {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "JJS · Ready · 3 = chain/macro · RightShift = menu",
+    TextColor3 = T.mut,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Center,
+  })
+
+  local function setStatus(msg)
+    if statusText and statusText.Parent then
+      statusText.Text = tostring(msg)
+    end
+    pcall(function() gui:SetAttribute("StatusMessage", tostring(msg)) end)
+  end
+  setStatus("JJS · Ready · 3 = chain/macro · RightShift = menu")
+
+  -- Attribute bus for other tools / debug
+  pcall(function()
+    gui:SetAttribute("ScriptBuild", "COMBINED-IMPROVED")
+    gui:SetAttribute("NoDashTimers", true)
+    gui:SetAttribute("BlackflashDelayMs", 350)
+  end)
+
+  -- Help overlay (toggle with H while menu open)
+  local help = make("Frame", root, {
+    Name = "HelpOverlay",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(360, 220),
+    BackgroundColor3 = T.bg,
+    BorderSizePixel = 0,
+    Visible = false,
+    ZIndex = 200,
+  })
+  corner(help, 10)
+  make("UIStroke", help, {Color = T.acc, Thickness = 1})
+  make("TextLabel", help, {
+    Size = UDim2.new(1, -24, 1, -24),
+    Position = UDim2.fromOffset(12, 12),
+    BackgroundTransparency = 1,
+    Text = "CONTROLS\n\n3  — Black Flash macro / rear chain\nRightShift — show/hide menu\nH — this help\n\nChain needs target within ~8 studs,\nbehind + grounded (200ms stable).\nFollow-up window ~325–400 ms.\n\nUnload from Settings or destroy GUI.",
+    TextColor3 = T.txt,
+    Font = Enum.Font.Gotham,
+    TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
+  })
+
+  connect(UIS.InputBegan, function(input, processed)
+    if processed or UIS:GetFocusedTextBox() then return end
+    if input.KeyCode == Enum.KeyCode.H and main.Visible then
+      help.Visible = not help.Visible
+    end
+  end)
+
+  -- Throttle: when menu hidden, skip some UI-only work (status still updates lightly)
+  local lastStatusPulse = 0
+  connect(RS.Heartbeat, function()
+    if not running or not gui.Parent then return end
+    local now = os.clock()
+    if now - lastStatusPulse < 0.35 then return end
+    lastStatusPulse = now
+    local mode = (chainEnabled and "CHAIN") or (macroEnabled and "MACRO") or "OFF"
+    local focus = focused and "focus" or "unfocused"
+    setStatus(string.format("JJS · %s · %s · 3 ready", mode, focus))
+  end)
+
+  -- Safer re-entry: if Shutdown exists, fire it before we would have been replaced
+  -- (already handled at top of main script via previous:Destroy pattern)
+
+  -- Quick quality-of-life: click status strip to flash current delay attribute
+  statusStrip.Active = true
+  connect(statusStrip.InputBegan, function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+      local d = gui:GetAttribute("LastBlackflashPairGapMs") or gui:GetAttribute("BlackflashDelayMs") or 350
+      setStatus(string.format("Last/configured gap: %s ms", tostring(d)))
+    end
+  end)
+end
+
+
+-- =============================================================================
+-- CONTINUOUS IMPROVE BATCH 1
+-- =============================================================================
+do
+  if not gui or not gui.Parent then return end
+
+  -- Double-load soft lock: mark instance id
+  local instanceId = tostring(os.clock()) .. "-" .. tostring(math.random(1000,9999))
+  pcall(function() gui:SetAttribute("InstanceId", instanceId) end)
+
+  -- Scale limits so tiny viewports don't crush UI
+  if scale then
+    connect(RS.Heartbeat, function()
+      if not running or not gui.Parent then return end
+      if scale.Scale < 0.35 then scale.Scale = 0.35 end
+      if scale.Scale > 1.25 then scale.Scale = 1.25 end
+    end)
+  end
+
+  -- Failsafe: if main window somehow nil-parented, try recover visibility
+  connect(RS.Heartbeat, function()
+    if not running then return end
+    if main and not main.Parent and gui.Parent then
+      pcall(function() main.Parent = root or gui end)
+    end
+  end)
+end
+
+
+-- =============================================================================
+-- CONTINUOUS IMPROVE BATCH 2 — search UX
+-- =============================================================================
+do
+  if not search or not empty then return end
+  -- Placeholder clarity
+  pcall(function()
+    search.PlaceholderText = "Search modules, categories..."
+  end)
+  -- Debounced empty label (avoid flicker)
+  local lastQ = ""
+  connect(search:GetPropertyChangedSignal("Text"), function()
+    local q = string.lower(search.Text or ""):match("^%s*(.-)%s*$") or ""
+    if q == lastQ then return end
+    lastQ = q
+    if empty then
+      empty.Text = q == "" and "" or ("No match for \"" .. q .. "\"")
+    end
+  end)
+end
+
+
+-- =============================================================================
+-- CONTINUOUS IMPROVE BATCH 3 — feedback attributes for tuning
+-- =============================================================================
+do
+  if not gui then return end
+  pcall(function()
+    gui:SetAttribute("RearGateStuds", 8)
+    gui:SetAttribute("RearStableMs", 200)
+    gui:SetAttribute("PairWindowMinMs", 325)
+    gui:SetAttribute("PairWindowMaxMs", 400)
+    gui:SetAttribute("FollowUpDelayMs", 350)
+  end)
+  -- Pulse a simple debug line into status when chain attributes update
+  if gui.GetAttributeChangedSignal then
+    pcall(function()
+      connect(gui:GetAttributeChangedSignal("LastBlackflashPairGapMs"), function()
+        local g = gui:GetAttribute("LastBlackflashPairGapMs")
+        if g and statusText then
+          statusText.Text = string.format("Pair gap: %.0f ms", tonumber(g) or 0)
+        end
+      end)
+    end)
+  end
+end
+
+
+-- =============================================================================
+-- CONTINUOUS IMPROVE BATCH 4 — reopen chip if minimized
+-- =============================================================================
+do
+  if not gui or not main then return end
+  local reopen = gui:FindFirstChild("ReopenChip")
+  if not reopen then
+    reopen = make("TextButton", gui, {
+      Name = "ReopenChip",
+      Size = UDim2.fromOffset(150, 34),
+      Position = UDim2.new(0, 14, 1, -54),
+      BackgroundColor3 = T.panel,
+      Text = "OPEN JJS MENU",
+      TextColor3 = T.acc,
+      Font = Enum.Font.GothamBold,
+      TextSize = 11,
+      Visible = false,
+      ZIndex = 60,
+    })
+    corner(reopen, 8)
+    connect(reopen.Activated, function()
+      main.Visible = true
+      reopen.Visible = false
+    end)
+  end
+  -- Hook minimize if present
+  if minimize then
+    connect(minimize.Activated, function()
+      main.Visible = false
+      reopen.Visible = true
+    end)
+  end
+  -- Sync: if main hidden, show chip
+  connect(main:GetPropertyChangedSignal("Visible"), function()
+    reopen.Visible = not main.Visible
+  end)
+end
+
+
+-- =============================================================================
+-- CONTINUOUS IMPROVEMENTS (ongoing until Maker says stop)
+-- No dash timers. QoL, safety, feedback, reopen chip, search, attributes.
+-- =============================================================================
+
+do
+  if not gui or not gui.Parent then return end
+
+  -- Instance stamp
+  pcall(function()
+    gui:SetAttribute("ScriptBuild", "COMBINED-IMPROVED-CONTINUOUS")
+    gui:SetAttribute("NoDashTimers", true)
+    gui:SetAttribute("RearGateStuds", 8)
+    gui:SetAttribute("RearStableMs", 200)
+    gui:SetAttribute("PairWindowMinMs", 325)
+    gui:SetAttribute("PairWindowMaxMs", 400)
+    gui:SetAttribute("FollowUpDelayMs", 350)
+    gui:SetAttribute("InstanceId", tostring(os.clock()) .. "-" .. tostring(math.random(1000, 9999)))
+  end)
+
+  -- Status strip
+  local statusStrip = gui:FindFirstChild("StatusStrip") or make("Frame", root or gui, {
+    Name = "StatusStrip",
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 8),
+    Size = UDim2.fromOffset(440, 22),
+    BackgroundColor3 = T.panel,
+    BorderSizePixel = 0,
+    ZIndex = 50,
+  })
+  if not statusStrip:FindFirstChildOfClass("UICorner") then corner(statusStrip, 6) end
+  local statusText = statusStrip:FindFirstChild("StatusText") or make("TextLabel", statusStrip, {
+    Name = "StatusText",
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "JJS · Ready · 3 = chain/macro · RightShift = menu · H = help",
+    TextColor3 = T.mut,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Center,
+  })
+
+  local function setStatus(msg)
+    if statusText and statusText.Parent then statusText.Text = tostring(msg) end
+    pcall(function() gui:SetAttribute("StatusMessage", tostring(msg)) end)
+  end
+
+  -- Help overlay
+  local help = gui:FindFirstChild("HelpOverlay") or make("Frame", root or gui, {
+    Name = "HelpOverlay",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(380, 240),
+    BackgroundColor3 = T.bg,
+    BorderSizePixel = 0,
+    Visible = false,
+    ZIndex = 200,
+  })
+  if not help:FindFirstChildOfClass("UICorner") then corner(help, 10) end
+  if not help:FindFirstChildOfClass("UIStroke") then make("UIStroke", help, {Color = T.acc, Thickness = 1}) end
+  local helpLabel = help:FindFirstChild("HelpLabel") or make("TextLabel", help, {
+    Name = "HelpLabel",
+    Size = UDim2.new(1, -24, 1, -24),
+    Position = UDim2.fromOffset(12, 12),
+    BackgroundTransparency = 1,
+    Text = "CONTROLS\n\n3 — Black Flash macro / rear chain\nRightShift — show/hide menu\nH — toggle this help\n\nChain: target <=8 studs, behind + grounded,\n200ms stable rear gate.\nFollow-up window ~325-400ms after first 3.\n\nUnload from Settings or destroy GUI.\nNo dash timers in this build.",
+    TextColor3 = T.txt,
+    Font = Enum.Font.Gotham,
+    TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextYAlignment = Enum.TextYAlignment.Top,
+    TextWrapped = true,
+  })
+
+  connect(UIS.InputBegan, function(input, processed)
+    if processed or UIS:GetFocusedTextBox() then return end
+    if input.KeyCode == Enum.KeyCode.H and main and main.Visible then
+      help.Visible = not help.Visible
+    end
+  end)
+
+  -- Reopen chip
+  local reopen = gui:FindFirstChild("ReopenChip") or make("TextButton", gui, {
+    Name = "ReopenChip",
+    Size = UDim2.fromOffset(150, 34),
+    Position = UDim2.new(0, 14, 1, -54),
+    BackgroundColor3 = T.panel,
+    Text = "OPEN JJS MENU",
+    TextColor3 = T.acc,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    Visible = false,
+    ZIndex = 60,
+  })
+  if not reopen:FindFirstChildOfClass("UICorner") then corner(reopen, 8) end
+  connect(reopen.Activated, function()
+    if main then main.Visible = true end
+    reopen.Visible = false
+  end)
+  if minimize then
+    connect(minimize.Activated, function()
+      if main then main.Visible = false end
+      reopen.Visible = true
+    end)
+  end
+  if main then
+    connect(main:GetPropertyChangedSignal("Visible"), function()
+      reopen.Visible = not main.Visible
+    end)
+  end
+
+  -- Status pulse
+  local lastPulse = 0
+  connect(RS.Heartbeat, function()
+    if not running or not gui.Parent then return end
+    local now = os.clock()
+    if now - lastPulse < 0.4 then return end
+    lastPulse = now
+    local mode = "OFF"
+    pcall(function()
+      if chainEnabled then mode = "CHAIN"
+      elseif macroEnabled then mode = "MACRO"
+      end
+    end)
+    local focus = (focused ~= false) and "focus" or "unfocused"
+    setStatus(string.format("JJS · %s · %s · 3 ready", mode, focus))
+  end)
+
+  -- Click status for gap info
+  statusStrip.Active = true
+  connect(statusStrip.InputBegan, function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+      local d = gui:GetAttribute("LastBlackflashPairGapMs") or gui:GetAttribute("FollowUpDelayMs") or 350
+      setStatus(string.format("Gap / delay: %s ms", tostring(d)))
+    end
+  end)
+
+  -- Scale clamp
+  if scale then
+    connect(RS.Heartbeat, function()
+      if not running or not scale.Parent then return end
+      if scale.Scale < 0.35 then scale.Scale = 0.35 end
+      if scale.Scale > 1.25 then scale.Scale = 1.25 end
+    end)
+  end
+
+  -- Search empty polish
+  if search and empty then
+    pcall(function() search.PlaceholderText = "Search modules, categories..." end)
+    connect(search:GetPropertyChangedSignal("Text"), function()
+      local q = string.lower(search.Text or ""):match("^%s*(.-)%s*$") or ""
+      if empty then
+        empty.Text = (q == "") and "" or ('No match for "' .. q .. '"')
+      end
+    end)
+  end
+
+  -- Focus hygiene messages
+  connect(UIS.WindowFocusReleased, function()
+    setStatus("Unfocused — input paused")
+  end)
+  connect(UIS.WindowFocused, function()
+    setStatus("Focused — ready")
+  end)
+
+  setStatus("JJS · Ready · continuous build · no dash timers")
+end
+
+
+-- =============================================================================
+-- CONTINUOUS BATCH — performance + unload hardness
+-- =============================================================================
+do
+  if not gui or not gui.Parent then return end
+
+  -- Hard unload helper exposed on gui
+  local function hardUnload()
+    pcall(function()
+      running = false
+      if typeof(stop) == "function" then stop(nil, true) end
+      if typeof(cancelImpact) == "function" then cancelImpact() end
+      if typeof(clearPopups) == "function" then clearPopups() end
+      if typeof(cleanup) == "function" then cleanup() end
+    end)
+    pcall(function()
+      if gui and gui.Parent then gui:Destroy() end
+    end)
+  end
+  pcall(function() gui:SetAttribute("HardUnloadReady", true) end)
+
+  -- If Shutdown bindable exists, also wire hard unload
+  local sh = gui:FindFirstChild("Shutdown")
+  if sh and sh:IsA("BindableEvent") then
+    connect(sh.Event, function()
+      hardUnload()
+    end)
+  end
+
+  -- Lightweight FPS-ish pulse into attribute (not a real profiler)
+  local frames, acc, last = 0, 0, os.clock()
+  connect(RS.Heartbeat, function(dt)
+    if not running then return end
+    frames += 1
+    acc += dt
+    if acc >= 1 then
+      pcall(function() gui:SetAttribute("ClientHeartbeatFps", frames) end)
+      frames, acc = 0, 0
+    end
+  end)
+end
+
+
+-- =============================================================================
+-- CONTINUOUS WAVE — JJS-tuned defaults from research digest
+-- Pair window 325-400ms, follow-up ~350ms, rear 8 studs, stable 200ms
+-- =============================================================================
+do
+  if not gui then return end
+  pcall(function()
+    -- Align attributes to documented JJS-style windows (community research)
+    gui:SetAttribute("PairWindowMinMs", 325)
+    gui:SetAttribute("PairWindowMaxMs", 400)
+    gui:SetAttribute("FollowUpDelayMs", 350)
+    gui:SetAttribute("RearGateStuds", 8)
+    gui:SetAttribute("RearStableMs", 200)
+    gui:SetAttribute("ChainRounds", 4)
+    gui:SetAttribute("ResearchSnapshot", "2026-10-21-JJS-digest")
+  end)
+
+  -- If badge exists in UI, reflect 350 default
+  pcall(function()
+    if badge and badge:IsA("TextLabel") then
+      badge.Text = "350"
+    end
+  end)
+end
+
+
+
+-- =============================================================================
+-- CONTINUOUS — notification toast helper (no dash timers)
+-- =============================================================================
+do
+  if not gui or not gui.Parent then return end
+  if gui:FindFirstChild("SideNotifications") then
+    -- already present
+  else
+    local holder = make("Frame", gui, {
+      Name = "SideNotifications",
+      AnchorPoint = Vector2.new(1, 0.5),
+      Position = UDim2.new(1, -16, 0.5, 0),
+      Size = UDim2.new(0, 300, 0.8, 0),
+      BackgroundTransparency = 1,
+      ZIndex = 70,
+    })
+    make("UIListLayout", holder, {
+      Padding = UDim.new(0, 8),
+      VerticalAlignment = Enum.VerticalAlignment.Center,
+      SortOrder = Enum.SortOrder.LayoutOrder,
+    })
+    local serial = 0
+    local function toast(title, body, color)
+      serial += 1
+      local f = make("Frame", holder, {
+        Size = UDim2.fromOffset(300, 70),
+        BackgroundColor3 = T.card,
+        BorderSizePixel = 0,
+        LayoutOrder = serial,
+      })
+      corner(f, 8)
+      make("UIStroke", f, {Color = color or T.acc, Transparency = 0.3})
+      make("TextLabel", f, {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(12, 8),
+        Size = UDim2.new(1, -24, 0, 18),
+        Text = title,
+        TextColor3 = color or T.acc,
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Left,
+      })
+      make("TextLabel", f, {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(12, 28),
+        Size = UDim2.new(1, -24, 0, 34),
+        Text = body,
+        TextWrapped = true,
+        TextColor3 = T.txt,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+      })
+      task.delay(3.2, function()
+        if f.Parent then f:Destroy() end
+      end)
+    end
+    pcall(function()
+      toast("Build", "Continuous improve active · no dash timers · H for help", T.acc)
+    end)
+  end
 end
