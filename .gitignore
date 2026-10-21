@@ -36,7 +36,7 @@ local impactLayer,impactConnection,impactToken=nil,nil,0
 local confirmedRemote,confirmedConnection,lastKillId=nil,nil,0
 local paintMacro,paintChain,chainStatus,killStatus
 local streakIndex,streakAt=0,nil
-local STREAK_WINDOW=1.0
+local STREAK_WINDOW=3.5
 local DEFAULT_POPUP_SOUND="rbxassetid://136561900676276"
 local popupRecords={}
 local SEQUENCE={
