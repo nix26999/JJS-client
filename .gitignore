@@ -55,10 +55,10 @@ local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) 
 local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
 -- ===== PART 1: Halloween palette =====
 do
- T.bg=Color3.fromRGB(14,8,20)          -- midnight black-purple window
- T.panel=Color3.fromRGB(28,14,38)      -- top bar and sidebar
- T.p2=Color3.fromRGB(44,22,56)         -- buttons, inputs, selected tab
- T.card=Color3.fromRGB(31,16,42)       -- module cards
+ T.bg=Color3.fromRGB(20,16,14)          -- midnight black-purple window
+ T.panel=Color3.fromRGB(34,26,22)      -- top bar and sidebar
+ T.p2=Color3.fromRGB(52,40,32)         -- buttons, inputs, selected tab
+ T.card=Color3.fromRGB(40,30,26)       -- module cards
  T.stroke=Color3.fromRGB(255,122,26)   -- pumpkin orange outlines
  T.acc=Color3.fromRGB(255,138,40)      -- accent (ON states, selected text)
  T.txt=Color3.fromRGB(255,242,224)     -- warm cream text
@@ -66,7 +66,7 @@ do
  T.mut=Color3.fromRGB(150,110,140)     -- hints and descriptions
  T.ok=Color3.fromRGB(160,255,120)      -- slime green
  T.warn=Color3.fromRGB(255,84,64)      -- blood red
- T.purple=Color3.fromRGB(150,80,255)   -- witch purple
+ T.purple=Color3.fromRGB(255,190,90)   -- witch purple
  T.ghost=Color3.fromRGB(190,255,210)   -- ghost glow
 end
 
@@ -120,6 +120,15 @@ local function toggle(p,name,get,set)
  connect(r.Activated,function() set(not get()); paint() end); paint()
  return paint
 end
+-- ===== card depth: every module card gets an outer shadow and a lit top edge =====
+local __baseCard=card
+card=function(p,name,sub)
+ local c=__baseCard(p,name,sub)
+ make("UIStroke",c,{Color=Color3.fromRGB(8,4,12),Thickness=4,Transparency=.55,ApplyStrokeMode=Enum.ApplyStrokeMode.Border})
+ make("UIGradient",c,{Color=ColorSequence.new(Color3.fromRGB(44,32,26),Color3.fromRGB(24,18,16)),Rotation=90})
+ return c
+end
+
 local c=card(pages.Macros,"Follow-up","")
 toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
 local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
@@ -1571,12 +1580,12 @@ end)
 -- ===== PART 2: gradients, glow, pumpkins and labels =====
 do
  -- window: layered gradient from purple haze down to black
- make("UIGradient",main,{Color=ColorSequence.new(Color3.fromRGB(44,16,60),Color3.fromRGB(8,4,12)),Rotation=90})
+ make("UIGradient",main,{Color=ColorSequence.new(Color3.fromRGB(40,28,22),Color3.fromRGB(12,8,6)),Rotation=90})
  -- extra orange glow outline on the window (layer above the base stroke)
  make("UIStroke",main,{Color=T.acc,Thickness=2,Transparency=.35})
 
  -- top bar: blood-orange to purple gradient
- make("UIGradient",top,{Color=ColorSequence.new(Color3.fromRGB(124,42,18),Color3.fromRGB(52,18,74)),Rotation=0})
+ make("UIGradient",top,{Color=ColorSequence.new(Color3.fromRGB(124,58,22),Color3.fromRGB(60,36,24)),Rotation=0})
 
  -- title text: orange with dark outline for the spooky look
  for _,o in ipairs(top:GetChildren()) do
@@ -1674,6 +1683,299 @@ do
 
  -- LAYER 3: thin orange border glow over the whole window
  make("UIStroke",main,{Color=orange,Thickness=1,Transparency=.6})
+end
+
+-- ===== PART 4: depth (parallax, vignette, shadows, lightning) =====
+do
+ local ink=Color3.fromRGB(8,4,12)
+ local TweenS=game:GetService("TweenService")
+
+ -- far haze blobs (deepest layer)
+ for i=1,3 do
+  local b=make("Frame",main,{AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(240+i*70,240+i*70),Position=UDim2.fromOffset(170*i,130*i),BackgroundColor3=Color3.fromRGB(110,60,30),BackgroundTransparency=.93,BorderSizePixel=0,ZIndex=0})
+  make("UICorner",b,{CornerRadius=UDim.new(0,999)})
+ end
+
+ -- parallax: back-layer frames anchored to the top move a little with the mouse.
+ -- Bottom-anchored pumpkins and fog, and the 4px embers, are left alone.
+ local nodes={}
+ for _,o in ipairs(main:GetChildren()) do
+  if o:IsA("Frame") and o.ZIndex==0 and o.Size.X.Scale==0 and o.Size.Y.Scale==0 and o.Position.Y.Scale==0 and o.Size.X.Offset~=4 then
+   local k=o.Size.X.Offset>=200 and .05 or (o.Size.Y.Offset==1 and .25 or .35)
+   table.insert(nodes,{f=o,b=o.Position,k=k})
+  end
+ end
+ local mx,my=0,0
+ connect(RS.Heartbeat,function(dt)
+  local m=UIS:GetMouseLocation();local ap,as=main.AbsolutePosition,main.AbsoluteSize
+  local tx=math.clamp((m.X-ap.X-as.X*.5)/(as.X*.5),-1,1)
+  local ty=math.clamp((m.Y-ap.Y-as.Y*.5)/(as.Y*.5),-1,1)
+  local a=math.min(1,dt*5);mx+=(tx-mx)*a;my+=(ty-my)*a
+  for _,n in ipairs(nodes) do
+   local dx,dy=-mx*n.k*40,-my*n.k*30
+   n.f.Position=UDim2.new(n.b.X.Scale,n.b.X.Offset+dx,n.b.Y.Scale,n.b.Y.Offset+dy)
+  end
+ end)
+
+ -- vignette: dark edges that pull the eye to the middle (layer above the content)
+ local function edge(size,pos,rot)
+  local f=make("Frame",main,{Size=size,Position=pos,BackgroundColor3=ink,BorderSizePixel=0,ZIndex=8})
+  make("UIGradient",f,{Color=ColorSequence.new(ink,ink),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.8),NumberSequenceKeypoint.new(1,1)}),Rotation=rot})
+ end
+ edge(UDim2.new(1,0,0,90),UDim2.new(0,0,0,0),90)
+ edge(UDim2.new(1,0,0,90),UDim2.new(0,0,1,-90),-90)
+ edge(UDim2.new(0,70,1,0),UDim2.new(0,0,0,0),0)
+ edge(UDim2.new(0,70,1,0),UDim2.new(1,-70,0,0),180)
+
+ -- inner shadow under the sidebar edge (depth between sidebar and page)
+ local sideShadow=make("Frame",main,{Size=UDim2.new(0,12,1,-44),Position=UDim2.new(0,150,0,44),BackgroundColor3=ink,BorderSizePixel=0,ZIndex=2})
+ make("UIGradient",sideShadow,{Color=ColorSequence.new(ink,ink),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.45),NumberSequenceKeypoint.new(1,1)}),Rotation=0})
+
+ -- title drop shadow so the orange title sits above the top bar
+ for _,o in ipairs(top:GetChildren()) do
+  if o:IsA("TextLabel") and o.Text=="JJS HUB" then
+   o.ZIndex=3
+   local sh=o:Clone();sh.Name="TitleShadow";sh.ZIndex=2;sh.TextColor3=ink;sh.TextTransparency=.35;sh.TextStrokeTransparency=1
+   sh.Position=o.Position+UDim2.fromOffset(2,2);sh.Parent=top
+  end
+ end
+
+ end
+
+-- ===== PART 5: depth stack (back to front) =====
+--  Z0  back wall      main gradient (Part 2)
+--  Z1  starfield      28 twinkling stars            (new)
+--  Z2  haze           3 drifting purple blobs       (Part 4)
+--  Z3  moon halo      glow behind the moon          (new)
+--  Z4  moon           gradient moon with rim        (Part 3)
+--  Z5  web + bats     spider web and 4 bats         (Part 3, parallax)
+--  Z6  pumpkins+fog   pumpkins, fog, embers         (Part 3)
+--  Z7  panel          inset page panel              (new)
+--  Z8  sidebar shadow, card shadows, ghost, avatar  (Parts 3, 4)
+--  Z9  scanlines      CRT lines over the window     (new)
+--  Z10 corners+glow   HUD corner brackets, top glow (new)
+--  Z11 vignette       dark edges                    (Part 4)
+--  Z12 flash          lightning overlay             (Part 4)
+do
+ local TweenS=game:GetService("TweenService")
+ -- Z1 starfield
+ local stars={}
+ for i=1,28 do
+  local s=make("Frame",main,{Size=UDim2.fromOffset(2,2),Position=UDim2.fromOffset(math.random(10,750),math.random(50,520)),BackgroundColor3=Color3.fromRGB(255,245,230),BackgroundTransparency=.4,BorderSizePixel=0,ZIndex=0})
+  make("UICorner",s,{CornerRadius=UDim.new(0,999)})
+  table.insert(stars,{f=s,base=.35+math.random()*.4,sp=1+math.random()*2.5,ph=math.random()*6.28})
+ end
+ -- Z3 moon halo (soft glow behind the moon)
+ local halo=make("Frame",main,{Size=UDim2.fromOffset(130,130),Position=UDim2.new(1,-130,0,26),BackgroundColor3=Color3.fromRGB(255,190,110),BackgroundTransparency=.82,BorderSizePixel=0,ZIndex=0})
+ make("UICorner",halo,{CornerRadius=UDim.new(0,999)})
+ -- Z7 inset panel behind the page content
+ local panel=make("Frame",main,{Size=UDim2.new(1,-150,1,-44),Position=UDim2.fromOffset(150,44),BackgroundColor3=Color3.fromRGB(30,14,44),BackgroundTransparency=.2,BorderSizePixel=0,ZIndex=0})
+ make("UIGradient",panel,{Color=ColorSequence.new(Color3.fromRGB(42,18,58),Color3.fromRGB(12,6,18)),Rotation=90})
+ -- Z9 scanlines
+ -- Z10 HUD corner brackets
+ local bracket=Color3.fromRGB(255,140,40)
+ local function corner_(px,py,sx,sy)
+  make("Frame",main,{Size=UDim2.fromOffset(22,2),Position=UDim2.new(sx,px,sy,py),BackgroundColor3=bracket,BorderSizePixel=0,ZIndex=10})
+  make("Frame",main,{Size=UDim2.fromOffset(2,22),Position=UDim2.new(sx,px,sy,py),BackgroundColor3=bracket,BorderSizePixel=0,ZIndex=10})
+ end
+ corner_(8,8,0,0); corner_(-30,8,1,0); corner_(8,-10,0,1); corner_(-30,-10,1,1)
+ -- Z10 glowing line under the top bar
+ local glow=make("Frame",main,{Size=UDim2.new(1,0,0,2),Position=UDim2.fromOffset(0,44),BackgroundColor3=bracket,BorderSizePixel=0,ZIndex=10})
+ make("UIGradient",glow,{Color=ColorSequence.new(bracket,Color3.fromRGB(150,60,220)),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,.85)}),Rotation=0})
+
+ -- animation: stars twinkle, moon halo breathes
+ connect(RS.Heartbeat,function()
+  local t=os.clock()
+  for _,s in ipairs(stars) do s.f.BackgroundTransparency=math.clamp(s.base+.3*math.sin(t*s.sp+s.ph),0,1) end
+  halo.BackgroundTransparency=.8+.07*math.sin(t*1.1)
+ end)
+end
+
+-- ===== PART 6 (clarity pass): gallery frame, gold title, warm glow =====
+do
+ local gold1=Color3.fromRGB(255,220,140)
+ local gold2=Color3.fromRGB(170,110,40)
+ -- gallery frame: outer gold stroke with a gradient, plus a thin inner line
+ local frameOuter=make("Frame",main,{Size=UDim2.new(1,8,1,8),Position=UDim2.fromOffset(-4,-4),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=12})
+ local outerStroke=make("UIStroke",frameOuter,{Color=gold1,Thickness=3})
+ make("UIGradient",outerStroke,{Color=ColorSequence.new(gold1,gold2),Rotation=45})
+ local frameInner=make("Frame",main,{Size=UDim2.new(1,-12,1,-12),Position=UDim2.fromOffset(6,6),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=12})
+ make("UIStroke",frameInner,{Color=gold2,Thickness=1,Transparency=.2})
+  -- gold gradient on the title text
+ for _,o in ipairs(top:GetChildren()) do
+  if o:IsA("TextLabel") and o.Text=="JJS HUB" then
+   o.TextColor3=Color3.fromRGB(255,255,255)
+   make("UIGradient",o,{Color=ColorSequence.new(gold1,Color3.fromRGB(255,140,40)),Rotation=0})
+  end
+ end
+ -- warm glow behind the title, fading to the right (above the top bar, transparent)
+ local glowBar=make("Frame",top,{Size=UDim2.fromOffset(300,44),BackgroundColor3=gold1,BackgroundTransparency=.9,BorderSizePixel=0,ZIndex=2})
+ make("UIGradient",glowBar,{Color=ColorSequence.new(gold1,gold1),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.85),NumberSequenceKeypoint.new(1,1)}),Rotation=0})
+end
+
+-- ===== PART 7: the world outside the menu (full-screen Halloween backdrop) =====
+--  shown only while the menu is open (follows the menu's Visible state)
+--  B1 sky  B2 horizon glow  B3 stars  B4 moon halo rings  B5 moon  B6 clouds
+--  B7 far hill + trees  B8 bats  B9 fog bands  B10 mid hill + tombstones
+--  B11 pumpkin patch  B12 torches  B13 falling ash  B14 front hill  B15 vignette
+do
+ local TweenS=game:GetService("TweenService")
+ local old=PG:FindFirstChild("JJSHalloweenBackdrop");if old then old:Destroy() end
+ local bg=Instance.new("ScreenGui");bg.Name="JJSHalloweenBackdrop";bg.ResetOnSpawn=false;bg.IgnoreGuiInset=true;bg.DisplayOrder=998;bg.Parent=PG
+ local function F(props,parent) return make("Frame",parent or bg,props) end
+ local function rnd(a,b) return a+math.random()*(b-a) end
+ local function round(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 999)}) end
+ local ink=Color3.fromRGB(10,5,6)
+ local orange=Color3.fromRGB(255,140,40)
+ local updaters={}
+
+ -- B1 sky
+ local sky=F({Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.fromRGB(40,18,10),BorderSizePixel=0,ZIndex=1})
+ make("UIGradient",sky,{Color=ColorSequence.new(Color3.fromRGB(58,26,12),Color3.fromRGB(4,2,3)),Rotation=90})
+ -- B2 horizon glow
+ local horizon=F({Size=UDim2.new(1.4,0,0,360),Position=UDim2.new(-.2,0,.6,0),BackgroundColor3=Color3.fromRGB(255,110,30),BackgroundTransparency=.84,BorderSizePixel=0,ZIndex=2}); round(horizon)
+ -- B3 stars
+ for i=1,90 do
+  local s=F({Size=UDim2.fromOffset(2,2),Position=UDim2.fromScale(rnd(0,1),rnd(0,.6)),BackgroundColor3=Color3.fromRGB(255,240,220),BackgroundTransparency=.4,BorderSizePixel=0,ZIndex=2}); round(s)
+  local base,sp,ph=rnd(.3,.6),rnd(1,3),rnd(0,6)
+  table.insert(updaters,function(t) s.BackgroundTransparency=math.clamp(base+.3*math.sin(t*sp+ph),0,1) end)
+ end
+ -- B4 + B5 moon: halo rings, disc, craters
+ local mx,my=.8,.16
+ for i,r in ipairs({250,196,150}) do
+  local ring=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(r,r),Position=UDim2.fromScale(mx,my),BackgroundColor3=Color3.fromRGB(255,190,110),BackgroundTransparency=.86+i*.03,BorderSizePixel=0,ZIndex=3}); round(ring)
+ end
+ local moon=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(120,120),Position=UDim2.fromScale(mx,my),BackgroundColor3=Color3.fromRGB(255,236,190),BorderSizePixel=0,ZIndex=4}); round(moon)
+ make("UIGradient",moon,{Color=ColorSequence.new(Color3.fromRGB(255,246,220),Color3.fromRGB(230,150,70)),Rotation=60})
+ for _,c in ipairs({{-.25,-.15,26},{.2,.1,18},{-.05,.28,14}}) do F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(c[3],c[3]),Position=UDim2.new(.5,c[1]*120,.5,c[2]*120),BackgroundColor3=Color3.fromRGB(205,140,80),BackgroundTransparency=.55,BorderSizePixel=0,ZIndex=5},moon) end
+ -- B6 clouds drifting across the sky
+ for i=1,5 do
+  local c=F({Size=UDim2.fromOffset(rnd(260,420),rnd(56,90)),Position=UDim2.fromScale(rnd(-.2,1),rnd(.08,.42)),BackgroundColor3=Color3.fromRGB(78,40,30),BackgroundTransparency=.8,BorderSizePixel=0,ZIndex=3}); round(c)
+  local sp=rnd(.004,.012)
+  table.insert(updaters,function(t,dt) local p=c.Position;local nx=p.X.Scale+sp*dt;if nx>1.2 then nx=-.3 end;c.Position=UDim2.new(nx,0,p.Y.Scale,0) end)
+ end
+ -- B7 far hill with trees
+ local function hill(y,h,col,z) local f=F({Size=UDim2.new(1.3,0,0,h),Position=UDim2.new(-.15,0,y,0),BackgroundColor3=col,BorderSizePixel=0,ZIndex=z}); round(f); return f end
+ local function tree(x,baseY,h,z,col)
+  local trunk=F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(6,h*.5),Position=UDim2.new(x,0,baseY,30),BackgroundColor3=col,BorderSizePixel=0,ZIndex=z}); round(trunk,3)
+  local crown=F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(h*.42,h*.52),Position=UDim2.new(x,0,baseY,30-h*.42),BackgroundColor3=col,BorderSizePixel=0,ZIndex=z}); round(crown)
+ end
+ hill(.76,320,Color3.fromRGB(34,16,12),6)
+ for i=1,7 do tree(rnd(-.02,1.02),.76,rnd(90,150),7,Color3.fromRGB(26,12,9)) end
+ -- B8 bats flying across the sky
+ for i=1,6 do
+  local y=rnd(.12,.5)
+  local body=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(44,26),Position=UDim2.fromOffset(0,0),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=8})
+  local batCore=F({AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(12,9),BackgroundColor3=ink,BorderSizePixel=0,ZIndex=8},body); round(batCore)
+  for _,side in ipairs({-1,1}) do F({AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5+side*.3,.4),Size=UDim2.fromOffset(20,8),BackgroundColor3=ink,BorderSizePixel=0,Rotation=side*-20,ZIndex=8},body) end
+  task.spawn(function()
+   while bg.Parent do
+    body.Position=UDim2.fromScale(-.1,y)
+    TweenS:Create(body,TweenInfo.new(rnd(16,24),Enum.EasingStyle.Linear),{Position=UDim2.fromScale(1.1,y)}):Play()
+    task.wait(rnd(18,30))
+   end
+  end)
+ end
+ -- B9 fog bands
+ for i,y in ipairs({.62,.72,.82}) do
+  local f=F({Size=UDim2.new(1.6,0,0,120),Position=UDim2.new(-.3,0,y,0),BackgroundColor3=Color3.fromRGB(120,60,40),BackgroundTransparency=.84,BorderSizePixel=0,ZIndex=9}); round(f)
+  task.spawn(function()
+   local dir=i%2==0 and 1 or -1
+   while bg.Parent do
+    TweenS:Create(f,TweenInfo.new(14,Enum.EasingStyle.Sine),{Position=UDim2.new(-.3+dir*.15,0,y,0)}):Play()
+    task.wait(14)
+    TweenS:Create(f,TweenInfo.new(14,Enum.EasingStyle.Sine),{Position=UDim2.new(-.3,0,y,0)}):Play()
+    task.wait(14)
+   end
+  end)
+ end
+ -- B10 mid hill with tombstones
+ hill(.86,360,Color3.fromRGB(20,9,7),10)
+ for i=1,10 do
+  local x=rnd(.02,.98)
+  local st=F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(18,28),Position=UDim2.new(x,0,.9,0),BackgroundColor3=Color3.fromRGB(58,52,48),BorderSizePixel=0,ZIndex=11}); round(st,9)
+  make("UIGradient",st,{Color=ColorSequence.new(Color3.fromRGB(80,72,66),Color3.fromRGB(30,26,24)),Rotation=90})
+ end
+ -- B11 pumpkin patch
+ local function pumpkin(x,y,s,z)
+  local halo=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(s*2.4,s*2.4),Position=UDim2.new(x,0,y,0),BackgroundColor3=orange,BackgroundTransparency=.88,BorderSizePixel=0,ZIndex=z}); round(halo)
+  local body=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(s,s*.82),Position=UDim2.new(x,0,y,0),BackgroundColor3=orange,BorderSizePixel=0,ZIndex=z+1}); round(body,s)
+  make("UIGradient",body,{Color=ColorSequence.new(Color3.fromRGB(255,175,70),Color3.fromRGB(190,60,10)),Rotation=90})
+  F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(s*.14,s*.24),Position=UDim2.new(x,0,y,-s*.36),BackgroundColor3=Color3.fromRGB(90,60,20),BorderSizePixel=0,ZIndex=z+1})
+  for _,ex in ipairs({-s*.2,s*.2}) do F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(s*.18,s*.18),Position=UDim2.new(x,ex,y,-s*.08),BackgroundColor3=ink,BorderSizePixel=0,Rotation=45,ZIndex=z+2}) end
+  local mouth=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(s*.5,s*.13),Position=UDim2.new(x,0,y,s*.16),BackgroundColor3=ink,BorderSizePixel=0,ZIndex=z+2}); round(mouth,6)
+ end
+ for _,p in ipairs({{.08,.93,70},{.22,.97,46},{.36,.94,56},{.6,.97,44},{.74,.93,64},{.9,.97,50},{.5,.99,36},{.16,.99,30}}) do pumpkin(p[1],p[2],p[3],12) end
+ -- B12 torches with flickering flames
+ for _,tx in ipairs({.04,.96}) do
+  local glow=F({AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(200,200),Position=UDim2.new(tx,0,.88,0),BackgroundColor3=orange,BackgroundTransparency=.86,BorderSizePixel=0,ZIndex=13}); round(glow)
+  F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(6,60),Position=UDim2.new(tx,0,.97,0),BackgroundColor3=Color3.fromRGB(70,44,24),BorderSizePixel=0,ZIndex=13})
+  local flame=F({AnchorPoint=Vector2.new(.5,1),Size=UDim2.fromOffset(16,26),Position=UDim2.new(tx,0,.9,0),BackgroundColor3=Color3.fromRGB(255,170,50),BorderSizePixel=0,ZIndex=14}); round(flame,10)
+  table.insert(updaters,function(t) glow.BackgroundTransparency=.82+.06*math.sin(t*9)+.03*math.sin(t*17); flame.Size=UDim2.fromOffset(16+2*math.sin(t*11),26+3*math.sin(t*7)) end)
+ end
+ -- B13 falling ash
+ local ash={}
+ for i=1,30 do
+  local p=F({Size=UDim2.fromOffset(3,3),Position=UDim2.fromScale(rnd(0,1),rnd(0,1)),BackgroundColor3=i%3==0 and orange or Color3.fromRGB(150,110,80),BackgroundTransparency=.3,BorderSizePixel=0,ZIndex=15})
+  table.insert(ash,{f=p,x=rnd(0,1),y=rnd(0,1),s=rnd(.03,.08),ph=rnd(0,6)})
+ end
+ table.insert(updaters,function(t,dt)
+  for _,a in ipairs(ash) do
+   a.y+=a.s*dt;a.x+=math.sin(t+a.ph)*.01*dt
+   if a.y>1.02 then a.y=-.02;a.x=rnd(0,1) end
+   a.f.Position=UDim2.fromScale(a.x,a.y)
+   a.f.Rotation+=dt*50
+  end
+ end)
+ -- B14 front hill
+ hill(.94,420,Color3.fromRGB(10,5,4),16)
+ -- B15 vignette (dark edges of the whole screen)
+ local function edge(size,pos,rot)
+  local f=F({Size=size,Position=pos,BackgroundColor3=ink,BorderSizePixel=0,ZIndex=20})
+  make("UIGradient",f,{Color=ColorSequence.new(ink,ink),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.25),NumberSequenceKeypoint.new(1,1)}),Rotation=rot})
+ end
+ edge(UDim2.new(1,0,.18,0),UDim2.new(0,0,0,0),90)
+ edge(UDim2.new(1,0,.22,0),UDim2.new(0,0,.78,0),-90)
+ edge(UDim2.new(.12,0,1,0),UDim2.new(0,0,0,0),0)
+ edge(UDim2.new(.12,0,1,0),UDim2.new(.88,0,0,0),180)
+
+ -- run the motion while the backdrop exists
+ bg.Enabled=main.Visible
+ connect(main:GetPropertyChangedSignal("Visible"),function() bg.Enabled=main.Visible end)
+ local t0=os.clock()
+ connect(RS.Heartbeat,function(dt)
+  local t=os.clock()-t0
+  for _,u in ipairs(updaters) do u(t,dt) end
+ end)
+ connect(gui.Destroying,function() if bg.Parent then bg:Destroy() end end)
+end
+
+-- ===== PART 8: menu ornaments (straight corners, category pumpkins, moon mark) =====
+do
+ local gold1=Color3.fromRGB(255,220,140)
+ -- straight L-shaped gold corners at each corner of the gallery frame (no rotation)
+ for _,c in ipairs({{0,0},{1,0},{0,1},{1,1}}) do
+  local sx,sy=c[1],c[2]
+  local ox=sx==0 and -4 or 4;local oy=sy==0 and -4 or 4
+  local hx=sx==0 and ox or ox-16;local hy=sy==1 and oy-2 or oy
+  local vx=sx==1 and ox-2 or ox;local vy=sy==0 and oy or oy-16
+  make("Frame",main,{Size=UDim2.fromOffset(16,2),Position=UDim2.new(sx,hx,sy,hy),BackgroundColor3=gold1,BorderSizePixel=0,ZIndex=13})
+  make("Frame",main,{Size=UDim2.fromOffset(2,16),Position=UDim2.new(sx,vx,sy,vy),BackgroundColor3=gold1,BorderSizePixel=0,ZIndex=13})
+ end
+ -- pumpkin icon on each category button (layer inside the button)
+ for _,b in ipairs(side:GetChildren()) do
+  if b:IsA("TextButton") then
+   make("UIPadding",b,{PaddingLeft=UDim.new(0,26)})
+   local ic=make("Frame",b,{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,8,.5,0),Size=UDim2.fromOffset(12,11),BackgroundColor3=Color3.fromRGB(255,140,40),BorderSizePixel=0,ZIndex=3})
+   make("UICorner",ic,{CornerRadius=UDim.new(0,6)})
+   for _,ex in ipairs({3,8}) do make("Frame",ic,{Size=UDim2.fromOffset(2,2),Position=UDim2.fromOffset(ex,4),BackgroundColor3=Color3.fromRGB(20,8,24),BorderSizePixel=0,ZIndex=4}) end
+  end
+ end
+ -- moon mark beside the title
+ local moonMark=make("Frame",top,{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,96,.5,0),Size=UDim2.fromOffset(16,16),BackgroundColor3=gold1,BorderSizePixel=0,ZIndex=3})
+ make("UICorner",moonMark,{CornerRadius=UDim.new(0,999)})
+ local moonHalo=make("Frame",top,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,104,.5,0),Size=UDim2.fromOffset(28,28),BackgroundColor3=gold1,BackgroundTransparency=.85,BorderSizePixel=0,ZIndex=2})
+ make("UICorner",moonHalo,{CornerRadius=UDim.new(0,999)})
 end
 
 status.Text="Default: 325 ms | Combos on Combos tab"
