@@ -2509,124 +2509,134 @@ local function playImageImpact(token)
 end
 cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end;if impactSeq then impactSeq.holder.Visible=false;impactSeq.holder.Position=UDim2.fromScale(.5,.5);for _,label in ipairs(impactSeq.labels) do label.Visible=false end end end
 local FIN_FPS=24
-local FIN_FRAMES=72             -- 3 seconds at 24 fps
-local FIN_RAYS,FIN_SLASHES,FIN_SHARDS,FIN_RINGS,FIN_SPARKS=48,8,24,6,30
+local FIN_FRAMES=72               -- 3 seconds at 24 fps
+local FIN_CRACKS=14               -- black crack veins radiating from the impact point
+local FIN_DEBRIS=30               -- cracked ground chunks
+local FIN_GLOW=10                 -- red glow discs stacked at the impact point
 local function finSmooth(a,b,x) local t=math.clamp((x-a)/(b-a),0,1);return t*t*(3-2*t) end
 local function playImpact(preview)
  if not running or not impactEnabled then return end
  if not preview and not reducedFlash and os.clock()-lastImpactAt<IMPACT_COOLDOWN then return end
  lastImpactAt=os.clock();cancelImpact();local token=impactToken
  local strobe=not reducedFlash
- local layer=make("Frame",gui,{Name="BlackflashImpactFrames",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
+ local layer=make("Frame",gui,{Name="BlackFlashCracks",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
  local rng=Random.new(math.floor(os.clock()*1000))
 
- -- palette: red shades (1 = brightest) and black shades (1 = darkest) only
- local reds,blacks={},{}
- for i=1,40 do reds[i]=Color3.fromHSV(rng:NextNumber(0,.012),rng:NextNumber(.8,1),1-.75*(i-1)/39) end
- for i=1,20 do blacks[i]=Color3.fromHSV(0,rng:NextNumber(0,.35),.015+.12*(i-1)/19) end
+ -- red and black shades only
+ local REDS={Color3.fromRGB(255,40,60),Color3.fromRGB(230,20,40),Color3.fromRGB(180,10,30),Color3.fromRGB(120,0,20),Color3.fromRGB(70,0,12)}
+ local BLACKS={Color3.fromRGB(0,0,0),Color3.fromRGB(12,0,3),Color3.fromRGB(28,2,6)}
 
- local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundColor3=blacks[1],BorderSizePixel=0,ZIndex=91})
+ -- layer 1: the background wall (black base, dark red when the impact lands)
+ local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundColor3=BLACKS[1],BorderSizePixel=0,ZIndex=91})
 
- -- 48 radial speed lines
- local rays={}
- for i=1,FIN_RAYS do
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(0,.5),BorderSizePixel=0,BackgroundColor3=reds[1],Visible=false,ZIndex=92})
-  table.insert(rays,{f=f,ang=(i-1)/FIN_RAYS*360+rng:NextNumber(-3,3),len=rng:NextNumber(.55,1.1),th=rng:NextNumber(2,9),c=rng:NextInteger(1,40),dark=(i%3==0)})
+ -- layer 2: radial red glow, built from stacked discs (brightest in the middle)
+ local glow={}
+ for i=1,FIN_GLOW do
+  local g=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),BackgroundColor3=REDS[math.min(5,1+math.floor((i-1)/2))],BackgroundTransparency=1,BorderSizePixel=0,ZIndex=92})
+  corner(g,999)
+  table.insert(glow,{f=g,k=i/FIN_GLOW})
  end
 
- -- 8 diagonal slash streaks
- local slashes={}
- for i=1,FIN_SLASHES do
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=reds[1],Visible=false,ZIndex=94})
-  table.insert(slashes,{f=f,ang=rng:NextNumber(-55,55)+(i%2==0 and 90 or 0),off=Vector2.new(rng:NextNumber(-320,320),rng:NextNumber(-220,220)),len=rng:NextNumber(.7,1.4),th=rng:NextNumber(10,24),c=rng:NextInteger(1,8)})
+ -- layer 3: cracked ground chunks
+ local debris={}
+ for i=1,FIN_DEBRIS do
+  local d=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=BLACKS[2],BackgroundTransparency=1,BorderSizePixel=0,Rotation=rng:NextNumber(0,180),ZIndex=93})
+  local st=make("UIStroke",d,{Color=REDS[3],Thickness=1,Transparency=1})
+  table.insert(debris,{f=d,st=st,a=rng:NextNumber(0,math.pi*2),r=rng:NextNumber(.05,.42),w=rng:NextNumber(.02,.06),h=rng:NextNumber(.01,.035)})
  end
 
- -- 24 shards flying out from the centre
- local shards={}
- for i=1,FIN_SHARDS do
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=reds[1],Visible=false,ZIndex=93});corner(f,2)
-  table.insert(shards,{f=f,a=rng:NextNumber(0,math.pi*2),dist=rng:NextNumber(.15,.55),sz=rng:NextNumber(.03,.11),rot=rng:NextNumber(0,360),spin=rng:NextNumber(-300,300),c=rng:NextInteger(1,40),dark=rng:NextNumber()<.4})
+ -- layer 4: the black crack veins. Each vein is a chain of tapered segments that branches,
+ -- so the cracks read as one bolt of black lightning spreading out from the impact point.
+ local segs={}
+ local function growCrack(x,y,a,n,L,w,t0,depth)
+  for k=1,n do
+   a=a+rng:NextNumber(-.25,.25)
+   local l=L*rng:NextNumber(.8,1.2)
+   local nx,ny=x+math.cos(a)*l,y+math.sin(a)*l
+   table.insert(segs,{x1=x,y1=y,x2=nx,y2=ny,w=w,t0=t0+k*.035})
+   if depth<1 and rng:NextNumber()<.45 then
+    growCrack(nx,ny,a+(rng:NextNumber()<.5 and -1 or 1)*rng:NextNumber(.45,.85),rng:NextInteger(2,3),l*.7,w*.5,t0+k*.035+.03,depth+1)
+   end
+   x,y=nx,ny
+   w=math.max(.0015,w*.88)
+   L=L*1.12
+  end
+ end
+ for i=1,FIN_CRACKS do
+  growCrack(0,0,(i-1)/FIN_CRACKS*math.pi*2+rng:NextNumber(-.15,.15),8,.05,.022,rng:NextNumber(0,.08),0)
+ end
+ for _,s in ipairs(segs) do
+  local fr=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundColor3=BLACKS[1],BorderSizePixel=0,Visible=false,ZIndex=94})
+  make("UIStroke",fr,{Color=REDS[2],Thickness=2})
+  s.fr=fr;s.f0=4+math.floor(s.t0*FIN_FPS);s.shown=false
  end
 
- -- 6 shockwave rings
+ -- layer 5: two shockwave rings
  local rings={}
- for i=1,FIN_RINGS do
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=95});corner(f,999)
-  local st=make("UIStroke",f,{Color=reds[1],Thickness=8})
-  table.insert(rings,{f=f,s=st,t0=6+(i-1)*3,c=rng:NextInteger(1,40)})
+ for i=1,2 do
+  local r=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),BackgroundTransparency=1,BorderSizePixel=0,Visible=false,ZIndex=95})
+  corner(r,999)
+  local st=make("UIStroke",r,{Color=REDS[1],Thickness=10})
+  table.insert(rings,{f=r,s=st,t0=3+(i-1)*4})
  end
 
- -- 30 sparks
- local sparks={}
- for i=1,FIN_SPARKS do
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=reds[1],Visible=false,ZIndex=96})
-  table.insert(sparks,{f=f,a=rng:NextNumber(0,math.pi*2),sp=rng:NextNumber(.3,.9),f0=18+rng:NextInteger(0,8),sz=rng:NextNumber(.006,.018),c=rng:NextInteger(1,40)})
- end
+ -- layer 6: the title, red with a heavy black outline
+ local word=make("TextLabel",layer,{AnchorPoint=Vector2.new(.5,0),Position=UDim2.fromScale(.5,.04),Size=UDim2.fromScale(.9,.2),BackgroundTransparency=1,Text="BLACK FLASH!!",TextScaled=true,Font=Enum.Font.GothamBlack,TextColor3=REDS[1],TextTransparency=1,ZIndex=97})
+ make("UIStroke",word,{Color=BLACKS[1],Thickness=6})
+ make("UITextSizeConstraint",word,{MinTextSize=20,MaxTextSize=140})
 
- -- title
- local word=make("TextLabel",layer,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.44),Size=UDim2.fromOffset(900,120),BackgroundTransparency=1,Text="BLACK FLASH",TextScaled=true,Font=Enum.Font.GothamBlack,TextColor3=reds[1],TextTransparency=1,ZIndex=97})
- make("UIStroke",word,{Color=blacks[1],Thickness=4})
- make("UITextSizeConstraint",word,{MinTextSize=20,MaxTextSize=120})
-
+ local geomReady=false
  local function draw(f)
-  local A=layer.AbsoluteSize;local cx,cy=A.X*.5,A.Y*.5
-  local unit=math.min(A.X,A.Y)/720;local mn=math.min(A.X,A.Y);local D=math.sqrt(A.X*A.X+A.Y*A.Y)
-  local out=finSmooth(FIN_FRAMES-12,FIN_FRAMES,f)
+  local A=layer.AbsoluteSize
+  if A.X<=0 or A.Y<=0 then return end
+  local cx,cy=A.X*.5,A.Y*.5
+  local mn=math.min(A.X,A.Y);local unit=mn/720
+  if not geomReady then
+   geomReady=true
+   for _,s in ipairs(segs) do
+    local dx,dy=s.x2-s.x1,s.y2-s.y1
+    s.fr.Size=UDim2.fromOffset(math.sqrt(dx*dx+dy*dy)*mn,math.max(1,s.w*mn))
+    s.fr.Position=UDim2.fromOffset(cx+(s.x1+s.x2)*.5*mn,cy+(s.y1+s.y2)*.5*mn)
+    s.fr.Rotation=math.deg(math.atan2(dy,dx))
+   end
+   for _,d in ipairs(debris) do
+    d.f.Size=UDim2.fromOffset(d.w*mn,d.h*mn)
+    d.f.Position=UDim2.fromOffset(cx+math.cos(d.a)*d.r*mn,cy+math.sin(d.a)*d.r*mn)
+   end
+  end
 
-  -- background: hit-stop black, red flash, strobing impact frames, then black
-  local bgColor
-  if f<=2 then bgColor=blacks[1]
-  elseif f==3 then bgColor=reds[1]
-  elseif f<=11 then if strobe then bgColor=(f%2==0) and blacks[3] or reds[12] else bgColor=blacks[2] end
-  elseif f<=19 then if strobe and f==15 then bgColor=reds[6] else bgColor=blacks[1] end
-  elseif f<=31 then if strobe then bgColor=(f%2==0) and blacks[1] or reds[20] else bgColor=blacks[2] end
-  elseif f<=50 then bgColor=blacks[2]
-  else bgColor=blacks[1] end
-  bg.BackgroundColor3=bgColor
+  local out=finSmooth(FIN_FRAMES-12,FIN_FRAMES,f)
+  local pulse=.5+.5*math.sin(f*.55)
+
+  -- background: black, a red flash on impact, then a pulsing dark red wall, then black
+  if f<=2 then bg.BackgroundColor3=BLACKS[1]
+  elseif f==3 then bg.BackgroundColor3=strobe and REDS[1] or REDS[3]
+  elseif f<=60 then bg.BackgroundColor3=(f%12<6) and REDS[3] or REDS[2]
+  else bg.BackgroundColor3=BLACKS[1] end
   bg.BackgroundTransparency=out
 
-  -- speed lines
-  for _,ry in ipairs(rays) do
-   local on=f>=4 and f<=11
-   ry.f.Visible=on
-   if on then
-    local p=finSmooth(4,8,f)
-    ry.f.Size=UDim2.fromOffset(ry.len*D*p,ry.th*unit)
-    ry.f.Position=UDim2.fromOffset(cx,cy)
-    ry.f.Rotation=ry.ang
-    ry.f.BackgroundColor3=ry.dark and blacks[ry.c%20+1] or reds[ry.c]
-    ry.f.BackgroundTransparency=out
-   end
+  -- glow discs swell out from the impact point and breathe
+  local gp=finSmooth(3,10,f)
+  for _,g in ipairs(glow) do
+   local r=(.05+.5*g.k)*mn*(.6+.4*gp)*(1+.05*pulse)
+   g.f.Size=UDim2.fromOffset(r*2,r*2)
+   local alpha=math.clamp((.25+.6*gp)*(1-g.k*.7)*(1-out),0,1)
+   g.f.BackgroundTransparency=1-alpha
   end
 
-  -- slash streaks
-  for _,sl in ipairs(slashes) do
-   local on=f>=12 and f<=19
-   sl.f.Visible=on
-   if on then
-    local p=finSmooth(12,14,f)
-    sl.f.Size=UDim2.fromOffset(sl.len*D*p,sl.th*unit)
-    sl.f.Position=UDim2.fromOffset(cx+sl.off.X*unit,cy+sl.off.Y*unit)
-    sl.f.Rotation=sl.ang
-    sl.f.BackgroundColor3=reds[sl.c]
-    sl.f.BackgroundTransparency=out
-   end
+  -- black cracks grow outward segment by segment
+  for _,s in ipairs(segs) do
+   local show=f>=s.f0 and f<=FIN_FRAMES-6
+   if show~=s.shown then s.fr.Visible=show;s.shown=show end
+   if show then s.fr.BackgroundTransparency=out end
   end
 
-  -- shards
-  for _,sh in ipairs(shards) do
-   local on=f>=20 and f<=50
-   sh.f.Visible=on
-   if on then
-    local p=finSmooth(20,30,f)
-    local d=sh.dist*mn*p
-    local s=sh.sz*mn*(1-.5*finSmooth(40,50,f))
-    sh.f.Size=UDim2.fromOffset(s,s*.45)
-    sh.f.Position=UDim2.fromOffset(cx+math.cos(sh.a)*d,cy+math.sin(sh.a)*d)
-    sh.f.Rotation=sh.rot+sh.spin*(f-20)/FIN_FPS
-    sh.f.BackgroundColor3=sh.dark and blacks[sh.c%20+1] or reds[sh.c]
-    sh.f.BackgroundTransparency=out
-   end
+  -- cracked ground chunks appear after the cracks have started
+  for _,d in ipairs(debris) do
+   local a=f>=10 and finSmooth(10,16,f)*(1-out) or 0
+   d.f.Visible=a>0
+   d.f.BackgroundTransparency=1-a*.85
+   d.st.Transparency=1-a
   end
 
   -- shockwave rings
@@ -2635,43 +2645,25 @@ local function playImpact(preview)
    rg.f.Visible=on
    if on then
     local p=(f-rg.t0)/12
-    local rad=(.05+.55*p)*mn
+    local rad=(.04+.6*p)*mn
     rg.f.Size=UDim2.fromOffset(rad*2,rad*2)
-    rg.f.Position=UDim2.fromOffset(cx,cy)
     rg.s.Thickness=math.max(1,(14*(1-p)+2)*unit)
-    rg.s.Color=reds[rg.c]
     rg.s.Transparency=math.clamp(p*.8+out,0,1)
    end
   end
 
-  -- sparks
-  for _,sp in ipairs(sparks) do
-   local on=f>=sp.f0 and f<=sp.f0+24
-   sp.f.Visible=on
-   if on then
-    local p=(f-sp.f0)/24
-    local d=sp.sp*mn*p
-    local s=sp.sz*mn*(1-p)
-    sp.f.Size=UDim2.fromOffset(s,s)
-    sp.f.Position=UDim2.fromOffset(cx+math.cos(sp.a)*d,cy+math.sin(sp.a)*d+60*unit*p*p)
-    sp.f.BackgroundColor3=reds[sp.c]
-    sp.f.BackgroundTransparency=out
-   end
-  end
-
   -- title
-  if f>=20 and f<=66 then
-   local pop=1+.5*(1-finSmooth(20,26,f))
-   word.Size=UDim2.fromOffset(900*pop,120*pop)
-   word.TextColor3=reds[(f%10)+1]
+  if f>=8 and f<=66 then
+   local pop=1+.12*(1-finSmooth(8,12,f))
+   word.Size=UDim2.fromScale(.9*pop,.2*pop)
    word.TextTransparency=finSmooth(FIN_FRAMES-12,FIN_FRAMES,f)
   else
    word.TextTransparency=1
   end
 
-  -- impact shake (decays over the first second)
-  if strobe and f>=3 and f<=24 then
-   local amp=(1-(f-3)/21)*14*unit
+  -- impact shake over the first half second
+  if strobe and f>=3 and f<=18 then
+   local amp=(1-(f-3)/15)*12*unit
    layer.Position=UDim2.fromOffset(rng:NextNumber(-amp,amp),rng:NextNumber(-amp,amp))
   else
    layer.Position=UDim2.fromOffset(0,0)
@@ -2806,7 +2798,7 @@ connect(UIS.InputBegan,function(i,processed)
 end)
 local fxCard=card(pages.Visuals,"Popups, voices and kill finisher","")
 toggle(fxCard,"Blackflash popups",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
-toggle(fxCard,"Kill finisher (3 s red and black impact frames)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
+toggle(fxCard,"Kill finisher (black crack impact, 3 s)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
 toggle(fxCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
 toggle(fxCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";cancelImpact();updateKillStatus() end)
 local bPop=make("TextButton",fxCard,{Text="PREVIEW POPUP - NOT A HIT",Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=40});corner(bPop,6)
