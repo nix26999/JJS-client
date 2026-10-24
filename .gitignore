@@ -15,7 +15,8 @@ if oldBg then oldBg:Destroy() end
 local running=true
 -- when the hub window is open (Visible), combat macros pause; when closed they resume
 local scriptsPaused=false
-local function scriptsActive() return running and not scriptsPaused end
+local hubUnlocked=false -- set true after key gate (or saved key)
+local function scriptsActive() return running and not scriptsPaused and hubUnlocked end
 local todoEnabled,todoBusy=false,false
 local perfectClapEnabled=false
 local perfectClapDelay=350
@@ -77,7 +78,22 @@ do
 end
 
 local gui=make("ScreenGui",PG,{Name="JJS HUB",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
-local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),Position=UDim2.new(.5,-380,.5,-270),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true})
+-- Key gate: join Discord to get the key, then unlock the hub
+local SCRIPT_KEY="J1nxhub01932456" -- post this key in your Discord
+local KEY_FILE="JJSHub_key.txt"
+local function keyAlreadySaved()
+ if typeof(readfile)~="function" or typeof(isfile)~="function" then return false end
+ local ok,data=pcall(function()
+  if not isfile(KEY_FILE) then return false end
+  return (readfile(KEY_FILE) or ""):gsub("%s+","")
+ end)
+ return ok and data==SCRIPT_KEY
+end
+local function saveKeyUnlock()
+ if typeof(writefile)=="function" then pcall(writefile,KEY_FILE,SCRIPT_KEY) end
+end
+if keyAlreadySaved() then hubUnlocked=true end
+local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),Position=UDim2.new(.5,-380,.5,-270),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true,Visible=hubUnlocked})
 corner(main,12); stroke(main)
 local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
@@ -130,6 +146,79 @@ local function openDiscordInvite()
  showLinkCopiedToast()
 end
 connect(discordBtn.Activated,openDiscordInvite)
+-- ===== KEY PAGE (shown until valid key from Discord) =====
+local keyPage=nil
+if not hubUnlocked then
+ keyPage=make("Frame",gui,{
+  Name="KeyPage",
+  Size=UDim2.fromOffset(420,320),
+  Position=UDim2.new(.5,-210,.5,-160),
+  BackgroundColor3=T.bg,
+  BorderSizePixel=0,
+  Active=true,
+  ZIndex=50,
+ })
+ corner(keyPage,12); stroke(keyPage)
+ local keyClose=make("TextButton",keyPage,{
+  Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,0,12),
+  BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16,ZIndex=52,
+ }); corner(keyClose,6)
+ connect(keyClose.Activated,function()
+  if keyPage then keyPage:Destroy(); keyPage=nil end
+  pcall(function() if gui.Parent then gui:Destroy() end end)
+ end)
+ make("TextLabel",keyPage,{
+  Size=UDim2.new(1,-56,0,28),Position=UDim2.fromOffset(16,18),
+  BackgroundTransparency=1,Text="JJS HUB — Key Required",
+  TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,
+  TextXAlignment=Enum.TextXAlignment.Left,ZIndex=51,
+ })
+ make("TextLabel",keyPage,{
+  Size=UDim2.new(1,-32,0,48),Position=UDim2.fromOffset(16,52),
+  BackgroundTransparency=1,
+  Text="Join our Discord to get the free key, then paste it below to unlock the script.",
+  TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=13,TextWrapped=true,
+  TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,ZIndex=51,
+ })
+ local keyDiscord=make("TextButton",keyPage,{
+  Size=UDim2.new(1,-32,0,36),Position=UDim2.fromOffset(16,110),
+  BackgroundColor3=Color3.fromRGB(88,101,242),Text="Join Discord",
+  TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=14,ZIndex=51,
+ }); corner(keyDiscord,8)
+ connect(keyDiscord.Activated,openDiscordInvite)
+ local keyBox=make("TextBox",keyPage,{
+  Size=UDim2.new(1,-32,0,36),Position=UDim2.fromOffset(16,158),
+  BackgroundColor3=T.p2,Text="",PlaceholderText="Enter key from Discord...",
+  TextColor3=T.txt,PlaceholderColor3=T.mut,Font=Enum.Font.Gotham,TextSize=14,
+  ClearTextOnFocus=false,ZIndex=51,
+ }); corner(keyBox,8)
+ local keyStatus=make("TextLabel",keyPage,{
+  Size=UDim2.new(1,-32,0,20),Position=UDim2.fromOffset(16,200),
+  BackgroundTransparency=1,Text="",TextColor3=T.warn,Font=Enum.Font.Gotham,TextSize=12,
+  TextXAlignment=Enum.TextXAlignment.Left,ZIndex=51,
+ })
+ local keySubmit=make("TextButton",keyPage,{
+  Size=UDim2.new(1,-32,0,40),Position=UDim2.fromOffset(16,232),
+  BackgroundColor3=T.acc,Text="Unlock Script",
+  TextColor3=Color3.fromRGB(20,12,8),Font=Enum.Font.GothamBold,TextSize=15,ZIndex=51,
+ }); corner(keySubmit,8)
+ local function tryUnlock()
+  local entered=(keyBox.Text or ""):gsub("^%s+",""):gsub("%s+$","")
+  if entered=="" then keyStatus.Text="Enter a key first."; keyStatus.TextColor3=T.warn; return end
+  if entered:lower()==SCRIPT_KEY:lower() then
+   hubUnlocked=true
+   saveKeyUnlock()
+   keyStatus.Text="Unlocked!"; keyStatus.TextColor3=T.ok
+   main.Visible=true
+   if keyPage then keyPage:Destroy(); keyPage=nil end
+  else
+   keyStatus.Text="Invalid key — join Discord to get the correct one."
+   keyStatus.TextColor3=T.warn
+  end
+ end
+ connect(keySubmit.Activated,tryUnlock)
+ connect(keyBox.FocusLost,function(enter) if enter then tryUnlock() end end)
+end
 local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
 make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
 make("UIPadding",side,{PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)})
@@ -1816,9 +1905,9 @@ connect(main:GetPropertyChangedSignal("Visible"),function()
 end)
 local tjClicks,tjLast=0,0
 connect(UIS.InputBegan,function(i)
- if gui:GetAttribute("FlingSequenceActive") then if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end;return end
+ if gui:GetAttribute("FlingSequenceActive") then if hubUnlocked and i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end;return end
  if UIS:GetFocusedTextBox() then return end
- if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end
+ if i.KeyCode==Enum.KeyCode.RightShift and hubUnlocked then main.Visible=not main.Visible end
  if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled and scriptsActive() then
   task.spawn(runPerfectClap)
  end
