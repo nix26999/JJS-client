@@ -2508,33 +2508,41 @@ local function playImageImpact(token)
  return true
 end
 cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end;if impactSeq then impactSeq.holder.Visible=false;impactSeq.holder.Position=UDim2.fromScale(.5,.5);for _,label in ipairs(impactSeq.labels) do label.Visible=false end end end
-local FIN_FRAMES,FIN_FPS=124,24
-local FIN_LAYERS,FIN_COLORS=30,100
+local FIN_FPS=24
+local FIN_FRAMES=240            -- 10 seconds at 24 fps
+local FIN_LAYERS=120            -- layers drawn every frame
+local FIN_COLORS=360            -- one colour per degree of the hue wheel
+local GRID_COLS,GRID_ROWS=12,10 -- 12 x 10 = 120 layers, laid out to cover the whole screen
+local DURATION=FIN_FRAMES/FIN_FPS
 local function finSmooth(a,b,x) local t=math.clamp((x-a)/(b-a),0,1);return t*t*(3-2*t) end
 local function playImpact(preview)
  if not running or not impactEnabled then return end
  if not preview and not reducedFlash and os.clock()-lastImpactAt<IMPACT_COOLDOWN then return end
  lastImpactAt=os.clock();cancelImpact();local token=impactToken
- local K=reducedFlash and .45 or 1
- local layer=make("Frame",gui,{Name="BlackflashKillFinisher124",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
+ local K=reducedFlash and .5 or 1
+ local layer=make("Frame",gui,{Name="BlackflashKillFinisher240",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
  local rng=Random.new(math.floor(os.clock()*1000))
  local seed=rng:NextInteger(1,1000000)
 
- -- 100 colours spread evenly around the RGB / hue wheel, then shuffled for this play
+ -- 360 colours, one per degree of the hue wheel, shuffled for this play
  local palette={}
  for i=0,FIN_COLORS-1 do palette[i+1]=Color3.fromHSV(i/FIN_COLORS,1,1) end
  for i=#palette,2,-1 do local j=rng:NextInteger(1,i);palette[i],palette[j]=palette[j],palette[i] end
 
  local wash=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
 
- -- 30 layers, each a different shape kind; every frame re-picks their size, place and colour
+ -- 120 layers on a 12 x 10 grid; each one is a different shape kind
  local stack={}
  for i=1,FIN_LAYERS do
-  local kind=i%3
-  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundTransparency=1,ZIndex=92+i%3})
-  if kind==0 then corner(f,999);local st=make("UIStroke",f,{Color=Color3.new(1,1,1),Thickness=4});table.insert(stack,{f=f,s=st,kind=kind,i=i})
-  elseif kind==1 then corner(f,999);table.insert(stack,{f=f,kind=kind,i=i})
-  else corner(f,10);table.insert(stack,{f=f,kind=kind,i=i}) end
+  local col=(i-1)%GRID_COLS;local row=math.floor((i-1)/GRID_COLS)
+  local kind=i%4
+  local f=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundTransparency=1,ZIndex=92+(i%3)})
+  local L={f=f,kind=kind,i=i,cx=(col+.5)/GRID_COLS,cy=(row+.5)/GRID_ROWS}
+  if kind==0 then corner(f,999);L.s=make("UIStroke",f,{Color=Color3.new(1,1,1),Thickness=4})
+  elseif kind==1 then corner(f,999)
+  elseif kind==2 then corner(f,14)
+  else corner(f,4) end
+  table.insert(stack,L)
  end
 
  local core={}
@@ -2543,10 +2551,10 @@ local function playImpact(preview)
  for i=1,3 do local c=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=coreColors[i],BackgroundTransparency=1,ZIndex=89});corner(c,999);core[i]=c end
 
  local parts={}
- for i=1,60 do
+ for i=1,80 do
   local p=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,ZIndex=95});corner(p,999)
-  local ang=rng:NextNumber(0,math.pi*2);local sp=rng:NextNumber(300,1100)
-  table.insert(parts,{f=p,dx=math.cos(ang)*sp,dy=math.sin(ang)*sp,sz=rng:NextNumber(4,12),hue=i/60,t0=.08+rng:NextNumber(0,.12)})
+  local ang=rng:NextNumber(0,math.pi*2);local sp=rng:NextNumber(300,1300)
+  table.insert(parts,{f=p,dx=math.cos(ang)*sp,dy=math.sin(ang)*sp,sz=rng:NextNumber(4,12),hue=i/80,t0=.08+rng:NextNumber(0,.12)})
  end
 
  local word=make("TextLabel",layer,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.42),Size=UDim2.fromOffset(900,120),BackgroundTransparency=1,Text="BLACK FLASH",TextScaled=true,Font=Enum.Font.GothamBlack,TextColor3=Color3.new(1,1,1),TextTransparency=1,ZIndex=96})
@@ -2555,37 +2563,41 @@ local function playImpact(preview)
 
  local function draw(f)
   local t=(f-1)/FIN_FPS
-  local A=layer.AbsoluteSize;local cx,cy=A.X*.5,A.Y*.5;local unit=math.min(A.X,A.Y)/720
-  local fade=1-finSmooth(4.3,FIN_FRAMES/FIN_FPS,t)
+  local A=layer.AbsoluteSize;local unit=math.min(A.X,A.Y)/720
+  local cellW,cellH=A.X/GRID_COLS,A.Y/GRID_ROWS
+  local fade=1-finSmooth(DURATION-1.2,DURATION,t)
   local grow=finSmooth(0,.4,t)
 
   -- screen wash: white flash, then a hue-drifting tint
   local tint=Color3.fromHSV((.97+t*.55)%1,.8,1)
   wash.BackgroundColor3=Color3.new(1,1,1):Lerp(tint,finSmooth(.03,.3,t))
   local flash=K*(1-finSmooth(.05,.35,t))
-  wash.BackgroundTransparency=1-math.clamp(math.max(flash,.14*fade*K),0,1)
+  wash.BackgroundTransparency=1-math.clamp(math.max(flash,.12*fade*K),0,1)
 
-  -- the 30 layers for this frame
+  -- all 120 layers, re-picked every frame; each covers its grid cell and overlaps its neighbours
+  local r=Random.new(seed+f*131)
   for _,L in ipairs(stack) do
-   local r=Random.new(seed+f*97+L.i*13)
-   local size=r:NextNumber(40,420)*unit*(.6+.4*math.sin(t*4+L.i))
-   local px=cx+r:NextNumber(-520,520)*unit*grow
-   local py=cy+r:NextNumber(-300,300)*unit*grow
+   local wob=math.sin(t*(2+L.i%5)+L.i)
+   local px=L.cx+r:NextNumber(-.05,.05)+.02*wob*grow
+   local py=L.cy+r:NextNumber(-.05,.05)+.02*math.cos(t*(1.5+L.i%4)+L.i)*grow
+   local size=math.max(cellW,cellH)*r:NextNumber(1.3,2.1)*(.85+.15*wob)
+   L.f.Size=UDim2.fromOffset(size,size)
+   L.f.Position=UDim2.fromScale(px,py)
+   L.f.Rotation=r:NextNumber(0,360)
    local col=palette[r:NextInteger(1,FIN_COLORS)]
-   local a=math.clamp(r:NextNumber(.2,.75)*fade,0,1)
-   L.f.Size=UDim2.fromOffset(size,size);L.f.Position=UDim2.fromOffset(px,py);L.f.Rotation=r:NextNumber(0,360)
+   local a=math.clamp(r:NextNumber(.25,.8)*fade*K,0,1)
    if L.kind==0 then
     L.f.BackgroundTransparency=1
-    L.s.Color=col;L.s.Thickness=math.max(1,(3+r:NextNumber(0,10))*unit);L.s.Transparency=1-a
+    L.s.Color=col;L.s.Thickness=math.max(1,(2+r:NextNumber(0,8))*unit);L.s.Transparency=1-a
    else
-    L.f.BackgroundColor3=col;L.f.BackgroundTransparency=1-a*K
+    L.f.BackgroundColor3=col;L.f.BackgroundTransparency=1-a
    end
   end
 
-  -- glowing core
+  -- glowing core in the middle
   for i,c in ipairs(core) do
    local rad=(90+320*grow)*unit*coreFactors[i]
-   c.Size=UDim2.fromOffset(rad*2,rad*2);c.Position=UDim2.fromOffset(cx,cy)
+   c.Size=UDim2.fromOffset(rad*2,rad*2);c.Position=UDim2.fromScale(.5,.5)
    c.BackgroundTransparency=1-math.clamp((1-finSmooth(.9,2.0,t))*fade*(i==1 and .9 or .55),0,1)
   end
 
@@ -2594,8 +2606,8 @@ local function playImpact(preview)
    local dt=t-p.t0
    if dt<0 then p.f.BackgroundTransparency=1 else
     local k=1-math.exp(-dt*2.8)
-    local x=cx+p.dx*unit*k*.5
-    local y=cy+p.dy*unit*k*.5+130*unit*dt*dt
+    local x=A.X*.5+p.dx*unit*k*.5
+    local y=A.Y*.5+p.dy*unit*k*.5+130*unit*dt*dt
     local sz=p.sz*unit*(1-finSmooth(1,1.7,dt))
     p.f.Size=UDim2.fromOffset(sz,sz);p.f.Position=UDim2.fromOffset(x,y)
     p.f.BackgroundColor3=palette[math.clamp(math.floor(((p.hue+t*.5)%1)*FIN_COLORS)+1,1,FIN_COLORS)]
@@ -2603,19 +2615,19 @@ local function playImpact(preview)
    end
   end
 
-  -- title word
+  -- title word: pops in, cycles colour, fades out at the end
   local wt=t-.22
   if wt<0 then word.TextTransparency=1 else
    local pop=1+.6*(1-finSmooth(0,.22,wt))
    word.Size=UDim2.fromOffset(900*pop,120*pop)
-   word.TextTransparency=finSmooth(4.0,4.4,t)
+   word.TextTransparency=finSmooth(DURATION-.8,DURATION-.3,t)
    word.TextColor3=Color3.new(1,1,1):Lerp(Color3.fromHSV((t*.6)%1,.7,1),.5)
   end
 
   -- impact shake
   if not reducedFlash and t<.35 then
    local amp=(1-t/.35)*10*unit
-   layer.Position=UDim2.fromOffset(rng:NextNumber(-amp,amp),rng:NextNumber(-amp,amp))
+   layer.Position=UDim2.fromOffset(r:NextNumber(-amp,amp),r:NextNumber(-amp,amp))
   else
    layer.Position=UDim2.fromOffset(0,0)
   end
@@ -2749,7 +2761,7 @@ connect(UIS.InputBegan,function(i,processed)
 end)
 local fxCard=card(pages.Visuals,"Popups, voices and kill finisher","")
 toggle(fxCard,"Blackflash popups",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
-toggle(fxCard,"Kill finisher (124 frames / 24 fps)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
+toggle(fxCard,"Kill finisher (240 frames / 24 fps)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
 toggle(fxCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
 toggle(fxCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";cancelImpact();updateKillStatus() end)
 local bPop=make("TextButton",fxCard,{Text="PREVIEW POPUP - NOT A HIT",Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=40});corner(bPop,6)
