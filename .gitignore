@@ -9,7 +9,13 @@ assert(LP,"Client required")
 local PG=LP:WaitForChild("PlayerGui")
 local old=PG:FindFirstChild("JJS HUB") or PG:FindFirstChild("AutoBlackflash")
 if old then old:Destroy() end
+-- remove leftover backdrop from a previous session
+local oldBg=PG:FindFirstChild("JJSHalloweenBackdrop")
+if oldBg then oldBg:Destroy() end
 local running=true
+-- when the hub window is open (Visible), combat macros pause; when closed they resume
+local scriptsPaused=false
+local function scriptsActive() return running and not scriptsPaused end
 local todoEnabled,todoBusy=false,false
 local perfectClapEnabled=false
 local perfectClapDelay=350
@@ -219,7 +225,7 @@ local function todoKey(key)
  VIM:SendKeyEvent(false,key,false,game)
 end
 local function runTodo()
- if todoBusy or busy or not running or not todoEnabled then return end
+ if todoBusy or busy or not scriptsActive() or not todoEnabled then return end
  todoBusy=true; busy=true
  local ok,err=pcall(function()
   if not todoWait(.8) then return end
@@ -241,19 +247,19 @@ local function send(duration)
  assert(okVIM and VIM,"Input simulation unavailable")
  keyHeld=true; VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
  local untilTime=os.clock()+duration
- while running and enabled and os.clock()<untilTime do task.wait() end
+ while scriptsActive() and enabled and os.clock()<untilTime do task.wait() end
  release()
 end
 local function run()
- if busy or not enabled or not running then return end
+ if busy or not enabled or not scriptsActive() then return end
  busy=true
  local ms,action=delayMs,mode
  local ok,err=pcall(function()
   task.wait(ms/1000)
-  if not running or not enabled then return end
+  if not scriptsActive() or not enabled then return end
   local count=action=="Triple" and 3 or action=="Double" and 2 or 1
   for i=1,count do
-   if not enabled or not running then break end
+   if not enabled or not scriptsActive() then break end
    send(action=="Hold" and ms/1000 or .035)
    if i<count then task.wait(.08) end
   end
@@ -261,7 +267,7 @@ local function run()
  release(); busy=false
  if running then status.Text=ok and "Sequence finished" or tostring(err) end
 end
-local function chainActive() return running and chainEnabled end
+local function chainActive() return scriptsActive() and chainEnabled end
 local function chainWait(seconds)
  local finish=os.clock()+seconds
  while chainActive() and os.clock()<finish do task.wait() end
@@ -375,7 +381,7 @@ local function runPerfectClap()
 end
 
 local function runTripleJump()
- if tripleJumpBusy or busy or not running or not tripleJumpEnabled then return end
+ if tripleJumpBusy or busy or not scriptsActive() or not tripleJumpEnabled then return end
  if not okVIM or not VIM then return end
  tripleJumpBusy=true; busy=true
  local ok,err=pcall(function()
@@ -1190,7 +1196,7 @@ do
   CAS:BindActionAtPriority(action,function(_,state) if typing() then return Enum.ContextActionResult.Pass end;if state==Enum.UserInputState.Begin and os.clock()>=suppressStartUntil then start() end;return Enum.ContextActionResult.Sink end,false,4000,Enum.KeyCode.Three)
  end
  start=function()
-  if active or not(enabledV2 or enabledV3) or not running or os.clock()<suppressStartUntil then return end;runVersion=enabledV3 and 3 or 2
+  if active or not(enabledV2 or enabledV3) or not scriptsActive() or os.clock()<suppressStartUntil then return end;runVersion=enabledV3 and 3 or 2
   if busy or todoBusy or manualSequenceBusy then say("Wait for the other macro to finish");return end
   if not okVIM or not VIM then say("Input simulation unavailable");return end;if not rig() then say("Character unavailable");return end
   disconnectFight();invalidateCaches();active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;strafeKey=Enum.KeyCode.D;flickUntil=0;needPostJumpBackoff=false;frontSequenceArmed=false;frontSequenceModel=nil
@@ -1201,7 +1207,7 @@ do
    local completed,cyclesFinished=0,0;local targetModel=nil;local mixupUsed=false;local jumpPrimed=false;local primeTime=0;local recoveringOver=false;local recoveryJumpActive=false
    local function valid()
     if active and not ensureFightAlive() then error("Chain stopped after target defeat",0) end
-    if not running or not enabledForRun() or not active or generation~=id or not rig() then error("Chain stopped",0) end
+    if not scriptsActive() or not enabledForRun() or not active or generation~=id or not rig() then error("Chain stopped",0) end
 
     if runVersion==2 and v2StartedAt>0 and (os.clock()-v2StartedAt)>=V2_MAX_DURATION then
      stop("V2 cancelled: 8s timeout. Press 3 to start again.")
@@ -1394,7 +1400,7 @@ do
    if generation==id then stop(ok and "Chain stopped" or tostring(err));bindCapture() end
   end)
  end
- blackflashV2Trigger=function() if not(enabledV2 or enabledV3) then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
+ blackflashV2Trigger=function() if not(enabledV2 or enabledV3) or not scriptsActive() then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
  toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v and active and runVersion==2 then stop("V2 off") end;feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture() end)
  toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v) enabledV3=v;if not v and active and runVersion==3 then stop("V3 off") end;feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture() end)
  toggle(box,"Include NPCs (shared V2/V3)",function() return includeNPCsV2 end,function(v)
@@ -1728,26 +1734,51 @@ do
  connect(gui.Destroying,shutdown)
 end
 
+local function destroyBackdrop()
+ local bg=PG:FindFirstChild("JJSHalloweenBackdrop")
+ if bg then bg:Destroy() end
+end
+local function setScriptsPaused(paused)
+ scriptsPaused=paused
+ if paused then
+  -- signal V2/V3 and other loops to halt while the hub is open
+  pcall(function() gui:SetAttribute("ScriptsPaused",true) end)
+  pcall(function() gui:SetAttribute("BlackflashChainV2Active",false) end)
+  pcall(function() gui:SetAttribute("BlackflashChainV3Active",false) end)
+ else
+  pcall(function() gui:SetAttribute("ScriptsPaused",false) end)
+ end
+end
 local function cleanup()
  if fxShutdown then pcall(fxShutdown) end
- if not running then return end
- running=false; enabled=false; todoEnabled=false; perfectClapEnabled=false; tripleJumpEnabled=false; pullEnabled=false; lockOn=false; chainEnabled=false; release()
- RS:UnbindFromRenderStep(bind)
- for _,conn in ipairs(conns) do conn:Disconnect() end
+ if not running then
+  destroyBackdrop()
+  return
+ end
+ running=false; scriptsPaused=false
+ enabled=false; todoEnabled=false; perfectClapEnabled=false; tripleJumpEnabled=false; pullEnabled=false; lockOn=false; chainEnabled=false; release()
+ pcall(function() RS:UnbindFromRenderStep(bind) end)
+ for _,conn in ipairs(conns) do pcall(function() conn:Disconnect() end) end
+ destroyBackdrop() -- always unload Halloween background with the hub
  if gui.Parent then gui:Destroy() end
 end
 connect(gui.Destroying,cleanup)
 connect(unload.Activated,cleanup)
 connect(close.Activated,function() main.Visible=false end)
+-- pause macros while hub is open; resume when closed (RightShift / X)
+scriptsPaused=main.Visible
+connect(main:GetPropertyChangedSignal("Visible"),function()
+ setScriptsPaused(main.Visible)
+end)
 local tjClicks,tjLast=0,0
 connect(UIS.InputBegan,function(i)
  if gui:GetAttribute("FlingSequenceActive") then if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end;return end
  if UIS:GetFocusedTextBox() then return end
  if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end
- if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled then
+ if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled and scriptsActive() then
   task.spawn(runPerfectClap)
  end
- if i.UserInputType==Enum.UserInputType.MouseButton1 and tripleJumpEnabled and not busy and not todoBusy and not tripleJumpBusy then
+ if i.UserInputType==Enum.UserInputType.MouseButton1 and tripleJumpEnabled and scriptsActive() and not busy and not todoBusy and not tripleJumpBusy then
   local now=os.clock()
   if now-tjLast>0.6 then tjClicks=0 end
   tjLast=now
@@ -2140,15 +2171,25 @@ do
  edge(UDim2.new(.12,0,1,0),UDim2.new(0,0,0,0),0)
  edge(UDim2.new(.12,0,1,0),UDim2.new(.88,0,0,0),180)
 
- -- run the motion while the backdrop exists
+ -- backdrop only while menu is open; fully destroyed on hub unload
  bg.Enabled=main.Visible
- connect(main:GetPropertyChangedSignal("Visible"),function() bg.Enabled=main.Visible end)
+ connect(main:GetPropertyChangedSignal("Visible"),function()
+  if bg.Parent then bg.Enabled=main.Visible end
+ end)
  local t0=os.clock()
+ local bgAlive=true
  connect(RS.Heartbeat,function(dt)
+  if not bgAlive or not bg.Parent then return end
+  if not bg.Enabled then return end
   local t=os.clock()-t0
   for _,u in ipairs(updaters) do u(t,dt) end
  end)
- connect(gui.Destroying,function() if bg.Parent then bg:Destroy() end end)
+ local function killBackdrop()
+  bgAlive=false
+  if bg.Parent then bg:Destroy() end
+ end
+ connect(gui.Destroying,killBackdrop)
+ connect(unload.Activated,killBackdrop)
 end
 
 -- ===== PART 8: menu ornaments (straight corners, category pumpkins, moon mark) =====
