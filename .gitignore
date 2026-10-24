@@ -339,7 +339,7 @@ end
 local bind="AutoBlackflashCamera"
 local cached,targetModel,lastScan=nil,nil,0
 RS:BindToRenderStep(bind,Enum.RenderPriority.Camera.Value+1,function(dt)
- if not running or not lockOn then cached=nil; return end
+ if not running or not lockOn or gui:GetAttribute("FlingSequenceActive") then cached=nil; return end
  if UIS:GetFocusedTextBox() then return end
  if os.clock()-lastScan>.2 then cached,targetModel=target(); lastScan=os.clock() end
  local cam=workspace.CurrentCamera
@@ -703,7 +703,7 @@ do
  local function invalidate() generation+=1;computing=false;clear() end
  local function halt() sprint(false);direction=Vector3.zero;local h=rig();if h then h:Move(Vector3.zero,false) end end
  local function reset() invalidate();releaseDash();halt();restore();target=nil end
- local function interrupted() if (busy and not bfAssistActive) or todoBusy or UIS:GetFocusedTextBox() then return true end;for k in pairs(keys) do if movement[k] then return true end end;return not sprintDown and not held[Enum.KeyCode.W] and UIS:IsKeyDown(Enum.KeyCode.W) end
+ local function interrupted() if gui:GetAttribute("FlingSequenceActive") then return true end;if (busy and not bfAssistActive) or todoBusy or UIS:GetFocusedTextBox() then return true end;for k in pairs(keys) do if movement[k] then return true end end;return not sprintDown and not held[Enum.KeyCode.W] and UIS:IsKeyDown(Enum.KeyCode.W) end
  connect(UIS.InputBegan,function(i) local k=i.KeyCode;if sending or held[k] or(k==Enum.KeyCode.W and sprintDown) then return end;if movement[k] then keys[k]=true end;if on and k==Enum.KeyCode.Q and not UIS:GetFocusedTextBox() then pauseUntil=os.clock()+.75 end end)
  connect(UIS.InputEnded,function(i) local k=i.KeyCode;if sending or held[k] or(k==Enum.KeyCode.W and sprintDown) then return end;keys[k]=nil end)
  connect(UIS.WindowFocusReleased,function() keys={};sprint(false);releaseDash();pauseUntil=os.clock()+.5 end)
@@ -749,6 +749,7 @@ do
  end
  connect(RS.Heartbeat,function()
   if not running or not on then return end
+  if gui:GetAttribute("FlingSequenceActive") then if not paused then invalidate();releaseDash();halt();restore() end;paused=true;return end
   if gui:GetAttribute("BehindTeleportActive") then if not paused then invalidate();releaseDash();halt();restore() end;paused=true;info.Text="Paused: loop teleport is active";return end
   local h,r=rig();if not h then sprint(false);restore();return end
   if interrupted() or os.clock()<pauseUntil then sprint(false);if interrupted() then releaseDash() end;if not paused then invalidate();direction=Vector3.zero;restore() end;paused=true;return end
@@ -784,7 +785,7 @@ do
  end)
  local renderName="JJSFollowAutomaticPathJump"
  RS:BindToRenderStep(renderName,Enum.RenderPriority.Character.Value+1,function()
-  if not running or not on then return end;if gui:GetAttribute("BehindTeleportActive") then sprint(false);restore();return end;if interrupted() or os.clock()<pauseUntil then sprint(false);restore();return end
+  if not running or not on then return end;if gui:GetAttribute("FlingSequenceActive") then sprint(false);restore();return end;if gui:GetAttribute("BehindTeleportActive") then sprint(false);restore();return end;if interrupted() or os.clock()<pauseUntil then sprint(false);restore();return end
   local h,r=rig();if not h then sprint(false);return end;local air=h.FloorMaterial==Enum.Material.Air;sprint(direction.Magnitude>.05 and face~=nil);h:Move(direction,false)
   if face and face.Parent and owned==h then h.AutoRotate=false;if not air then local aim=Vector3.new(face.Position.X,r.Position.Y,face.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end end end
  end)
@@ -798,7 +799,7 @@ do
  local function restoreSpin() if spinHumanoid and spinHumanoid.Parent then spinHumanoid.AutoRotate=previousAutoRotate end;spinHumanoid=nil;spinRoot=nil end
  toggle(panel,"Slow Spin",function() return spinEnabled end,function(v) spinEnabled=v;if not v then restoreSpin() end end);moduleSlider(panel,"Spin speed",5,90,spinSpeed," degrees/s",function() return spinSpeed end,function(v) spinSpeed=v end)
  RS:BindToRenderStep(spinBind,Enum.RenderPriority.Character.Value+2,function(dt)
-  if not running or not spinEnabled then return end;local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");local root=char and char:FindFirstChild("HumanoidRootPart")
+  if gui:GetAttribute("FlingSequenceActive") then restoreSpin();return end;if not running or not spinEnabled then return end;local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");local root=char and char:FindFirstChild("HumanoidRootPart")
   if not hum or not root or hum.Health<=0 then restoreSpin();return end;if spinHumanoid~=hum or spinRoot~=root then restoreSpin();spinHumanoid=hum;spinRoot=root;previousAutoRotate=hum.AutoRotate;local _,yaw=root.CFrame:ToOrientation();spinAngle=yaw end
   hum.AutoRotate=false;spinAngle=(spinAngle+math.rad(spinSpeed)*dt)%(math.pi*2);root.CFrame=CFrame.new(root.Position)*CFrame.Angles(0,spinAngle,0)
  end)
@@ -826,7 +827,7 @@ do
  local function restoreSpeed() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.WalkSpeed=originalSpeed end;ownedHumanoid=nil;originalSpeed=nil end
  local function applySpeed() if not speedEnabled or not running then return end;if gui:GetAttribute("BuildSpeedActive") then restoreSpeed();return end;local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");if not hum or hum.Health<=0 then restoreSpeed();return end;if ownedHumanoid~=hum then restoreSpeed();ownedHumanoid=hum;originalSpeed=hum.WalkSpeed end;hum.WalkSpeed=selectedSpeed end
  toggle(panel,"Speed",function() return speedEnabled end,function(v) speedEnabled=v;if v then applySpeed() else restoreSpeed() end end);moduleSlider(panel,"Walk speed",1,10000,selectedSpeed," studs/s",function() return selectedSpeed end,function(v) selectedSpeed=math.clamp(v,1,10000);if speedEnabled then applySpeed() end end)
- connect(LP.CharacterRemoving,restoreSpeed);RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+3,function() if speedEnabled then applySpeed() end end)
+ connect(LP.CharacterRemoving,restoreSpeed);RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+3,function() if speedEnabled and not gui:GetAttribute("FlingSequenceActive") then applySpeed() end end)
  local function shutdown() speedEnabled=false;RS:UnbindFromRenderStep(bind);restoreSpeed() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
@@ -840,7 +841,7 @@ do
  moduleSlider(panel,"Maximum built speed",16,10000,maxSpeed," studs/s",function() return maxSpeed end,function(v) maxSpeed=math.clamp(v,16,10000);currentSpeed=math.min(currentSpeed,maxSpeed) end);toggle(panel,"Reset speed when stopped",function() return resetOnStop end,function(v) resetOnStop=v end)
  local resetButton=make("TextButton",panel,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Reset built speed",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=nextOrder(panel)+2});corner(resetButton,6);connect(resetButton.Activated,function() currentSpeed=math.min(startSpeed,maxSpeed) end)
  RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+5,function(dt)
-  if not running or not on then return end;local char=LP.Character;local h=char and char:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then restore();return end
+  if not running or not on or gui:GetAttribute("FlingSequenceActive") then return end;local char=LP.Character;local h=char and char:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then restore();return end
   if owned~=h then restore();owned=h;previousSpeed=h.WalkSpeed;currentSpeed=math.min(startSpeed,maxSpeed) end;local moving=h.MoveDirection.Magnitude>.05
   if moving then currentSpeed=math.min(maxSpeed,currentSpeed+acceleration*dt) elseif resetOnStop then currentSpeed=math.min(startSpeed,maxSpeed) end;currentSpeed=math.clamp(currentSpeed,1,maxSpeed);h.WalkSpeed=currentSpeed;readout.Text=string.format("Built speed: %.1f / %d studs/s%s",currentSpeed,maxSpeed,moving and " - building" or " - held")
  end)
@@ -866,8 +867,8 @@ do
  end
  toggle(panel,"Jump Power",function() return on end,function(v) on=v;if v then apply();feedback.Text="Enabled - press Space / jump" else restore();clearAir();feedback.Text="Off" end end);moduleSlider(panel,"Jump power",1,1000,selectedPower,"",function() return selectedPower end,function(v) selectedPower=math.clamp(v,1,1000);if on then apply() end end)
  toggle(panel,"Grounded velocity jump assist",function() return assist end,function(v) assist=v end);connect(UIS.JumpRequest,requestJump);connect(UIS.InputBegan,function(input,processed) if not processed and input.KeyCode==Enum.KeyCode.Space and not UIS:GetFocusedTextBox() then requestJump() end end)
- connect(RS.Heartbeat,function() if not on or not running then return end;local h=apply();if not h then return end;if h.FloorMaterial==Enum.Material.Air then gui:SetAttribute("JumpPowerAirborne",true) elseif os.clock()>=graceUntil then clearAir() end end)
- RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+6,function() if on then apply() end end);connect(LP.CharacterRemoving,function() restore();clearAir();lastLaunch=-math.huge end)
+ connect(RS.Heartbeat,function() if not on or not running or gui:GetAttribute("FlingSequenceActive") then return end;local h=apply();if not h then return end;if h.FloorMaterial==Enum.Material.Air then gui:SetAttribute("JumpPowerAirborne",true) elseif os.clock()>=graceUntil then clearAir() end end)
+ RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+6,function() if on and not gui:GetAttribute("FlingSequenceActive") then apply() end end);connect(LP.CharacterRemoving,function() restore();clearAir();lastLaunch=-math.huge end)
  local function shutdown() on=false;RS:UnbindFromRenderStep(bind);restore();clearAir() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 end
 
@@ -1528,6 +1529,205 @@ do
  end)
 end
 
+
+do
+ local active=false
+ local closed=false
+ local generation=0
+ local snapshot=nil
+ local mouseDown=false
+ local skipTeam=true
+ local range=300
+ local hitDelayMs=300
+ local contactMs=450
+ local ownedBusy=false
+ local panel=card(pages.Combat,"Fling Kill All","")
+ local feedback=make("TextLabel",panel,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,Text="Ready - experimental; hits and kills unverified",TextColor3=T.dim,TextWrapped=true,TextSize=11,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
+ ord[panel]=3
+ toggle(panel,"Skip teammates",function() return skipTeam end,function(v) if not active then skipTeam=v end end)
+ moduleSlider(panel,"Maximum range",25,1000,range," studs",function() return range end,function(v) if not active then range=v end end)
+ moduleSlider(panel,"After M1 delay",100,1000,hitDelayMs," ms",function() return hitDelayMs end,function(v) if not active then hitDelayMs=v end end)
+ moduleSlider(panel,"Fling duration",100,700,contactMs," ms",function() return contactMs end,function(v) if not active then contactMs=v end end)
+ local function makeButton(text,color)
+  local b=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=color or T.p2,Text=text,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=nextOrder(panel)+2})
+  corner(b,6)
+  return b
+ end
+ local testButton=makeButton("Test nearest: teleport > M1 > fling")
+ local allButton=makeButton("Fling Kill All - one pass")
+ local stopButton=makeButton("Stop (End)",T.warn)
+ local function report(text)
+  if feedback.Parent and not closed then feedback.Text=text end
+ end
+ local function living(player)
+  local c=player.Character
+  local h=c and c:FindFirstChildOfClass("Humanoid")
+  local r=c and c:FindFirstChild("HumanoidRootPart")
+  if h and r and h.Health>0 then return c,h,r end
+ end
+ local function teammate(p)
+  return not LP.Neutral and not p.Neutral and LP.Team~=nil and LP.Team==p.Team
+ end
+ local function releaseMouse()
+  if mouseDown and okVIM and VIM then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+  mouseDown=false
+ end
+ local function restoreCharacter()
+  releaseMouse()
+  local state=snapshot
+  snapshot=nil
+  if not state then return end
+  for part,value in pairs(state.collisions) do if part.Parent then pcall(function() part.CanCollide=value end) end end
+  if state.humanoid.Parent then pcall(function() state.humanoid.AutoRotate=state.autoRotate end) end
+  if state.root.Parent and LP.Character==state.character then
+   pcall(function()
+    state.root.AssemblyLinearVelocity=Vector3.zero
+    state.root.AssemblyAngularVelocity=Vector3.zero
+    state.root.CFrame=state.origin
+   end)
+  end
+ end
+ local function releaseOwnership()
+  if ownedBusy then
+   ownedBusy=false
+   busy=false
+   manualSequenceBusy=false
+   if gui.Parent then gui:SetAttribute("FlingSequenceActive",false) end
+  end
+ end
+ local function stop(message)
+  generation+=1
+  restoreCharacter()
+  active=false
+  releaseOwnership()
+  report(message or "Stopped")
+ end
+ local function alive(id,player,state,target,targetHumanoid,targetRoot)
+  return running and gui.Parent~=nil and not closed and active and generation==id and LP.Character==state.character and state.root.Parent~=nil and state.humanoid.Health>0 and player.Parent==Players and player.Character==target and targetRoot.Parent~=nil and targetHumanoid.Health>0
+ end
+ local function waitFor(seconds,id,player,state,target,targetHumanoid,targetRoot)
+  local finish=os.clock()+seconds
+  repeat
+   if not alive(id,player,state,target,targetHumanoid,targetRoot) then return false end
+   RS.Heartbeat:Wait()
+  until os.clock()>=finish
+  return alive(id,player,state,target,targetHumanoid,targetRoot)
+ end
+ local function attempt(player,id)
+  local character,humanoid,root=living(LP)
+  local target,targetHumanoid,targetRoot=living(player)
+  if not root or not targetRoot or player==LP or(skipTeam and teammate(player)) then return false,false,0,"Skipped" end
+  if(targetRoot.Position-root.Position).Magnitude>range then return false,false,0,"Out of range" end
+  local state={character=character,humanoid=humanoid,root=root,origin=root.CFrame,autoRotate=humanoid.AutoRotate,collisions={}}
+  snapshot=state
+  local sent,completed,displacement=false,false,0
+  local reason="Cancelled"
+  local ok,err=pcall(function()
+   humanoid.AutoRotate=false
+   report("Teleport behind: "..player.DisplayName)
+   local position=targetRoot.Position-targetRoot.CFrame.LookVector*2.6
+   root.CFrame=CFrame.lookAt(position,Vector3.new(targetRoot.Position.X,position.Y,targetRoot.Position.Z))
+   root.AssemblyLinearVelocity=Vector3.zero
+   root.AssemblyAngularVelocity=Vector3.zero
+   if not waitFor(.08,id,player,state,target,targetHumanoid,targetRoot) then return end
+   if(root.Position-targetRoot.Position).Magnitude>7 then reason="Target moved before M1";return end
+   if UIS:GetFocusedTextBox() then reason="Typing - cancelled";return end
+   report("M1 input: "..player.DisplayName)
+   mouseDown=true
+   local inputOK,inputError=pcall(function() VIM:SendMouseButtonEvent(0,0,0,true,game,0) end)
+   if not inputOK then releaseMouse();reason="M1 input unavailable";return end
+   local valid=waitFor(.035,id,player,state,target,targetHumanoid,targetRoot)
+   releaseMouse()
+   if not valid then return end
+   sent=true
+   if not waitFor(hitDelayMs/1000,id,player,state,target,targetHumanoid,targetRoot) then reason="Target unavailable after M1";return end
+   if(root.Position-targetRoot.Position).Magnitude>18 then reason="Target moved before fling";return end
+   for _,part in ipairs(character:GetDescendants()) do if part:IsA("BasePart") then state.collisions[part]=part.CanCollide;part.CanCollide=true end end
+   local targetOrigin=targetRoot.Position
+   local began=os.clock()
+   report("Fling attempt: "..player.DisplayName)
+   while os.clock()-began<contactMs/1000 do
+    if not alive(id,player,state,target,targetHumanoid,targetRoot) then break end
+    if UIS:GetFocusedTextBox() then reason="Typing - cancelled";break end
+    local delta=targetRoot.Position-root.Position
+    if delta.Magnitude>18 then break end
+    local direction=Vector3.new(delta.X,0,delta.Z)
+    if direction.Magnitude<.05 then direction=Vector3.new(targetRoot.CFrame.LookVector.X,0,targetRoot.CFrame.LookVector.Z) end
+    if direction.Magnitude<.05 then direction=Vector3.new(0,0,-1) end
+    root.AssemblyAngularVelocity=Vector3.new(0,55,0)
+    root.AssemblyLinearVelocity=direction.Unit*120+Vector3.new(0,8,0)
+    RS.Heartbeat:Wait()
+   end
+   displacement=targetRoot.Parent and(targetRoot.Position-targetOrigin).Magnitude or 0
+   completed=true
+   reason="Attempt completed"
+  end)
+  if snapshot==state then restoreCharacter() end
+  if not ok then return false,sent,0,tostring(err) end
+  return completed,sent,displacement,reason
+ end
+ local function start(nearestOnly)
+  if active or closed or not running or not gui.Parent then return end
+  if busy or todoBusy or manualSequenceBusy or tripleJumpBusy then report("Wait for the other macro to finish");return end
+  if UIS:GetFocusedTextBox() then report("Finish typing first");return end
+  if not okVIM or not VIM then report("Input simulation unavailable");return end
+  local _,_,root=living(LP)
+  if not root then report("Character unavailable");return end
+  local queue={}
+  for _,p in ipairs(Players:GetPlayers()) do
+   local _,_,other=living(p)
+   if p~=LP and other and(not skipTeam or not teammate(p)) then
+    local d=(other.Position-root.Position).Magnitude
+    if d<=range then table.insert(queue,{player=p,distance=d}) end
+   end
+  end
+  table.sort(queue,function(a,b) return a.distance<b.distance end)
+  if #queue==0 then report("No eligible targets in range");return end
+  if nearestOnly then queue={queue[1]} end
+  active=true;ownedBusy=true;busy=true;manualSequenceBusy=true
+  gui:SetAttribute("FlingSequenceActive",true)
+  generation+=1
+  local id=generation
+  task.spawn(function()
+   local completed,inputs,moved=0,0,0
+   local ok,err=xpcall(function()
+    RS.Heartbeat:Wait();RS.Heartbeat:Wait()
+    for _,item in ipairs(queue) do
+     if not running or closed or generation~=id or not active then break end
+     if not living(LP) then stop("Character unavailable - stopped");return end
+     if UIS:GetFocusedTextBox() then stop("Typing - stopped");return end
+     local done,sent,distance,reason=attempt(item.player,id)
+     if sent then inputs+=1 end
+     if done then completed+=1;if distance>=8 then moved+=1 end end
+     if generation~=id then break end
+     if not done then report(reason) end
+     local deadline=os.clock()+.2
+     while os.clock()<deadline and generation==id and active and running and not closed do RS.Heartbeat:Wait() end
+    end
+   end,function(e) return tostring(e) end)
+   if generation==id then
+    restoreCharacter();active=false;releaseOwnership()
+    report(ok and string.format("%d M1 inputs | %d fling attempts | %d moved >=8 studs\nHits, kills and credit unverified",inputs,completed,moved) or "Stopped: "..tostring(err))
+   end
+  end)
+ end
+ connect(testButton.Activated,function() start(true) end)
+ connect(allButton.Activated,function() start(false) end)
+ connect(stopButton.Activated,function() if active then stop("Stopped") end end)
+ connect(UIS.InputBegan,function(input)
+  if input.KeyCode==Enum.KeyCode.End and active then stop("Stopped") end
+ end)
+ connect(LP.CharacterRemoving,function() if active then stop("Character removed - stopped") end end)
+ connect(UIS.WindowFocusReleased,function() if active then stop("Focus lost - stopped") end end)
+ local function shutdown()
+  if closed then return end
+  stop("Stopped")
+  closed=true
+ end
+ connect(unload.Activated,shutdown)
+ connect(gui.Destroying,shutdown)
+end
+
 local function cleanup()
  if fxShutdown then pcall(fxShutdown) end
  if not running then return end
@@ -1541,6 +1741,7 @@ connect(unload.Activated,cleanup)
 connect(close.Activated,function() main.Visible=false end)
 local tjClicks,tjLast=0,0
 connect(UIS.InputBegan,function(i)
+ if gui:GetAttribute("FlingSequenceActive") then if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end;return end
  if UIS:GetFocusedTextBox() then return end
  if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end
  if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled then
