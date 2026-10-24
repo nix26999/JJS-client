@@ -1,41 +1,1534 @@
--- COMBINED + IMPROVED:
--- CHANGELOG: removed dash timers; status strip; help(H); reopen chip; attribute bus; scale clamp; hard unload; fps attr
--- COMBINED + IMPROVED: TEN-COMBO UI/CORE | no dash timers | status strip | help (H) | attribute bus
--- Base UI and core systems from COMPLETE TEN-COMBO MAIN.
--- Extra systems (V2/V3 chain, dash timers, todo, auto-block, notifications) merged from companion script.
--- One complete script. Replace previous; do not append. Requires gethui() and virtual input.
--- ASCII-only. Not live-tested.
-
--- AUTOBLACKFLASH / COMPLETE TEN-COMBO MAIN / VOICES 10 / CACHED AUDIO DUCKING
--- One complete script, not an extension. Replace previous script; do not append it.
--- ASCII-only. Not live-tested. Requires executor gethui() and permitted virtual input.
--- Macro, rear-gated four-round chain, UI/search/drag, 10 ordered popup stages,
--- five random default sounds, custom Jackpot/Obito/Plus Ultra/Goku sounds,
--- rolling 3.5s countdown, pooled sparkles, 16-frame/0.8s kill finisher, unload.
--- Popup voices volume 10. Active game audio .12 multiplier; original volumes restored.
--- Audio cache indexed gradually, no full-game scan triggered by a popup voice.
--- Chain activation remains 3. D+Q, flick camera at enemy during dash, hold D until behind.
--- 30% rear sampling, <=8 studs, grounded/height check and 200ms stable gate.
--- Actual Black Flash/hit attribution is not verified by client timing/health loss.
--- Confirmed-only kill FX requires the earlier package's server confirmation event.
--- Kill finisher art: optional 16-frame PNG sequence over 0.8 s (20 FPS). Full set impact_01..16.png, reduced-flash set
--- impact_soft_01..16.png (chosen by "Reduced flashes"). Put them in the executor workspace folder. If they are
--- missing, the built-in vector finisher plays instead. Triggers are unchanged: confirmed kill, or estimated lethal.
+local __okMain,__errMain=xpcall(function()
+local fxShutdown,onBlackflashPair
+-- AUTO BLACKFLASH
+-- Press 3: wait 325 ms, then send selected follow-up.
+-- Combos tab: True Stun Lock, Hyper King, Style, Cursed Partners.
+-- Input simulation is environment-dependent. Not live-tested.
 local Players=game:GetService("Players")
 local RS=game:GetService("RunService")
 local UIS=game:GetService("UserInputService")
-local CAS=game:GetService("ContextActionService")
+local LP=Players.LocalPlayer
+assert(LP,"Client required")
+local PG=LP:WaitForChild("PlayerGui")
+local old=PG:FindFirstChild("AutoBlackflash")
+if old then old:Destroy() end
+local running=true
+local todoEnabled,todoBusy=false,false
+local perfectClapEnabled=false
+local perfectClapDelay=350
+local tripleJumpEnabled=false
+local tripleJumpBusy=false
+local lockDistance=250
+local pullStrength=10
+local pullEnabled=false
+local lockTargetMode="Torso"
+local enabled,lockOn,includeNPC,chainEnabled=false,false,false,false
+local chainRepeats=3
+local chainCooldownUntil=0
+local lastThreeTime=0
+local delayMs,mode=325,"Single"
+local busy=false
+local manualSequenceBusy=false
+local blackflashV2Trigger=nil
+local bfAssistActive=false
+local followSetEnabled=nil -- assigned by Follow Behind module
+local lockOnPaint=nil
+local followPaint=nil
+local conns={}
+local function bfAssistOn()
+ bfAssistActive=true
+ lockOn=true
+ if lockOnPaint then lockOnPaint() end
+ if followSetEnabled then followSetEnabled(true) end
+ if followPaint then followPaint() end
+end
+local function bfAssistOff()
+ bfAssistActive=false
+ lockOn=false
+ if lockOnPaint then lockOnPaint() end
+ if followSetEnabled then followSetEnabled(false) end
+ if followPaint then followPaint() end
+end
+local T={bg=Color3.fromRGB(12,12,16),panel=Color3.fromRGB(18,18,24),p2=Color3.fromRGB(24,24,32),card=Color3.fromRGB(22,22,30),stroke=Color3.fromRGB(40,40,55),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(235,235,245),dim=Color3.fromRGB(140,140,160),mut=Color3.fromRGB(90,90,110),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
+local function make(class,parent,props)
+ local o=Instance.new(class); for k,v in pairs(props or {}) do o[k]=v end; o.Parent=parent; return o
+end
+local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns,c); return c end
+local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
+local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
+local gui=make("ScreenGui",PG,{Name="AutoBlackflash",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),Position=UDim2.new(.5,-380,.5,-270),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true})
+corner(main,12); stroke(main)
+local scale=make("UIScale",main,{Scale=1})
+local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
+corner(top,12)
+make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="AUTO BLACKFLASH",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
+local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
+local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
+make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
+make("UIPadding",side,{PaddingTop=UDim.new(0,10),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)})
+local content=make("Frame",main,{Size=UDim2.new(1,-150,1,-44),Position=UDim2.fromOffset(150,44),BackgroundColor3=T.bg,BorderSizePixel=0,ClipsDescendants=true})
+local title=make("TextLabel",content,{Size=UDim2.new(1,-24,0,22),Position=UDim2.fromOffset(16,10),BackgroundTransparency=1,Text="Macro",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left})
+local desc=make("TextLabel",content,{Size=UDim2.new(1,-24,0,14),Position=UDim2.fromOffset(16,32),BackgroundTransparency=1,Text="Delay and follow-up key action",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left})
+local pages,buttons={},{}
+local cats={{"Macro","Delay and follow-up key action"},{"Combos","True Stun Lock, Hyper King, Style, Cursed Partners"},{"Auto Blackflash","Blackflash chain, copied sequence and route"},{"Lock On","Optional camera targeting and NPC filter"},{"Movement","Walk speed, build speed, jump power and slow spin"},{"Visuals","Popups, voices, kill finisher and invisibility"},{"Settings","Status, controls, and unload"}}
+table.insert(cats,{"Todo","Press 3: 800 ms -> R -> 100 ms -> 2 -> 650 ms -> 2"})
+for i,cat in ipairs(cats) do
+ local name,description=cat[1],cat[2]
+ local b=make("TextButton",side,{Size=UDim2.new(1,0,0,32),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.txt or T.dim,Font=Enum.Font.GothamMedium,TextSize=13,LayoutOrder=i}); corner(b,8); buttons[name]=b
+ local p=make("ScrollingFrame",content,{Size=UDim2.new(1,0,1,-52),Position=UDim2.fromOffset(0,52),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1})
+ make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)})
+ make("UIListLayout",p,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder}); pages[name]=p
+ connect(b.Activated,function()
+  title.Text=name; desc.Text=description
+  for key,page in pairs(pages) do page.Visible=key==name end
+  for key,btn in pairs(buttons) do btn.BackgroundTransparency=key==name and 0 or 1; btn.BackgroundColor3=T.p2; btn.TextColor3=key==name and T.acc or T.dim; btn.Font=key==name and Enum.Font.GothamBold or Enum.Font.GothamMedium end
+ end)
+end
+local ord={}
+local function nextOrder(p) ord[p]=(ord[p] or 0)+1; return ord[p] end
+local function card(p,name,sub)
+ local c=make("Frame",p,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=nextOrder(p)}); corner(c,10); stroke(c)
+ make("UIPadding",c,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)})
+ make("UIListLayout",c,{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder})
+ make("TextLabel",c,{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0})
+ make("TextLabel",c,{Size=UDim2.new(1,0,0,14),BackgroundTransparency=1,Text=sub,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1})
+ make("Frame",c,{Size=UDim2.new(1,0,0,1),BackgroundColor3=T.stroke,BorderSizePixel=0,LayoutOrder=2}); return c
+end
+local function toggle(p,name,get,set)
+ local r=make("TextButton",p,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
+ make("TextLabel",r,{Size=UDim2.new(1,-50,1,0),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
+ local track=make("Frame",r,{Size=UDim2.fromOffset(36,18),Position=UDim2.new(1,-36,.5,-9),BackgroundColor3=T.p2,BorderSizePixel=0}); corner(track,9)
+ local knob=make("Frame",track,{Size=UDim2.fromOffset(14,14),Position=UDim2.new(0,2,.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0}); corner(knob,7)
+ local function paint() track.BackgroundColor3=get() and T.acc or Color3.fromRGB(45,45,55); knob.Position=get() and UDim2.new(1,-16,.5,-7) or UDim2.new(0,2,.5,-7) end
+ connect(r.Activated,function() set(not get()); paint() end); paint()
+ return paint
+end
+local c=card(pages.Macro,"Follow-up","Press 3 normally; the macro sends only the delayed action")
+toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
+local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
+ local r=make("Frame",parent,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
+ make("TextLabel",r,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
+ local value=make("TextLabel",r,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text=tostring(get())..suffix,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
+ local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
+ local fill=make("Frame",bar,{Size=UDim2.new((get()-min)/(max-min),0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
+ local sliding=false
+ local function update(x)
+  local a=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
+  local v=math.floor(min+(max-min)*a+.5)
+  set(v)
+  fill.Size=UDim2.new(a,0,1,0)
+  value.Text=tostring(v)..suffix
+ end
+ connect(bar.InputBegan,function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true; update(i.Position.X) end
+ end)
+ connect(UIS.InputChanged,function(i)
+  if sliding and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then update(i.Position.X) end
+ end)
+ connect(UIS.InputEnded,function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=false end
+ end)
+end
+toggle(c,"Triple Jump (3x LMB > 100ms > Jump > 50ms > LMB)",function() return tripleJumpEnabled end,function(v) tripleJumpEnabled=v end)
+local modes={"Single","Double","Triple","Hold"}
+local modeBtn=make("TextButton",c,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Key action: Single",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=nextOrder(c)+2}); corner(modeBtn,6)
+connect(modeBtn.Activated,function() mode=modes[(table.find(modes,mode)%#modes)+1]; modeBtn.Text="Key action: "..mode end)
+local cc=card(pages["Auto Blackflash"],"Copied sequence","After 3: copied sequence; no added chain-start lockout")
+toggle(cc,"Auto Blackflash Chain",function() return chainEnabled end,function(v) chainEnabled=v end)
+local lc=card(pages["Lock On"],"Camera assist and pull","Nearest living target; adjustable distance and pull")
+lockOnPaint=toggle(lc,"Auto Lock On",function() return lockOn end,function(v) lockOn=v end)
+toggle(lc,"Include NPCs",function() return includeNPC end,function(v) includeNPC=v end)
+toggle(lc,"Pull To Target",function() return pullEnabled end,function(v) pullEnabled=v end)
+local lockModes={"Torso","Back"}
+local lockModeBtn=make("TextButton",lc,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Target mode: "..lockTargetMode,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=nextOrder(lc)+2}); corner(lockModeBtn,6)
+connect(lockModeBtn.Activated,function()
+ local i=table.find(lockModes,lockTargetMode) or 1
+ lockTargetMode=lockModes[(i%#lockModes)+1]
+ lockModeBtn.Text="Target mode: "..lockTargetMode
+end)
+local function lockSlider(name,min,max,initial,suffix,get,set)
+ local r=make("Frame",lc,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(lc)+2})
+ make("TextLabel",r,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
+ local value=make("TextLabel",r,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text=tostring(get())..suffix,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
+ local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
+ local fill=make("Frame",bar,{Size=UDim2.new((get()-min)/(max-min),0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
+ local sliding=false
+ local function update(x)
+  local a=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
+  local v=math.floor(min+(max-min)*a+.5)
+  set(v)
+  fill.Size=UDim2.new(a,0,1,0)
+  value.Text=tostring(v)..suffix
+ end
+ connect(bar.InputBegan,function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true; update(i.Position.X) end
+ end)
+ connect(UIS.InputChanged,function(i)
+  if sliding and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then update(i.Position.X) end
+ end)
+ connect(UIS.InputEnded,function(i)
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=false end
+ end)
+end
+lockSlider("Lock Distance",10,500,lockDistance," studs",function() return lockDistance end,function(v) lockDistance=v end)
+lockSlider("Pull Strength",1,100,pullStrength,"",function() return pullStrength end,function(v) pullStrength=v end)
+local tc=card(pages.Todo,"Todo macro","3 -> 800 ms -> R -> 100 ms -> 2 -> 650 ms -> 2")
+toggle(tc,"Todo Macro",function() return todoEnabled end,function(v) todoEnabled=v end)
+local todoStatus=make("TextLabel",tc,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="Ready",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(tc)+2})
+toggle(tc,"Perfect Clap",function() return perfectClapEnabled end,function(v) perfectClapEnabled=v end)
+moduleSlider(tc,"Clap delay",50,1000,perfectClapDelay," ms",function() return perfectClapDelay end,function(v) perfectClapDelay=v end)
+local sc=card(pages.Settings,"Session","RightShift hides/shows the menu; X hides it")
+local status=make("TextLabel",sc,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
+local unload=make("TextButton",sc,{Size=UDim2.new(1,0,0,30),BackgroundColor3=Color3.fromRGB(130,45,65),Text="Unload",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4}); corner(unload,8)
+local okVIM,VIM=pcall(function() return game:GetService("VirtualInputManager") end)
+local function todoWait(seconds)
+ local finish=os.clock()+seconds
+ while running and todoEnabled and os.clock()<finish do task.wait() end
+ return running and todoEnabled
+end
+local function todoKey(key)
+ assert(okVIM and VIM,"Input simulation unavailable")
+ VIM:SendKeyEvent(true,key,false,game)
+ task.wait(.035)
+ VIM:SendKeyEvent(false,key,false,game)
+end
+local function runTodo()
+ if todoBusy or busy or not running or not todoEnabled then return end
+ todoBusy=true; busy=true
+ local ok,err=pcall(function()
+  if not todoWait(.8) then return end
+  todoKey(Enum.KeyCode.R)
+  if not todoWait(.1) then return end
+  todoKey(Enum.KeyCode.Two)
+  if not todoWait(.65) then return end
+  todoKey(Enum.KeyCode.Two)
+ end)
+ todoBusy=false; busy=false
+ if running then
+  todoStatus.Text=ok and (todoEnabled and "Sequence finished" or "Cancelled") or tostring(err)
+  todoStatus.TextColor3=ok and T.dim or T.warn
+ end
+end
+local keyHeld=false
+local function release() if keyHeld and okVIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Three,false,game) end) end; keyHeld=false end
+local function send(duration)
+ assert(okVIM and VIM,"Input simulation unavailable")
+ keyHeld=true; VIM:SendKeyEvent(true,Enum.KeyCode.Three,false,game)
+ local untilTime=os.clock()+duration
+ while running and enabled and os.clock()<untilTime do task.wait() end
+ release()
+end
+local function run()
+ if busy or not enabled or not running then return end
+ busy=true
+ local ms,action=delayMs,mode
+ local ok,err=pcall(function()
+  task.wait(ms/1000)
+  if not running or not enabled then return end
+  local count=action=="Triple" and 3 or action=="Double" and 2 or 1
+  for i=1,count do
+   if not enabled or not running then break end
+   send(action=="Hold" and ms/1000 or .035)
+   if i<count then task.wait(.08) end
+  end
+ end)
+ release(); busy=false
+ if running then status.Text=ok and "Action finished (not a hit confirmation)" or tostring(err) end
+end
+local function chainActive() return running and chainEnabled end
+local function chainWait(seconds)
+ local finish=os.clock()+seconds
+ while chainActive() and os.clock()<finish do task.wait() end
+ return chainActive()
+end
+local function chainClickLMB()
+ if not chainActive() then return false end
+ assert(okVIM and VIM,"Input simulation unavailable")
+ VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+ chainWait(.035)
+ VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+ return chainActive()
+end
+local function chainPress3()
+ if not chainActive() then return false end
+ send(.035)
+ return chainActive()
+end
+local function runChain()
+ if busy or not chainActive() then return end
+ busy=true
+ local ok,err=pcall(function()
+  for i=1,chainRepeats do
+   if not chainActive() then break end
+   if not chainWait(delayMs/1000) then break end
+   if not chainPress3() then break end
+   if not chainWait(.65) then break end
+   if not chainClickLMB() then break end
+   if not chainWait(delayMs/1000) then break end
+   if not chainPress3() then break end
+   if not chainWait(delayMs/1000) then break end
+   if not chainPress3() then break end
+   if not chainWait(.65) then break end
+   if not chainClickLMB() then break end
+   if not chainWait(delayMs/1000) then break end
+   if not chainPress3() then break end
+   if not chainWait(delayMs/1000) then break end
+   if not chainPress3() then break end
+   if i%2==0 and i<chainRepeats then
+    chainCooldownUntil=os.clock()+5
+    busy=false
+    return
+   end
+  end
+ end)
+ release()
+ busy=false
+ if running then status.Text=ok and "Copied Auto Blackflash sequence finished" or tostring(err) end
+end
+local humanoids={}
+local function track(o) if o:IsA("Humanoid") then humanoids[o]=true end end
+connect(workspace.DescendantAdded,track)
+connect(workspace.DescendantRemoving,function(o) humanoids[o]=nil end)
+for _,o in ipairs(workspace:GetDescendants()) do track(o) end
+local function target()
+ local char=LP.Character; local root=char and char:FindFirstChild("HumanoidRootPart")
+ if not root then return nil,nil end
+ local best,distance=nil,lockDistance
+ local bestModel=nil
+ for hum in pairs(humanoids) do
+  local model=hum.Parent
+  if model and model:IsA("Model") and model~=char and hum.Health>0 then
+   local owner=Players:GetPlayerFromCharacter(model)
+   if owner or includeNPC then
+    local part=model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+    if part and part:IsA("BasePart") then
+     local d=(part.Position-root.Position).Magnitude
+     if d<distance then best=part; distance=d; bestModel=model end
+    end
+   end
+  end
+ end
+ return best,bestModel
+end
+local bind="AutoBlackflashCamera"
+local cached,targetModel,lastScan=nil,nil,0
+RS:BindToRenderStep(bind,Enum.RenderPriority.Camera.Value+1,function(dt)
+ if not running or not lockOn then cached=nil; return end
+ if UIS:GetFocusedTextBox() then return end
+ if os.clock()-lastScan>.2 then cached,targetModel=target(); lastScan=os.clock() end
+ local cam=workspace.CurrentCamera
+ if cam and cached and cached.Parent then
+  local aimPos=cached.Position
+  if targetModel and lockTargetMode=="Back" then
+   local root=targetModel:FindFirstChild("HumanoidRootPart")
+   if root then aimPos=root.Position-root.CFrame.LookVector*3 end
+  end
+  local delta=aimPos-cam.CFrame.Position
+  if delta.Magnitude>.01 then cam.CFrame=cam.CFrame:Lerp(CFrame.lookAt(cam.CFrame.Position,aimPos),1-math.exp(-18*dt)) end
+  if pullEnabled and cached.Parent then
+   local char=LP.Character
+   local root=char and char:FindFirstChild("HumanoidRootPart")
+   if root then
+    local direction=aimPos-root.Position
+    if direction.Magnitude>.5 then root.AssemblyLinearVelocity=direction.Unit*pullStrength end
+   end
+  end
+ end
+end)
+local function clapClick()
+ if not okVIM or not VIM then return end
+ VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+ task.wait(.035)
+ VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+end
+local function runPerfectClap()
+ if not perfectClapEnabled or not running then return end
+ task.delay(perfectClapDelay/1000,function()
+  if running and perfectClapEnabled then clapClick() end
+ end)
+end
+
+-- Triple Jump: 3x (LMB > Jump > LMB downslam). Toggle in Macro; runs on 3 rapid LMB when enabled.
+local function runTripleJump()
+ if tripleJumpBusy or busy or not running or not tripleJumpEnabled then return end
+ if not okVIM or not VIM then return end
+ tripleJumpBusy=true; busy=true
+ local ok,err=pcall(function()
+  for i=1,3 do
+   if not running or not tripleJumpEnabled then break end
+   -- LMB
+   VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+   task.wait(.035)
+   VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+   -- wait 100 ms then Jump
+   task.wait(.100)
+   local char=LP.Character
+   local hum=char and char:FindFirstChildOfClass("Humanoid")
+   if hum and hum.Health>0 then
+    hum.Jump=true
+    pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game) end)
+    task.wait(.035)
+    pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end)
+   end
+   -- wait 50 ms then LMB downslam
+   task.wait(.050)
+   VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+   task.wait(.035)
+   VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+   if i<3 then task.wait(.05) end
+  end
+ end)
+ tripleJumpBusy=false; busy=false
+ if running and status and status.Parent then
+  status.Text=ok and "Triple jump sequence sent (not a hit confirmation)" or tostring(err)
+ end
+end
+
+-- Standard True Stun Lock Combo. K starts; K again cancels. Timings need in-game tuning.
+-- Q dash > 3 M1 > 1 (Cursed Strikes) > 3 M1 > double-tap 3 (Divergent Fist / Black Flash) > Jump + 2 (Crushing Blow)
+do
+ local active=false
+ local token=0
+ local heldKey=nil
+ local mouseHeld=false
+ local panel=card(pages.Combos,"Standard True Stun Lock","K: play or cancel | longer Q > 3 M1 > wait 70ms > 1 > 3 M1 > 3+3 BF > Jump + 2")
+ local label=make("TextLabel",panel,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - start close or let Q close the gap. No 4th M1 (avoids knockback).",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local button=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel True Stun Lock (K)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4}); corner(button,6)
+ -- M1s: 0.60 gap. First 3 M1 then 70ms > 1. Longer Q dash.
+ local timing={
+  punchGap=.60,
+  clickHold=.035,
+  startup=.08,
+  qHold=.18,
+  afterQ=.25,
+  afterThreeM1=.07,
+  afterCursed=2.0,
+  afterSecondM1=.30,
+  blackFlashGap=.325,
+  afterBlackFlash=.40,
+  jumpLead=.12,
+  afterJumpBeforeTwo=.05,
+ }
+ local function releaseCombo()
+  if okVIM and VIM then
+   if heldKey then pcall(function() VIM:SendKeyEvent(false,heldKey,false,game) end) end
+   if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+  end
+  heldKey=nil; mouseHeld=false
+ end
+ local function cancel()
+  token+=1; active=false; manualSequenceBusy=false; releaseCombo()
+  if label.Parent then label.Text="Ready - start close or let Q close the gap. No 4th M1 (avoids knockback)." end
+ end
+ local function toggleCombo()
+  if active then cancel(); return end
+  if busy or manualSequenceBusy then label.Text="Wait for the other macro to finish"; return end
+  if not okVIM or not VIM then label.Text="Input simulation unavailable"; return end
+  active=true; manualSequenceBusy=true; token+=1
+  local id=token
+  task.spawn(function()
+   local function check()
+    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if not running or token~=id or not h or h.Health<=0 then error("Combo cancelled",0) end
+   end
+   local function waitFor(seconds)
+    local finish=os.clock()+seconds
+    repeat check(); task.wait() until os.clock()>=finish
+    check()
+   end
+   local function click()
+    check(); mouseHeld=true
+    local cursor=UIS:GetMouseLocation()
+    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0)
+    waitFor(timing.clickHold or .05)
+    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0); mouseHeld=false
+   end
+   local function key(code,hold)
+    check()
+    hold=hold or .08
+    heldKey=code
+    VIM:SendKeyEvent(true,code,false,game)
+    waitFor(hold)
+    VIM:SendKeyEvent(false,code,false,game)
+    heldKey=nil
+   end
+   local function threeM1(afterWait)
+    for i=1,3 do
+     click()
+     if i<3 then waitFor(timing.punchGap) end
+    end
+    if afterWait and afterWait>0 then waitFor(afterWait) end
+   end
+   local ok,err=pcall(function()
+    label.Text="True Stun Lock: Approach / Dash Q"
+    heldKey=Enum.KeyCode.Q
+    VIM:SendKeyEvent(true,Enum.KeyCode.Q,false,game)
+    waitFor(timing.qHold)
+    VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game)
+    heldKey=nil
+    waitFor(timing.afterQ)
+    label.Text="True Stun Lock: 3 M1 (no 4th)"
+    waitFor(timing.startup)
+    threeM1(nil) -- 3 M1s only, no trailing wait inside
+    -- clear any stuck mouse, wait 70ms, then press 1 firmly
+    if mouseHeld then
+     local c=UIS:GetMouseLocation()
+     VIM:SendMouseButtonEvent(c.X,c.Y,0,false,game,0)
+     mouseHeld=false
+    end
+    waitFor(timing.afterThreeM1) -- 70ms
+    label.Text="True Stun Lock: Ability 1 Cursed Strikes"
+    key(Enum.KeyCode.One,.12)
+    waitFor(timing.afterCursed)
+    label.Text="True Stun Lock: 3 M1 follow-up"
+    threeM1(timing.afterSecondM1)
+    label.Text="True Stun Lock: Ability 3 Divergent Fist / Black Flash"
+    local first=os.clock()
+    key(Enum.KeyCode.Three)
+    local remain=timing.blackFlashGap-(os.clock()-first)
+    if remain>0 then waitFor(remain) end
+    key(Enum.KeyCode.Three)
+    waitFor(timing.afterBlackFlash)
+    label.Text="True Stun Lock: Jump + Ability 2 Crushing Blow"
+    heldKey=Enum.KeyCode.Space
+    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
+    local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Jump=true end
+    waitFor(timing.jumpLead)
+    key(Enum.KeyCode.Two)
+    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
+    heldKey=nil
+   end)
+   if token==id then
+    releaseCombo(); active=false; manualSequenceBusy=false
+    if label.Parent then label.Text=ok and "True Stun Lock inputs sent - hits not confirmed" or tostring(err) end
+   end
+  end)
+ end
+ connect(button.Activated,toggleCombo)
+ connect(UIS.InputBegan,function(input,processed)
+  if processed or UIS:GetFocusedTextBox() then return end
+  if input.KeyCode==Enum.KeyCode.K then toggleCombo() end
+ end)
+ connect(LP.CharacterRemoving,cancel)
+ connect(gui.Destroying,cancel)
+ connect(unload.Activated,cancel)
+end
+
+-- Advanced Hyper King 90% DMG Combo. H starts; H again cancels.
+-- 3 M1 > Downslam > 2 Crushing Blow > 1 Cursed Strikes (M1 reset) > Downslam > Side Dash behind > 3+3 Black Flash
+do
+ local active=false
+ local token=0
+ local heldKey=nil
+ local mouseHeld=false
+ local side=Enum.KeyCode.D
+ local panel=card(pages.Combos,"Hyper King 90% DMG","H: play or cancel | 3 M1 > Downslam > 2 > 1 > Downslam > Side Dash behind > 3+3 BF")
+ local label=make("TextLabel",panel,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - for opponents who hold evasive. Side dash moves behind during fall/roll. All finishers use downslam (no uppercut).",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local sideBtn=make("TextButton",panel,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Side dash: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4}); corner(sideBtn,6)
+ connect(sideBtn.Activated,function()
+  side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D
+  sideBtn.Text=side==Enum.KeyCode.D and "Side dash: D (right)" or "Side dash: A (left)"
+ end)
+ local button=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Hyper King (H)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5}); corner(button,6)
+ -- M1s: prior 0.40 + (0.40/2) = 0.60 between punches
+ local timing={
+  punchGap=.60,
+  clickHold=.035,
+  startup=.08,
+  afterThree=.30,
+  downslamLead=.12,
+  afterDownslam=.40,
+  afterTwo=.40,
+  afterOne=1.80,
+  afterSecondDownslam=.40,
+  dashHold=.10,
+  afterDash=.25,
+  blackFlashGap=.325,
+ }
+ local function releaseCombo()
+  if okVIM and VIM then
+   if heldKey then pcall(function() VIM:SendKeyEvent(false,heldKey,false,game) end) end
+   if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
+  end
+  heldKey=nil; mouseHeld=false
+ end
+ local function cancel()
+  token+=1; active=false; manualSequenceBusy=false; releaseCombo()
+  if label.Parent then label.Text="Ready - for opponents who hold evasive. Side dash moves behind during fall/roll." end
+ end
+ local function toggleCombo()
+  if active then cancel(); return end
+  if busy or manualSequenceBusy then label.Text="Wait for the other macro to finish"; return end
+  if not okVIM or not VIM then label.Text="Input simulation unavailable"; return end
+  active=true; manualSequenceBusy=true; token+=1
+  local id=token
+  local chosenSide=side
+  task.spawn(function()
+   local function check()
+    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if not running or token~=id or not h or h.Health<=0 then error("Hyper King cancelled",0) end
+   end
+   local function waitFor(seconds)
+    local finish=os.clock()+seconds
+    repeat check(); task.wait() until os.clock()>=finish
+    check()
+   end
+   local function click()
+    check(); mouseHeld=true
+    local cursor=UIS:GetMouseLocation()
+    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0)
+    waitFor(timing.clickHold or .05)
+    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0); mouseHeld=false
+   end
+   local function key(code)
+    check(); heldKey=code; VIM:SendKeyEvent(true,code,false,game)
+    waitFor(.05)
+    VIM:SendKeyEvent(false,code,false,game); heldKey=nil
+   end
+   local function threeM1()
+    for i=1,3 do
+     click()
+     if i<3 then waitFor(timing.punchGap) end
+    end
+    waitFor(timing.afterThree)
+   end
+   local ok,err=pcall(function()
+    label.Text="Hyper King: 3 M1"
+    waitFor(timing.startup)
+    threeM1()
+    label.Text="Hyper King: Downslam"
+    heldKey=Enum.KeyCode.Space
+    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
+    local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Jump=true end
+    waitFor(timing.downslamLead)
+    click()
+    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
+    heldKey=nil
+    waitFor(timing.afterDownslam)
+    label.Text="Hyper King: Ability 2 Crushing Blow"
+    key(Enum.KeyCode.Two)
+    waitFor(timing.afterTwo)
+    label.Text="Hyper King: Ability 1 Cursed Strikes (M1 reset)"
+    key(Enum.KeyCode.One)
+    waitFor(timing.afterOne)
+    label.Text="Hyper King: Downslam"
+    heldKey=Enum.KeyCode.Space
+    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
+    local hum2=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum2 then hum2.Jump=true end
+    waitFor(timing.downslamLead)
+    click()
+    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
+    heldKey=nil
+    waitFor(timing.afterSecondDownslam)
+    label.Text="Hyper King: Side dash behind"
+    heldKey=chosenSide
+    VIM:SendKeyEvent(true,chosenSide,false,game)
+    VIM:SendKeyEvent(true,Enum.KeyCode.Q,false,game)
+    waitFor(.035)
+    VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game)
+    if timing.dashHold>.035 then waitFor(timing.dashHold-.035) end
+    VIM:SendKeyEvent(false,chosenSide,false,game)
+    heldKey=nil
+    waitFor(timing.afterDash)
+    label.Text="Hyper King: Behind Black Flash (3+3)"
+    local first=os.clock()
+    key(Enum.KeyCode.Three)
+    local remain=timing.blackFlashGap-(os.clock()-first)
+    if remain>0 then waitFor(remain) end
+    key(Enum.KeyCode.Three)
+   end)
+   if token==id then
+    releaseCombo(); active=false; manualSequenceBusy=false
+    if label.Parent then label.Text=ok and "Hyper King inputs sent - hits not confirmed" or tostring(err) end
+   end
+  end)
+ end
+ connect(button.Activated,toggleCombo)
+ connect(UIS.InputBegan,function(input,processed)
+  if processed or UIS:GetFocusedTextBox() then return end
+  if input.KeyCode==Enum.KeyCode.H then toggleCombo() end
+ end)
+ connect(LP.CharacterRemoving,cancel)
+ connect(gui.Destroying,cancel)
+ connect(unload.Activated,cancel)
+end
+
+-- Follow: direct-route fast start, path jumps, airborne sprint/dashes, named picker.
+do
+ local PFS=game:GetService("PathfindingService")
+ local on,dashes,autoJump=false,true,true;local selectedId,target=nil,nil;local direction=Vector3.zero
+ local owned,oldRotate,face=nil,nil,nil;local route,blocked=nil,nil;local points,index={},2;local planned=nil
+ local computing=false;local generation=0;local jumpingIndex=nil;local jumpStarted,jumpLeftGround=0,false
+ local lastJump=-math.huge;local sprintDown,sending=false,false;local held,keys={},{};local dashTicket=0
+ local pauseUntil,frontReady,quickReady=0,0,0;local paused=false;local FRONT_DISTANCE,QUICKSTEP_DISTANCE=25,17.5
+ local movement={[Enum.KeyCode.W]=true,[Enum.KeyCode.A]=true,[Enum.KeyCode.S]=true,[Enum.KeyCode.D]=true}
+ local box=card(pages["Lock On"],"Follow Behind - Automatic Path Jumps","Direct clear-route movement | airborne sprint/dashes | front 25 / side-back 17.5")
+ local chosenLabel=make("TextLabel",box,{Size=UDim2.new(1,0,0,24),BackgroundTransparency=1,Text="Target: nearest player",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local search=make("TextBox",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="",PlaceholderText="Search username / display name",ClearTextOnFocus=false,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=4});corner(search,6)
+ local list=make("ScrollingFrame",box,{Size=UDim2.new(1,0,0,130),BackgroundColor3=T.p2,BorderSizePixel=0,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),ScrollBarThickness=3,LayoutOrder=5});make("UIListLayout",list,{Padding=UDim.new(0,3),SortOrder=Enum.SortOrder.LayoutOrder})
+ local info=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Off",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=6})
+ local function rig() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");if h and r and h.Health>0 then return h,r end end
+ local function flat(v) return Vector3.new(v.X,0,v.Z) end
+ local function send(k,v) if not okVIM or not VIM then return false end;sending=true;local ok=pcall(function() VIM:SendKeyEvent(v,k,false,game) end);sending=false;return ok end
+ local function sprint(v)
+  if sprintDown==v then return end;sprintDown=v;if not v then send(Enum.KeyCode.W,false);return end
+  local a=send(Enum.KeyCode.W,true);local b=send(Enum.KeyCode.W,false);local c=send(Enum.KeyCode.W,true);if not(a and b and c) then send(Enum.KeyCode.W,false);sprintDown=false end
+ end
+ local function releaseDash() dashTicket+=1;for k in pairs(held) do send(k,false) end;held={} end
+ local function restore() if owned and owned.Parent then owned.AutoRotate=oldRotate end;owned=nil;face=nil end
+ local function clear() if blocked then blocked:Disconnect();blocked=nil end;if route then route:Destroy();route=nil end;points={};index=2;planned=nil;jumpingIndex=nil end
+ local function invalidate() generation+=1;computing=false;clear() end
+ local function halt() sprint(false);direction=Vector3.zero;local h=rig();if h then h:Move(Vector3.zero,false) end end
+ local function reset() invalidate();releaseDash();halt();restore();target=nil end
+ local function interrupted() if (busy and not bfAssistActive) or todoBusy or UIS:GetFocusedTextBox() then return true end;for k in pairs(keys) do if movement[k] then return true end end;return not sprintDown and not held[Enum.KeyCode.W] and UIS:IsKeyDown(Enum.KeyCode.W) end
+ connect(UIS.InputBegan,function(i) local k=i.KeyCode;if sending or held[k] or(k==Enum.KeyCode.W and sprintDown) then return end;if movement[k] then keys[k]=true end;if on and k==Enum.KeyCode.Q and not UIS:GetFocusedTextBox() then pauseUntil=os.clock()+.75 end end)
+ connect(UIS.InputEnded,function(i) local k=i.KeyCode;if sending or held[k] or(k==Enum.KeyCode.W and sprintDown) then return end;keys[k]=nil end)
+ connect(UIS.WindowFocusReleased,function() keys={};sprint(false);releaseDash();pauseUntil=os.clock()+.5 end)
+ local rows={}
+ local function filter() local q=search.Text:lower();for _,e in ipairs(rows) do e.b.Visible=q=="" or e.text:find(q,1,true)~=nil end end
+ local function rebuild()
+  for _,e in ipairs(rows) do e.c:Disconnect();e.b:Destroy() end;rows={}
+  local function row(text,n,id)
+   local b=make("TextButton",list,{Size=UDim2.new(1,0,0,26),BackgroundColor3=T.p2,Text=text,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=n});corner(b,5)
+   local c=b.Activated:Connect(function() selectedId=id;reset();chosenLabel.Text="Target: "..text end);table.insert(rows,{b=b,c=c,text=text:lower()})
+  end
+  row("Nearest player (automatic)",0,nil);local ps=Players:GetPlayers();table.sort(ps,function(a,b) return a.Name:lower()<b.Name:lower() end)
+  for i,p in ipairs(ps) do if p~=LP then row(p.DisplayName.." (@"..p.Name..")",i,p.UserId) end end;filter()
+ end
+ connect(search:GetPropertyChangedSignal("Text"),filter);connect(Players.PlayerAdded,rebuild);connect(Players.PlayerRemoving,function(p) if p==target then reset() end;task.defer(function() if running and gui.Parent then rebuild() end end) end);rebuild()
+ local function setFollow(v)
+  if on==v then return end
+  on=v;reset();info.Text=v and "Finding target..." or "Off"
+ end
+ followSetEnabled=setFollow
+ followPaint=toggle(box,"Follow Behind + Sprint",function() return on end,function(v) setFollow(v) end)
+ toggle(box,"Automatic Pathfinding Jumps",function() return autoJump end,function(v) autoJump=v;invalidate() end)
+ toggle(box,"Use Front / Side / Back Dashes",function() return dashes end,function(v) dashes=v;if not v then releaseDash() end end)
+ local function rayParams() local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;local exclude={LP.Character};if target and target.Character then table.insert(exclude,target.Character) end;params.FilterDescendantsInstances=exclude;params.RespectCanCollide=true;return params end
+ local function clearDirectRoute(r,goal)
+  local offset=flat(goal-r.Position);if offset.Magnitude<.05 or math.abs(goal.Y-r.Position.Y)>3 then return false end
+  local params=rayParams();local right=Vector3.new(-offset.Z,0,offset.X).Unit*1.5
+  for _,shift in ipairs({Vector3.zero,right,-right,Vector3.new(0,-1.5,0)}) do if workspace:Raycast(r.Position+shift,offset,params) then return false end end
+  local samples=math.max(1,math.ceil(offset.Magnitude/3));for step=1,samples do if not workspace:Raycast(r.Position+offset*(step/samples),Vector3.new(0,-5,0),params) then return false end end;return true
+ end
+ local function dash(h,r,goal,wp)
+  if not dashes or os.clock()<pauseUntil or next(held) or not wp then return end;local cam=workspace.CurrentCamera;if not cam then return end
+  local f,s=flat(cam.CFrame.LookVector),flat(cam.CFrame.RightVector);if f.Magnitude<.01 or s.Magnitude<.01 then return end
+  f=f.Unit;s=s.Unit;local fd,sd=direction:Dot(f),direction:Dot(s)
+  local k,v,d=nil,nil,0;local now=os.clock()
+  if fd>.9 and now>=frontReady then k=Enum.KeyCode.W;v=f;d=FRONT_DISTANCE
+  elseif math.abs(sd)>.9 and now>=quickReady then k=sd>0 and Enum.KeyCode.D or Enum.KeyCode.A;v=sd>0 and s or -s;d=QUICKSTEP_DISTANCE
+  elseif fd<-.9 and now>=quickReady then k=Enum.KeyCode.S;v=-f;d=QUICKSTEP_DISTANCE end
+  if not k or flat(goal-r.Position).Magnitude<d+2 or flat(wp.Position-r.Position).Magnitude<d+1 then return end;local params=rayParams();if workspace:Raycast(r.Position,v*(d+2),params) then return end
+  if h.FloorMaterial~=Enum.Material.Air then for _,fraction in ipairs({.25,.5,.75,1}) do if not workspace:Raycast(r.Position+v*d*fraction,Vector3.new(0,-7,0),params) then return end end end
+  sprint(false);dashTicket+=1;local ticket=dashTicket;held[k]=true;held[Enum.KeyCode.Q]=true;pauseUntil=now+.75;if k==Enum.KeyCode.W then frontReady=now+6 else quickReady=now+2 end
+  send(k,true);send(Enum.KeyCode.Q,true);task.spawn(function() task.wait(.06);if ticket==dashTicket then releaseDash() end end)
+ end
+ connect(RS.Heartbeat,function()
+  if not running or not on then return end
+  if gui:GetAttribute("BehindTeleportActive") then if not paused then invalidate();releaseDash();halt();restore() end;paused=true;info.Text="Paused: loop teleport is active";return end
+  local h,r=rig();if not h then sprint(false);restore();return end
+  if interrupted() or os.clock()<pauseUntil then sprint(false);if interrupted() then releaseDash() end;if not paused then invalidate();direction=Vector3.zero;restore() end;paused=true;return end
+  if paused then paused=false;invalidate() end;local best,dist=nil,250
+  if selectedId then best=Players:GetPlayerByUserId(selectedId)
+  else
+   for _,p in ipairs(Players:GetPlayers()) do local c=p.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart");if th and tr and th.Health>0 and p~=LP then local d=(tr.Position-r.Position).Magnitude;if d<dist then dist=d;best=p end end end
+   local c=target and target.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart");if th and tr and th.Health>0 and(tr.Position-r.Position).Magnitude<250 and dist+6>=(tr.Position-r.Position).Magnitude then best=target end
+  end
+  if best~=target then invalidate();target=best end;local c=target and target.Character;local th=c and c:FindFirstChildOfClass("Humanoid");local tr=c and c:FindFirstChild("HumanoidRootPart")
+  if not th or not tr or th.Health<=0 or(tr.Position-r.Position).Magnitude>250 then halt();restore();info.Text="Waiting for target";return end
+  if owned~=h then restore();owned=h;oldRotate=h.AutoRotate end;face=tr
+  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return end;look=look.Unit;local goal=tr.Position-look*4;local airborne=h.FloorMaterial==Enum.Material.Air;local delta=flat(goal-r.Position)
+  if not airborne and not jumpingIndex and delta.Magnitude<1.4 and math.abs(goal.Y-r.Position.Y)<4 then halt();info.Text="Behind "..target.DisplayName;return end
+  if not airborne and not jumpingIndex and clearDirectRoute(r,goal) then if route or computing then invalidate() end;direction=delta.Unit;sprint(true);h:Move(direction,false);info.Text="Following "..target.DisplayName.." - direct route";dash(h,r,goal,{Position=goal,Action=Enum.PathWaypointAction.Walk});return end
+  if not computing and not airborne and not jumpingIndex and(not planned or(goal-planned).Magnitude>.75 or index>#points) then
+   computing=true;local ticket=generation;local origin=r.Position;task.spawn(function()
+    local candidate=PFS:CreatePath({AgentRadius=2,AgentHeight=5,AgentCanJump=autoJump,WaypointSpacing=30});local ok=pcall(function() candidate:ComputeAsync(origin,goal) end)
+    if ticket~=generation or not on or not running then candidate:Destroy();return end;computing=false
+    if ok and candidate.Status==Enum.PathStatus.Success then clear();route=candidate;points=candidate:GetWaypoints();index=2;planned=goal;blocked=candidate.Blocked:Connect(function(i) if i>=index then planned=nil end end) else candidate:Destroy();info.Text="No route; retrying" end
+   end)
+  end
+  local wp=points[index];while wp and wp.Action~=Enum.PathWaypointAction.Jump and index<#points and flat(wp.Position-r.Position).Magnitude<3 do index+=1;wp=points[index] end
+  if wp then local gap=flat(wp.Position-r.Position).Magnitude
+   if wp.Action==Enum.PathWaypointAction.Jump and autoJump then
+    if not jumpingIndex and not airborne and os.clock()-lastJump>.35 then jumpingIndex=index;jumpStarted=os.clock();lastJump=jumpStarted;jumpLeftGround=false;h.Jump=true;h:ChangeState(Enum.HumanoidStateType.Jumping) end
+    if jumpingIndex==index then if airborne then jumpLeftGround=true end;local landed=jumpLeftGround and not airborne and os.clock()-jumpStarted>.15;local reached=jumpLeftGround and gap<2.5
+     if reached or landed then jumpingIndex=nil;index+=1;wp=points[index];if landed and not reached then planned=nil end elseif not airborne and not jumpLeftGround and os.clock()-jumpStarted>.6 then jumpingIndex=nil;planned=nil end
+    end
+   elseif gap<1.5 then index+=1;wp=points[index] end
+   if wp then local d=flat(wp.Position-r.Position);if d.Magnitude>.05 then direction=d.Unit else direction=Vector3.zero end;sprint(direction.Magnitude>.05);h:Move(direction,false);info.Text=jumpingIndex and "Auto-jumping along path" or "Following "..target.DisplayName;dash(h,r,goal,wp) else direction=Vector3.zero;planned=nil end
+  elseif not airborne then direction=Vector3.zero;h:Move(direction,false);sprint(false) end
+ end)
+ local renderName="JJSFollowAutomaticPathJump"
+ RS:BindToRenderStep(renderName,Enum.RenderPriority.Character.Value+1,function()
+  if not running or not on then return end;if gui:GetAttribute("BehindTeleportActive") then sprint(false);restore();return end;if interrupted() or os.clock()<pauseUntil then sprint(false);restore();return end
+  local h,r=rig();if not h then sprint(false);return end;local air=h.FloorMaterial==Enum.Material.Air;sprint(direction.Magnitude>.05 and face~=nil);h:Move(direction,false)
+  if face and face.Parent and owned==h then h.AutoRotate=false;if not air then local aim=Vector3.new(face.Position.X,r.Position.Y,face.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end end end
+ end)
+ local function shutdown() on=false;reset();RS:UnbindFromRenderStep(renderName);for _,e in ipairs(rows) do e.c:Disconnect() end end
+ connect(LP.CharacterRemoving,reset);connect(gui.Destroying,shutdown);connect(unload.Activated,shutdown)
+end
+
+-- Slow Spin.
+do
+ local spinEnabled=false;local spinSpeed=30;local spinHumanoid,spinRoot,previousAutoRotate=nil,nil,nil;local spinAngle=0;local spinBind="JJSIntegratedSlowSpin"
+ local panel=card(pages.Movement,"Slow Spin","Slow rotation; overrides follow-facing while enabled")
+ local function restoreSpin() if spinHumanoid and spinHumanoid.Parent then spinHumanoid.AutoRotate=previousAutoRotate end;spinHumanoid=nil;spinRoot=nil end
+ toggle(panel,"Slow Spin",function() return spinEnabled end,function(v) spinEnabled=v;if not v then restoreSpin() end end);moduleSlider(panel,"Spin speed",5,90,spinSpeed," degrees/s",function() return spinSpeed end,function(v) spinSpeed=v end)
+ RS:BindToRenderStep(spinBind,Enum.RenderPriority.Character.Value+2,function(dt)
+  if not running or not spinEnabled then return end;local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");local root=char and char:FindFirstChild("HumanoidRootPart")
+  if not hum or not root or hum.Health<=0 then restoreSpin();return end;if spinHumanoid~=hum or spinRoot~=root then restoreSpin();spinHumanoid=hum;spinRoot=root;previousAutoRotate=hum.AutoRotate;local _,yaw=root.CFrame:ToOrientation();spinAngle=yaw end
+  hum.AutoRotate=false;spinAngle=(spinAngle+math.rad(spinSpeed)*dt)%(math.pi*2);root.CFrame=CFrame.new(root.Position)*CFrame.Angles(0,spinAngle,0)
+ end)
+ local function stopSpin() spinEnabled=false;RS:UnbindFromRenderStep(spinBind);restoreSpin() end;connect(LP.CharacterRemoving,restoreSpin);connect(unload.Activated,stopSpin);connect(gui.Destroying,stopSpin)
+end
+
+-- Local-only invisibility; does not hide you from other players.
+do
+ local invisible=false;local saved={};local characterConnection=nil;local bind="JJSLocalInvisibility"
+ local panel=card(pages.Visuals,"Invisible (Local Only)","Hides your avatar on your screen only; other players can still see you")
+ local function propertyFor(o)
+  if o:IsA("BasePart") then return "LocalTransparencyModifier",1 end;if o:IsA("Decal") or o:IsA("Texture") then return "Transparency",1 end
+  if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Beam") or o:IsA("BillboardGui") or o:IsA("SurfaceGui") or o:IsA("Highlight") then return "Enabled",false end;if o:IsA("Humanoid") then return "DisplayDistanceType",Enum.HumanoidDisplayDistanceType.None end
+ end
+ local function hide(o) if not invisible or saved[o] then return end;local property,value=propertyFor(o);if not property then return end;local ok,old=pcall(function() return o[property] end);if ok then saved[o]={property=property,original=old,hidden=value};pcall(function() o[property]=value end) end end
+ local function restore() if characterConnection then characterConnection:Disconnect();characterConnection=nil end;for o,e in pairs(saved) do pcall(function() o[e.property]=e.original end) end;saved={} end
+ local function attach(char) restore();if not invisible or not char then return end;characterConnection=char.DescendantAdded:Connect(hide);for _,o in ipairs(char:GetDescendants()) do hide(o) end end
+ toggle(panel,"Invisible (Local Only)",function() return invisible end,function(v) invisible=v;if v then attach(LP.Character) else restore() end end);connect(LP.CharacterAdded,function(char) if invisible then attach(char) end end);connect(LP.CharacterRemoving,restore)
+ RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+4,function() if not running or not invisible then return end;for o,e in pairs(saved) do if o.Parent then pcall(function() o[e.property]=e.hidden end) end end end)
+ local function shutdown() invisible=false;RS:UnbindFromRenderStep(bind);restore() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+
+-- Regular Speed 1-10000; yields to Build Speed.
+do
+ local speedEnabled=false;local selectedSpeed=24;local ownedHumanoid,originalSpeed=nil,nil;local bind="JJSIntegratedSpeed"
+ local panel=card(pages.Movement,"Speed","Walk speed 1-10000; off restores your previous value; yields to Build Speed")
+ local function restoreSpeed() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.WalkSpeed=originalSpeed end;ownedHumanoid=nil;originalSpeed=nil end
+ local function applySpeed() if not speedEnabled or not running then return end;if gui:GetAttribute("BuildSpeedActive") then restoreSpeed();return end;local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");if not hum or hum.Health<=0 then restoreSpeed();return end;if ownedHumanoid~=hum then restoreSpeed();ownedHumanoid=hum;originalSpeed=hum.WalkSpeed end;hum.WalkSpeed=selectedSpeed end
+ toggle(panel,"Speed",function() return speedEnabled end,function(v) speedEnabled=v;if v then applySpeed() else restoreSpeed() end end);moduleSlider(panel,"Walk speed",1,10000,selectedSpeed," studs/s",function() return selectedSpeed end,function(v) selectedSpeed=math.clamp(v,1,10000);if speedEnabled then applySpeed() end end)
+ connect(LP.CharacterRemoving,restoreSpeed);RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+3,function() if speedEnabled then applySpeed() end end)
+ local function shutdown() speedEnabled=false;RS:UnbindFromRenderStep(bind);restoreSpeed() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+
+-- Build Speed, cap 10000.
+do
+ local on=false;local startSpeed,acceleration,maxSpeed=16,10,10000;local currentSpeed=startSpeed;local resetOnStop=false;local owned,previousSpeed=nil,nil;local bind="JJSBuildSpeed";gui:SetAttribute("BuildSpeedActive",false)
+ local panel=card(pages.Movement,"Build Speed","Gain speed while moving, up to 10000; holds gained speed when stopped")
+ local readout=make("TextLabel",panel,{Size=UDim2.new(1,0,0,26),BackgroundTransparency=1,Text="Off",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
+ local function restore() if owned and owned.Parent then owned.WalkSpeed=previousSpeed end;owned=nil;previousSpeed=nil end
+ toggle(panel,"Build Speed",function() return on end,function(v) if not v then restore() end;on=v;currentSpeed=math.min(startSpeed,maxSpeed);gui:SetAttribute("BuildSpeedActive",v);readout.Text=v and "Enabled - move to build speed" or "Off" end)
+ moduleSlider(panel,"Starting speed",1,100,startSpeed," studs/s",function() return startSpeed end,function(v) startSpeed=v end);moduleSlider(panel,"Speed gained per second",1,100,acceleration," studs/s per second",function() return acceleration end,function(v) acceleration=v end)
+ moduleSlider(panel,"Maximum built speed",16,10000,maxSpeed," studs/s",function() return maxSpeed end,function(v) maxSpeed=math.clamp(v,16,10000);currentSpeed=math.min(currentSpeed,maxSpeed) end);toggle(panel,"Reset speed when stopped",function() return resetOnStop end,function(v) resetOnStop=v end)
+ local resetButton=make("TextButton",panel,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Reset built speed",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=nextOrder(panel)+2});corner(resetButton,6);connect(resetButton.Activated,function() currentSpeed=math.min(startSpeed,maxSpeed) end)
+ RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+5,function(dt)
+  if not running or not on then return end;local char=LP.Character;local h=char and char:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then restore();return end
+  if owned~=h then restore();owned=h;previousSpeed=h.WalkSpeed;currentSpeed=math.min(startSpeed,maxSpeed) end;local moving=h.MoveDirection.Magnitude>.05
+  if moving then currentSpeed=math.min(maxSpeed,currentSpeed+acceleration*dt) elseif resetOnStop then currentSpeed=math.min(startSpeed,maxSpeed) end;currentSpeed=math.clamp(currentSpeed,1,maxSpeed);h.WalkSpeed=currentSpeed;readout.Text=string.format("Built speed: %.1f / %d studs/s%s",currentSpeed,maxSpeed,moving and " - building" or " - held")
+ end)
+ connect(LP.CharacterRemoving,function() restore();currentSpeed=math.min(startSpeed,maxSpeed) end);local function shutdown() on=false;restore();RS:UnbindFromRenderStep(bind);pcall(function() gui:SetAttribute("BuildSpeedActive",false) end) end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+
+-- Jump Power fix: grounded velocity assist and teleport conflict guard.
+do
+ local on=false;local selectedPower=50;local assist=true;local owned,original=nil,nil;local lastLaunch=-math.huge;local graceUntil=0;local bind="JJSJumpPower";gui:SetAttribute("JumpPowerAirborne",false)
+ local panel=card(pages.Movement,"Jump Power","1-1000; grounded jump assist; loop teleport pauses until landing")
+ local feedback=make("TextLabel",panel,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Off",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
+ local function clearAir() graceUntil=0;gui:SetAttribute("JumpPowerAirborne",false) end
+ local function restore() if owned and owned.Parent and original then owned.JumpPower=original.power;owned.JumpHeight=original.height;owned.UseJumpPower=original.mode;owned:SetStateEnabled(Enum.HumanoidStateType.Jumping,original.jumping) end;owned=nil;original=nil end
+ local function rig() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");if h and r and h.Health>0 then return h,r end end
+ local function apply()
+  if not on or not running then return end;local h,r=rig();if not h then restore();clearAir();return end
+  if owned~=h then restore();owned=h;original={power=h.JumpPower,height=h.JumpHeight,mode=h.UseJumpPower,jumping=h:GetStateEnabled(Enum.HumanoidStateType.Jumping)} end
+  h.UseJumpPower=true;h.JumpPower=selectedPower;local gravity=workspace.Gravity;if gravity>0 then h.JumpHeight=math.clamp((selectedPower*selectedPower)/(2*gravity),0,1000) end;h:SetStateEnabled(Enum.HumanoidStateType.Jumping,true);return h,r
+ end
+ local function requestJump()
+  if not on or not running or UIS:GetFocusedTextBox() then return end;local h,r=apply();if not h or r.Anchored or h.Sit or h.PlatformStand then return end
+  if h.FloorMaterial==Enum.Material.Air or os.clock()-lastLaunch<.25 then return end;lastLaunch=os.clock();graceUntil=lastLaunch+.35;gui:SetAttribute("JumpPowerAirborne",true)
+  h.Jump=true;h:ChangeState(Enum.HumanoidStateType.Jumping);if assist then local v=r.AssemblyLinearVelocity;r.AssemblyLinearVelocity=Vector3.new(v.X,selectedPower,v.Z) end;feedback.Text="Jump requested: "..selectedPower.." - not server-confirmed"
+ end
+ toggle(panel,"Jump Power",function() return on end,function(v) on=v;if v then apply();feedback.Text="Enabled - press Space / jump" else restore();clearAir();feedback.Text="Off" end end);moduleSlider(panel,"Jump power",1,1000,selectedPower,"",function() return selectedPower end,function(v) selectedPower=math.clamp(v,1,1000);if on then apply() end end)
+ toggle(panel,"Grounded velocity jump assist",function() return assist end,function(v) assist=v end);connect(UIS.JumpRequest,requestJump);connect(UIS.InputBegan,function(input,processed) if not processed and input.KeyCode==Enum.KeyCode.Space and not UIS:GetFocusedTextBox() then requestJump() end end)
+ connect(RS.Heartbeat,function() if not on or not running then return end;local h=apply();if not h then return end;if h.FloorMaterial==Enum.Material.Air then gui:SetAttribute("JumpPowerAirborne",true) elseif os.clock()>=graceUntil then clearAir() end end)
+ RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+6,function() if on then apply() end end);connect(LP.CharacterRemoving,function() restore();clearAir();lastLaunch=-math.huge end)
+ local function shutdown() on=false;RS:UnbindFromRenderStep(bind);restore();clearAir() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+
+-- Style Combo, B to run/cancel.
+do
+ local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
+ local timings={punchGap=.60,downslamLead=.12,afterDownslam=.30,afterStrikes=2.0,afterSecondM1s=.30,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
+ local box=card(pages.Combos,"Style Combo","B: run/cancel | 3 M1 > Downslam > Cursed Strikes > 3 M1 > Side Dash > Black Flash > Aerial Crushing Blow")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready - timings untested; start close to your opponent",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local sideButton=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Style dash side: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4});corner(sideButton,6);connect(sideButton.Activated,function() side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;sideButton.Text=side==Enum.KeyCode.D and "Style dash side: D (right)" or "Style dash side: A (left)" end)
+ local play=make("TextButton",box,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Style Combo (B)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5});corner(play,6)
+ for _,spec in ipairs({{"M1 spacing",50,800,"punchGap"},{"Downslam lead",50,400,"downslamLead"},{"After downslam",0,800,"afterDownslam"},{"After Cursed Strikes",500,3500,"afterStrikes"},{"After second 3 M1s",0,2000,"afterSecondM1s"},{"Side dash hold",35,300,"dashHold"},{"After side dash",0,500,"afterDash"},{"Black Flash second tap",150,700,"blackFlashDelay"},{"After Black Flash",100,1200,"afterBlackFlash"},{"Aerial jump lead",35,400,"aerialLead"}}) do local key=spec[4];moduleSlider(box,spec[1],spec[2],spec[3],math.floor(timings[key]*1000+.5)," ms",function() return timings[key]*1000 end,function(v) timings[key]=v/1000 end) end
+ local function releaseInputs() if okVIM and VIM then for key in pairs(held) do pcall(function() VIM:SendKeyEvent(false,key,false,game) end) end;if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end end;held={};mouseDown=false end
+ local function finish() releaseInputs();if active then busy=false;manualSequenceBusy=false end;active=false end;local function cancel() generation+=1;finish();if feedback.Parent then feedback.Text="Style Combo cancelled / ready" end end
+ local function start()
+  if active then cancel();return end;if not running then return end;if busy or todoBusy or manualSequenceBusy then feedback.Text="Wait for the other macro to finish";return end;if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
+  local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then feedback.Text="Character unavailable";return end
+  active=true;busy=true;manualSequenceBusy=true;generation+=1;local id=generation;local chosenSide=side;local t=table.clone(timings)
+  task.spawn(function()
+   local function check() local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");if not running or generation~=id or not active or not hum or hum.Health<=0 then error("Style Combo cancelled",0) end end
+   local function waitFor(seconds) local untilTime=os.clock()+seconds;repeat check();task.wait() until os.clock()>=untilTime;check() end;local function key(code,down) check();if down then held[code]=true end;VIM:SendKeyEvent(down,code,false,game);if not down then held[code]=nil end end
+   local function tap(code) key(code,true);waitFor(.035);key(code,false) end;local function punch() check();mouseDown=true;local cursor=UIS:GetMouseLocation();VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0);waitFor(.035);VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0);mouseDown=false end
+   local function threeM1s() for i=1,3 do punch();if i<3 then waitFor(t.punchGap) end end end
+   local ok,err=pcall(function()
+    feedback.Text="Running Style Combo: first 3 M1s";waitFor(.15);threeM1s();waitFor(t.punchGap)
+    feedback.Text="Style Combo: Downslam";key(Enum.KeyCode.Space,true);local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid");if hum then hum.Jump=true end;waitFor(t.downslamLead);punch();key(Enum.KeyCode.Space,false);waitFor(t.afterDownslam)
+    feedback.Text="Style Combo: Cursed Strikes";tap(Enum.KeyCode.One);waitFor(t.afterStrikes)
+    feedback.Text="Style Combo: second 3 M1s";threeM1s();waitFor(t.afterSecondM1s)
+    feedback.Text="Style Combo: Side Dash";key(chosenSide,true);key(Enum.KeyCode.Q,true);waitFor(.035);key(Enum.KeyCode.Q,false);if t.dashHold>.035 then waitFor(t.dashHold-.035) end;key(chosenSide,false);waitFor(t.afterDash)
+    feedback.Text="Style Combo: Black Flash attempt";local firstTap=os.clock();tap(Enum.KeyCode.Three);local remaining=t.blackFlashDelay-(os.clock()-firstTap);if remaining>0 then waitFor(remaining) end;tap(Enum.KeyCode.Three);waitFor(t.afterBlackFlash)
+    feedback.Text="Style Combo: Aerial Crushing Blow";key(Enum.KeyCode.Space,true);waitFor(t.aerialLead);tap(Enum.KeyCode.Two);key(Enum.KeyCode.Space,false)
+   end)
+   if generation==id then finish();if feedback.Parent then feedback.Text=ok and "Style Combo inputs sent - hits not confirmed" or tostring(err) end end
+  end)
+ end
+ connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.B then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
+end
+
+-- Cursed Partners Blackflash, N to run/cancel.
+do
+ local active=false;local generation=0;local held=nil
+ local box=card(pages.Combos,"Cursed Partners Blackflash","N: run/cancel | 1 > wait 750 ms > 2 > wait 750 ms > 2")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Ready - input sequence; hit success is not verified",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local play=make("TextButton",box,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Cursed Partners (N)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4});corner(play,6)
+ local function releaseInput() if held and okVIM and VIM then pcall(function() VIM:SendKeyEvent(false,held,false,game) end) end;held=nil end;local function finish() releaseInput();if active then busy=false;manualSequenceBusy=false end;active=false end;local function cancel() generation+=1;finish();if feedback.Parent then feedback.Text="Cursed Partners cancelled / ready" end end
+ local function start()
+  if active then cancel();return end;if not running then return end;if busy or todoBusy or manualSequenceBusy then feedback.Text="Wait for the other macro to finish";return end;if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
+  local character=LP.Character;local humanoid=character and character:FindFirstChildOfClass("Humanoid");if not humanoid or humanoid.Health<=0 then feedback.Text="Character unavailable";return end
+  active=true;busy=true;manualSequenceBusy=true;generation+=1;local id=generation;task.spawn(function()
+   local function check() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");if not running or not active or generation~=id or not h or h.Health<=0 then error("Cursed Partners cancelled",0) end end
+   local function waitFor(seconds) local deadline=os.clock()+seconds;repeat check();task.wait() until os.clock()>=deadline;check() end;local function tap(code) check();held=code;VIM:SendKeyEvent(true,code,false,game);waitFor(.035);VIM:SendKeyEvent(false,code,false,game);held=nil end
+   local ok,err=pcall(function() feedback.Text="Running Cursed Partners Blackflash";tap(Enum.KeyCode.One);waitFor(.750);tap(Enum.KeyCode.Two);waitFor(.750);tap(Enum.KeyCode.Two) end)
+   if generation==id then finish();if feedback.Parent then feedback.Text=ok and "Cursed Partners inputs sent - hits not confirmed" or tostring(err) end end
+  end)
+ end
+ connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.N then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
+end
+
+-- Loop Teleport Behind, named-player picker; yields during Jump Power jumps.
+do
+ local on=false;local selectedId=nil;local intervalMs=150;local behindDistance=4;local lastTeleport=-math.huge;gui:SetAttribute("BehindTeleportActive",false)
+ local box=card(pages["Lock On"],"Loop Teleport Behind","Pick a player, then enable; yields during Jump Power jumps")
+ local selected=make("TextLabel",box,{Size=UDim2.new(1,0,0,24),BackgroundTransparency=1,Text="Target: none selected",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+ local search=make("TextBox",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="",PlaceholderText="Pick by username or display name",ClearTextOnFocus=false,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=4});corner(search,6)
+ local list=make("ScrollingFrame",box,{Size=UDim2.new(1,0,0,130),BackgroundColor3=T.p2,BorderSizePixel=0,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),ScrollBarThickness=3,LayoutOrder=5});make("UIListLayout",list,{Padding=UDim.new(0,3),SortOrder=Enum.SortOrder.LayoutOrder})
+ local info=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Off - choose a player above",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=6});ord[box]=6;local rows={}
+ local function filter() local q=search.Text:lower();for _,entry in ipairs(rows) do entry.button.Visible=q=="" or entry.text:find(q,1,true)~=nil end end
+ local function rebuild()
+  for _,entry in ipairs(rows) do entry.connection:Disconnect();entry.button:Destroy() end;rows={};local ps=Players:GetPlayers();table.sort(ps,function(a,b) return a.Name:lower()<b.Name:lower() end)
+  for index,p in ipairs(ps) do if p~=LP then
+   local label=p.DisplayName.." (@"..p.Name..")";local button=make("TextButton",list,{Size=UDim2.new(1,0,0,26),BackgroundColor3=selectedId==p.UserId and T.acc or T.p2,Text=label,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=index});corner(button,5)
+   local connection=button.Activated:Connect(function() selectedId=p.UserId;selected.Text="Target: "..label;lastTeleport=-math.huge;for _,entry in ipairs(rows) do entry.button.BackgroundColor3=entry.id==selectedId and T.acc or T.p2 end;info.Text=on and "Loop teleport enabled" or "Ready - enable Loop Teleport Behind" end)
+   table.insert(rows,{button=button,connection=connection,text=label:lower(),id=p.UserId})
+  end end;filter()
+ end
+ connect(search:GetPropertyChangedSignal("Text"),filter);connect(Players.PlayerAdded,rebuild);connect(Players.PlayerRemoving,function(p) if selectedId==p.UserId then selectedId=nil;selected.Text="Target: none selected";info.Text="Target left - choose another player" end;task.defer(function() if running and gui.Parent then rebuild() end end) end);rebuild()
+ toggle(box,"Loop Teleport Behind",function() return on end,function(v) on=v;gui:SetAttribute("BehindTeleportActive",v);lastTeleport=-math.huge;info.Text=v and (selectedId and "Loop teleport enabled" or "Choose a player above") or "Off" end)
+ moduleSlider(box,"Repeat interval",50,1000,intervalMs," ms",function() return intervalMs end,function(v) intervalMs=v end);moduleSlider(box,"Behind distance",2,12,behindDistance," studs",function() return behindDistance end,function(v) behindDistance=v end)
+ connect(RS.Heartbeat,function()
+  if not running or not on or busy or todoBusy or manualSequenceBusy or UIS:GetFocusedTextBox() then return end;if gui:GetAttribute("JumpPowerAirborne") then info.Text="Paused during jump - resumes on landing";return end
+  local now=os.clock();if now-lastTeleport<intervalMs/1000 then return end;local p=selectedId and Players:GetPlayerByUserId(selectedId);if not p or p==LP then info.Text="Choose a player above";return end
+  local c=LP.Character;local tc=p.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");local th=tc and tc:FindFirstChildOfClass("Humanoid");local tr=tc and tc:FindFirstChild("HumanoidRootPart")
+  if not h or not r or h.Health<=0 or not th or not tr or th.Health<=0 then info.Text="Waiting for both characters to be alive";return end
+  local look=Vector3.new(tr.CFrame.LookVector.X,0,tr.CFrame.LookVector.Z);if look.Magnitude<.01 then return end;look=look.Unit;local offset=-look*behindDistance
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={c,tc};params.RespectCanCollide=true
+  if workspace:Raycast(tr.Position,offset,params) then info.Text="Behind position blocked - waiting";lastTeleport=now;return end
+  lastTeleport=now;local position=tr.Position+offset;r.CFrame=CFrame.lookAt(position,Vector3.new(tr.Position.X,position.Y,tr.Position.Z));r.AssemblyLinearVelocity=Vector3.zero;r.AssemblyAngularVelocity=Vector3.zero;info.Text="Looping behind "..p.DisplayName.." every "..intervalMs.." ms"
+ end)
+ local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+
+-- Shared V2/V3 engine; turnaround S+Q variant starts only from the target's front.
+do
+ local CAS=game:GetService("ContextActionService")
+ local enabledV2,enabledV3,active=false,false,false;local runVersion=2
+ local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
+ local includeNPCsV2=false;local turnaroundMixups=false;local calculatorEnabled=true;local autoCameraAngle=false
+ local generation=0;local held={};local mouseDown=false;local targetRoot=nil;local ownedHumanoid,previousAutoRotate=nil,nil
+ local repeatGapMs,jumpLeadMs,cameraFlickHoldMs=325,120,150;local postDashTurnDegrees=75
+ local SIDE_MIN,CATCHUP_DISTANCE,ATTACK_MIN,ATTACK_MAX=6,7,2,6;local ATTACK_CENTER=4
+ local POST_JUMP_MIN,POST_JUMP_AIM=5,5.25;local needPostJumpBackoff=false
+ local nextDash=0;local phase="idle";local steering=Vector3.zero;local mixFacing=Vector3.zero;local strafeKey=Enum.KeyCode.D
+ local flickUntil=0;local flickRotation=nil;local flickNavigationRight=Vector3.zero
+ local lockSuppressed=false;local borrowedLock=false;local previousLockOn=false
+ local frontSequenceArmed=false;local frontSequenceModel=nil
+ local fightModel,fightHumanoid=nil,nil;local fightLinks={};local suppressStartUntil=0
+ local targetCacheAt=-math.huge;local targetCacheReady=false;local cachedCandidate,cachedRoot=nil,nil;local routeCache=nil
+ local sharedParams=nil;local paramsModel,paramsCharacter=nil,nil
+ local MOVE_KEYS={Enum.KeyCode.W,Enum.KeyCode.A,Enum.KeyCode.S,Enum.KeyCode.D};local PAUSED_FOR_TYPING={}
+ local action="JJSBlackflashV2Activate";local cameraBind,faceBind="JJSBlackflashV2Camera","JJSBlackflashV2Facing"
+ local v2StartedAt=0;local V2_MAX_DURATION=8
+ local box=card(pages["Auto Blackflash"],"Blackflash Chain V2","Press 3 | 3 Black Flash sequences, then LMB and stop | auto-cancel on cooldown or 8s")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable V2 and press 3",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
+ local boxV3=card(pages["Auto Blackflash"],"Blackflash Chain V3","Press 3 | 3 Black Flash sequences > wait 300 ms > LMB > loop until target dies")
+ local feedbackV3=make("TextLabel",boxV3,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Off - enable V3 and press 3; V3 takes priority if both are enabled",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[boxV3]=3
+ local calcBox=card(pages["Auto Blackflash"],"V2 / V3 Route Calculator","Cached left/right orbit, obstacle and ETA estimates")
+ local calcStatus=make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,106),BackgroundTransparency=1,Text="Waiting for a live target",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3});ord[calcBox]=3
+ gui:SetAttribute("BlackflashChainV2Active",false);gui:SetAttribute("BlackflashChainV3Active",false)
+ local start,bindCapture,stop,stopForDefeat
+ local function enabledForRun() if runVersion==3 then return enabledV3 else return enabledV2 end end
+ -- Detect ability/hotbar cooldown overlays in PlayerGui (common JJS UI patterns)
+ local function abilityCooldownActive()
+  local pg=LP:FindFirstChild("PlayerGui")
+  if not pg then return false end
+  for _,d in ipairs(pg:GetDescendants()) do
+   if d:IsA("GuiObject") and d.Visible then
+    local n=string.lower(d.Name)
+    if n:find("cooldown",1,true) or n:find("cdframe",1,true) or n:find("cd_",1,true) or n=="cd" then
+     local parentName=d.Parent and string.lower(d.Parent.Name) or ""
+     local grandName=d.Parent and d.Parent.Parent and string.lower(d.Parent.Parent.Name) or ""
+     local ctx=parentName.." "..grandName.." "..n
+     if ctx:find("skill",1,true) or ctx:find("ability",1,true) or ctx:find("hotbar",1,true) or ctx:find("slot",1,true) or ctx:find("move",1,true) or ctx:find("black",1,true) or ctx:find("3",1,true) or ctx:find("combat",1,true) then
+      -- visible filled cooldown ring/frame
+      if d:IsA("ImageLabel") or d:IsA("Frame") or d:IsA("TextLabel") then
+       if d:IsA("ImageLabel") and d.ImageTransparency>=.99 then
+        -- skip fully transparent
+       else
+        return true
+       end
+      end
+     end
+    end
+   end
+  end
+  return false
+ end
+ local function setting(name)
+  if runVersion==3 then return V3_FIXED[name] end
+  if name=="Turn" then return postDashTurnDegrees elseif name=="CameraHold" then return cameraFlickHoldMs elseif name=="RepeatGap" then return repeatGapMs elseif name=="JumpLead" then return jumpLeadMs end
+ end
+ local function say(text) local label=runVersion==3 and feedbackV3 or feedback;if runVersion==3 then text=text:gsub("^V2","V3") end;if label.Parent and label.Text~=text then label.Text=text end end
+ local function flat(v) return Vector3.new(v.X,0,v.Z) end
+ local function rig() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");if h and r and h.Health>0 then return h,r end end
+ local function typing() return UIS:GetFocusedTextBox()~=nil end
+ local function invalidateCaches() targetCacheAt=-math.huge;targetCacheReady=false;cachedCandidate=nil;cachedRoot=nil;routeCache=nil;sharedParams=nil;paramsModel=nil;paramsCharacter=nil end
+ local function sendKey(code,down) local ok,err=pcall(function() VIM:SendKeyEvent(down,code,false,game) end);if not ok then error(err,0) end end
+ local function key(code,down)
+  if down then if typing() then error(PAUSED_FOR_TYPING,0) end;if held[code] then return end;held[code]=true;if code==Enum.KeyCode.Three then suppressStartUntil=os.clock()+.1 end;sendKey(code,true)
+  elseif held[code] then sendKey(code,false);held[code]=nil end
+ end
+ local function releaseInputs() for code in pairs(held) do pcall(function() sendKey(code,false) end) end;held={};if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end;mouseDown=false end
+ local function restoreLockOn() if borrowedLock then lockOn=previousLockOn end;borrowedLock=false;lockSuppressed=false;mixFacing=Vector3.zero end
+ local function restoreFacing() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.AutoRotate=previousAutoRotate end;ownedHumanoid=nil end
+ local function move(mode,vector)
+  if typing() then error(PAUSED_FOR_TYPING,0) end;phase=mode;steering=vector or Vector3.zero
+  key(Enum.KeyCode.W,mode=="catchup" or mode=="attackApproach" or mode=="jumpOver")
+  key(Enum.KeyCode.S,mode=="backMixup" or mode=="postJumpBackoff")
+  local side=mode=="side";key(Enum.KeyCode.D,side and strafeKey==Enum.KeyCode.D);key(Enum.KeyCode.A,side and strafeKey==Enum.KeyCode.A)
+  if mode~="side" and mode~="backMixup" then key(Enum.KeyCode.Q,false) end
+ end
+ local function releasePositioning() phase="idle";steering=Vector3.zero;for _,code in ipairs(MOVE_KEYS) do key(code,false) end;key(Enum.KeyCode.Q,false) end
+ local function disconnectFight() for _,c in ipairs(fightLinks) do c:Disconnect() end;fightLinks={};fightModel=nil;fightHumanoid=nil end
+ stop=function(message)
+  generation+=1;local owned=active;active=false
+  -- Fully release control: inputs, positioning, camera lock, facing
+  releasePositioning();releaseInputs();disconnectFight();invalidateCaches()
+  phase="idle";steering=Vector3.zero;targetRoot=nil
+  flickUntil=0;flickRotation=nil;flickNavigationRight=Vector3.zero;needPostJumpBackoff=false
+  frontSequenceArmed=false;frontSequenceModel=nil
+  lockSuppressed=false;mixFacing=Vector3.zero;borrowedLock=false
+  restoreFacing()
+  local h,r=rig()
+  if h then
+   h.AutoRotate=true
+   h:Move(Vector3.zero,false)
+  end
+  if r then
+   -- clear any script-driven velocity lock so the character is not frozen in place
+   local v=r.AssemblyLinearVelocity
+   r.AssemblyLinearVelocity=Vector3.new(v.X,v.Y,v.Z)
+   r.AssemblyAngularVelocity=Vector3.zero
+  end
+  bfAssistOff() -- turns off Lock On + Follow Behind in logic and UI (camera unlock)
+  v2StartedAt=0
+  if owned then busy=false;manualSequenceBusy=false end
+  gui:SetAttribute("BlackflashChainV2Active",false);gui:SetAttribute("BlackflashChainV3Active",false)
+  say(message or "Stopped - camera unlocked, free to move. Press 3 to start again")
+ end
+ stopForDefeat=function(reason) if not active then return end;local name=fightModel and fightModel.Name or "target";stop("V2 stopped: "..name.." "..(reason or "defeated")..". Press 3 for a new run.");suppressStartUntil=os.clock()+.15;if bindCapture then bindCapture() end end
+ local function ensureFightAlive()
+  if not active then return false end
+  if fightHumanoid and fightHumanoid.Health<=0 then stopForDefeat("died");return false end
+  if fightModel and not fightModel:IsDescendantOf(workspace) then stopForDefeat("was removed");return false end;return true
+ end
+ local function watchFight(p)
+  if not active or not p or not p.Model or fightModel==p.Model then return end;if not ensureFightAlive() then return end
+  disconnectFight();fightModel=p.Model;fightHumanoid=p.Humanoid or p.Model:FindFirstChildOfClass("Humanoid");if not fightHumanoid then return end
+  local watchedModel,watchedHumanoid,watchedRun=fightModel,fightHumanoid,generation
+  local function stillCurrent() return active and generation==watchedRun and fightModel==watchedModel end
+  table.insert(fightLinks,watchedHumanoid.Died:Connect(function() if stillCurrent() then stopForDefeat("died") end end))
+  table.insert(fightLinks,watchedHumanoid.HealthChanged:Connect(function(health) if health<=0 and stillCurrent() then stopForDefeat("died") end end))
+  table.insert(fightLinks,watchedModel.AncestryChanged:Connect(function() if stillCurrent() and not watchedModel:IsDescendantOf(workspace) then stopForDefeat("was removed") end end))
+  if watchedHumanoid.Health<=0 then stopForDefeat("died") end
+ end
+ local function pauseForTyping() releaseInputs();phase="idle";steering=Vector3.zero;flickUntil=0;restoreLockOn();restoreFacing();if bindCapture then bindCapture() end;say("V2 paused while typing in a text box") end
+ local function closest(force)
+  local h,r=rig();if not h then return nil end
+  if active and runVersion==3 and fightModel and fightHumanoid then
+   if fightHumanoid.Health<=0 or not fightModel:IsDescendantOf(workspace) then return nil end
+   local owner=Players:GetPlayerFromCharacter(fightModel);if not owner and not includeNPCsV2 then return nil end
+   local root=fightModel:FindFirstChild("HumanoidRootPart") or fightModel.PrimaryPart;if not root or not root:IsA("BasePart") then return nil end
+   if cachedCandidate and cachedCandidate.Model==fightModel and cachedCandidate.Humanoid==fightHumanoid then return cachedCandidate,root end
+   return {DisplayName=owner and owner.DisplayName or fightModel.Name,IsNPC=owner==nil,Model=fightModel,Humanoid=fightHumanoid},root
+  end
+  local now=os.clock()
+  if not force and targetCacheReady and now-targetCacheAt<1/30 then
+   if not cachedCandidate then return nil end
+   if cachedRoot and cachedRoot.Parent and cachedCandidate.Humanoid.Health>0 and cachedCandidate.Model:IsDescendantOf(workspace) then return cachedCandidate,cachedRoot end
+  end
+  local best,bestRoot,bestDistance=nil,nil,math.huge
+  for hum in pairs(humanoids) do local model=hum.Parent
+   if hum.Health>0 and model and model:IsA("Model") and model~=LP.Character and model:IsDescendantOf(workspace) then local owner=Players:GetPlayerFromCharacter(model)
+    if owner~=LP and (owner or includeNPCsV2) then local root=model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+     if root and root:IsA("BasePart") then local distance=(root.Position-r.Position).Magnitude
+      if distance<bestDistance then best={DisplayName=owner and owner.DisplayName or model.Name,IsNPC=owner==nil,Model=model,Humanoid=hum};bestRoot=root;bestDistance=distance end
+     end
+    end
+   end
+  end
+  cachedCandidate=best;cachedRoot=bestRoot;targetCacheAt=now;targetCacheReady=true;return best,bestRoot
+ end
+ local function spacing(tr) local h,r=rig();if not h or not tr or not tr.Parent then return nil end;local offset=flat(r.Position-tr.Position);return offset.Magnitude,offset,h,r end
+ local function facingDot(tr)
+  local distance,offset=spacing(tr);if not distance or distance<.5 then return nil end
+  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return nil end
+  return offset.Unit:Dot(look.Unit)
+ end
+ local function rearSide(tr) local dot=facingDot(tr);return dot~=nil and dot<=-.55 end
+ local function frontSide(tr) local dot=facingDot(tr);return dot~=nil and dot>=.55 end
+ local function authorizedFrontVariant(tr)
+  local model=tr and tr:FindFirstAncestorOfClass("Model")
+  return frontSequenceArmed and model==frontSequenceModel
+ end
+ local function attackReady(tr,ignoreHeight)
+  local distance,_,h,r=spacing(tr)
+  if needPostJumpBackoff or not distance or distance<ATTACK_MIN or distance>ATTACK_MAX then return false end
+  if not rearSide(tr) and not authorizedFrontVariant(tr) then return false end
+  return ignoreHeight or math.abs(r.Position.Y-tr.Position.Y)<=6
+ end
+ local function paramsFor(tr)
+  local model=tr and tr:FindFirstAncestorOfClass("Model");local character=LP.Character
+  if sharedParams and paramsModel==model and paramsCharacter==character then return sharedParams end
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;local exclude={character};if model then table.insert(exclude,model) end
+  params.FilterDescendantsInstances=exclude;params.RespectCanCollide=true;sharedParams=params;paramsModel=model;paramsCharacter=character;return params
+ end
+ local function objectInRoute(r,tr,direction,length)
+  if direction.Magnitude<.01 then return false end;local vector=direction.Unit*length;local params=paramsFor(tr);local side=Vector3.new(-direction.Z,0,direction.X).Unit
+  for _,shift in ipairs({Vector3.zero,Vector3.new(0,-1.5,0),Vector3.new(0,1,0),side,-side}) do if workspace:Raycast(r.Position+shift,vector,params) then return true end end;return false
+ end
+ local function navigationRight(away)
+  local cam=workspace.CurrentCamera;local right=cam and flat(cam.CFrame.RightVector) or Vector3.new(-away.Z,0,away.X)
+  if os.clock()<flickUntil and flickNavigationRight.Magnitude>.01 then right=flickNavigationRight end;if right.Magnitude<.01 then right=Vector3.new(-away.Z,0,away.X) end;return right.Unit
+ end
+ local function signedYaw(from,to) from=flat(from);to=flat(to);if from.Magnitude<.01 or to.Magnitude<.01 then return 0 end;from=from.Unit;to=to.Unit;return math.deg(math.atan2(from:Cross(to).Y,math.clamp(from:Dot(to),-1,1))) end
+ local function calculateRoute(tr,right,force)
+  local radius,offset,h,r=spacing(tr);if not radius or radius<.5 then return nil end
+  local look=flat(tr.CFrame.LookVector);if look.Magnitude<.01 then return nil end;look=look.Unit;local now=os.clock();local speed=math.max(h.WalkSpeed,1)
+  if not force and routeCache and routeCache.Root==tr and now-routeCache.At<.12 and(r.Position-routeCache.PlayerPos).Magnitude<.75 and(tr.Position-routeCache.TargetPos).Magnitude<.75 and look:Dot(routeCache.Look)>.985 and right:Dot(routeCache.Right)>.985 and math.abs(speed-routeCache.Speed)<1 then return routeCache.Plan end
+  local unit=offset.Unit;local rear=-look;local signed=math.atan2(unit:Cross(rear).Y,math.clamp(unit:Dot(rear),-1,1));local rightSign=unit:Cross(right).Y>=0 and 1 or -1
+  local cone=math.acos(.55);local twoPi=math.pi*2;local rightRadians=(signed*rightSign)%twoPi;local leftRadians=(-signed*rightSign)%twoPi
+  if rearSide(tr) then rightRadians=0;leftRadians=0 else rightRadians=math.max(0,rightRadians-cone);leftRadians=math.max(0,leftRadians-cone) end
+  local params=paramsFor(tr)
+  local function evaluate(radians,sign)
+   local length=radius*radians;local walkTime=length/speed;local dashTime=math.max(0,nextDash-now)+.5+math.max(0,length-17.5)/speed
+   local blocked=false;local previous=r.Position;local steps=math.clamp(math.ceil(math.deg(radians)/20),1,8)
+   for i=1,steps do
+    local angle=radians*sign*(i/steps);local c,s=math.cos(angle),math.sin(angle);local x=unit.X*c+unit.Z*s;local z=-unit.X*s+unit.Z*c
+    local point=Vector3.new(tr.Position.X+x*radius,r.Position.Y,tr.Position.Z+z*radius);local segment=point-previous
+    if segment.Magnitude>.01 then for _,shift in ipairs({Vector3.zero,Vector3.new(0,-1.25,0)}) do if workspace:Raycast(previous+shift,segment,params) then blocked=true;break end end end
+    if blocked then break end;previous=point
+   end
+   return {Degrees=math.deg(radians),Distance=length,Time=math.min(walkTime,dashTime),Blocked=blocked}
+  end
+  local rightRoute=evaluate(rightRadians,rightSign);local leftRoute=evaluate(leftRadians,-rightSign);local chosen=nil
+  if not rightRoute.Blocked and not leftRoute.Blocked then chosen=leftRoute.Time<rightRoute.Time and Enum.KeyCode.A or Enum.KeyCode.D
+  elseif not rightRoute.Blocked then chosen=Enum.KeyCode.D elseif not leftRoute.Blocked then chosen=Enum.KeyCode.A end
+  local cam=workspace.CurrentCamera;local predictedYaw=0;if cam and chosen then local delta=(chosen==Enum.KeyCode.A and -right or right)*17.5;predictedYaw=signedYaw(cam.CFrame.LookVector,tr.Position-(cam.CFrame.Position+delta)) end
+  local plan={Left=leftRoute,Right=rightRoute,Side=chosen,BothBlocked=chosen==nil,PredictedYaw=predictedYaw}
+  routeCache={Root=tr,At=now,PlayerPos=r.Position,TargetPos=tr.Position,Look=look,Right=right,Speed=speed,Plan=plan};return plan
+ end
+ local function dashPathClearOfTarget(r,tr,direction)
+  local travel=direction*17.5;local relative=flat(r.Position-tr.Position);local t=math.clamp(-relative:Dot(travel)/math.max(travel:Dot(travel),.001),0,1);return (relative+travel*t).Magnitude>=SIDE_MIN
+ end
+ local function flickCameraAfterSideDash(dashKey,right)
+  local cam=workspace.CurrentCamera;if not cam or typing() then return end
+  local configuredAngle=setting("Turn");local degrees=dashKey==Enum.KeyCode.D and -configuredAngle or configuredAngle
+  if calculatorEnabled and autoCameraAngle and targetRoot then degrees=signedYaw(cam.CFrame.LookVector,targetRoot.Position-cam.CFrame.Position) end
+  if math.abs(degrees)<.01 then return end;flickRotation=CFrame.Angles(0,math.rad(degrees),0)*cam.CFrame.Rotation;flickUntil=os.clock()+setting("CameraHold")/1000;flickNavigationRight=right;cam.CFrame=CFrame.new(cam.CFrame.Position)*flickRotation
+ end
+ local function enforceMovementPriority()
+  if not active or typing() or not targetRoot then return end;local distance,offset=spacing(targetRoot);if not distance then return end
+  if phase=="turnAway" or phase=="backMixup" then return end
+  if needPostJumpBackoff then
+   if distance<POST_JUMP_MIN then move("postJumpBackoff",offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1));return
+   else needPostJumpBackoff=false;if phase=="postJumpBackoff" then releasePositioning() end end
+  end
+  if distance>CATCHUP_DISTANCE then move("catchup",offset.Magnitude>.01 and -offset.Unit or Vector3.zero)
+  elseif phase=="catchup" then releasePositioning()
+  elseif phase=="side" and(rearSide(targetRoot) or distance<SIDE_MIN) then releasePositioning() end
+ end
+ bindCapture=function()
+  CAS:UnbindAction(action);if not(enabledV2 or enabledV3) or not running then return end
+  CAS:BindActionAtPriority(action,function(_,state) if typing() then return Enum.ContextActionResult.Pass end;if state==Enum.UserInputState.Begin and os.clock()>=suppressStartUntil then start() end;return Enum.ContextActionResult.Sink end,false,4000,Enum.KeyCode.Three)
+ end
+ start=function()
+  if active or not(enabledV2 or enabledV3) or not running or os.clock()<suppressStartUntil then return end;runVersion=enabledV3 and 3 or 2
+  if busy or todoBusy or manualSequenceBusy then say("Wait for the other macro to finish");return end
+  if not okVIM or not VIM then say("Input simulation unavailable");return end;if not rig() then say("Character unavailable");return end
+  disconnectFight();invalidateCaches();active=true;busy=true;manualSequenceBusy=true;generation+=1;nextDash=0;strafeKey=Enum.KeyCode.D;flickUntil=0;needPostJumpBackoff=false;frontSequenceArmed=false;frontSequenceModel=nil
+  bfAssistOn()
+  v2StartedAt=(runVersion==2) and os.clock() or 0
+  gui:SetAttribute("BlackflashChainV2Active",true);gui:SetAttribute("BlackflashChainV3Active",runVersion==3);local id=generation
+  task.spawn(function()
+   local completed,cyclesFinished=0,0;local targetModel=nil;local mixupUsed=false;local jumpPrimed=false;local primeTime=0;local recoveringOver=false;local recoveryJumpActive=false
+   local function valid()
+    if active and not ensureFightAlive() then error("Chain stopped after target defeat",0) end
+    if not running or not enabledForRun() or not active or generation~=id or not rig() then error("Chain stopped",0) end
+    -- V2 only: cancel after 8 seconds
+    if runVersion==2 and v2StartedAt>0 and (os.clock()-v2StartedAt)>=V2_MAX_DURATION then
+     stop("V2 cancelled: 8s timeout. Press 3 to start again.")
+     bindCapture()
+     error("V2 8s timeout",0)
+    end
+    -- V2 only: cancel if ability cooldown UI activates (grace 0.6s so open UI does not instant-cancel)
+    if runVersion==2 and v2StartedAt>0 and (os.clock()-v2StartedAt)>=.6 and abilityCooldownActive() then
+     stop("V2 cancelled: ability cooldown active. Press 3 to start again.")
+     bindCapture()
+     error("V2 cooldown",0)
+    end
+   end
+   local function check() valid();if typing() then error(PAUSED_FOR_TYPING,0) end end
+   local function resetRoute() mixupUsed=false;strafeKey=Enum.KeyCode.D;jumpPrimed=false;needPostJumpBackoff=false;recoveringOver=false;recoveryJumpActive=false;frontSequenceArmed=false;frontSequenceModel=nil end
+   local function updateTarget()
+    if not ensureFightAlive() then error("Target defeated - press 3 again",0) end
+    local p,tr=closest();watchFight(p);if not active then error("Target defeated",0) end;targetRoot=tr
+    if p and p.Model~=targetModel then targetModel=p.Model;resetRoute();flickUntil=0;routeCache=nil end
+    local h=rig();if jumpPrimed and h and h.FloorMaterial~=Enum.Material.Air and os.clock()-primeTime>.15 then jumpPrimed=false end;enforceMovementPriority();return p,tr
+   end
+   local function waitFor(seconds,requireAttack)
+    local deadline=os.clock()+seconds;repeat check();local _,tr=updateTarget();if requireAttack and not attackReady(tr,true) then return false end;RS.Heartbeat:Wait() until os.clock()>=deadline;check();return true
+   end
+   local function tapThree() check();CAS:UnbindAction(action);key(Enum.KeyCode.Three,true);waitFor(.035,false);key(Enum.KeyCode.Three,false);bindCapture() end
+   local function tapJump() check();key(Enum.KeyCode.Space,true);local h=rig();h.Jump=true;waitFor(.035,false);key(Enum.KeyCode.Space,false) end
+   local function jumpBeforeBlackflash()
+    check();releasePositioning();if jumpPrimed then jumpPrimed=false;local _,tr=updateTarget();return attackReady(tr,true) end
+    local h=rig();if h.FloorMaterial==Enum.Material.Air then return false end;tapJump();return waitFor(setting("JumpLead")/1000,true)
+   end
+   local function clickLMB() check();mouseDown=true;VIM:SendMouseButtonEvent(0,0,0,true,game,0);waitFor(.035,false);VIM:SendMouseButtonEvent(0,0,0,false,game,0);mouseDown=false end
+   local function useAvailableSide(r,tr,right)
+    if calculatorEnabled then local plan=calculateRoute(tr,right);if plan and plan.BothBlocked then return nil end;if plan and plan.Side then strafeKey=plan.Side end end
+    local direction=strafeKey==Enum.KeyCode.A and -right or right
+    if objectInRoute(r,tr,direction,17.5) then local alternate=-direction;if objectInRoute(r,tr,alternate,17.5) then return nil end;strafeKey=strafeKey==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;direction=alternate end;return direction
+   end
+   local function markJumpBehind() recoveringOver=false;recoveryJumpActive=false;releasePositioning();jumpPrimed=true;primeTime=os.clock();needPostJumpBackoff=true end
+   local function sideDash(r,tr,direction)
+    if objectInRoute(r,tr,direction,17.5) or not dashPathClearOfTarget(r,tr,direction) then return false end
+    local attemptedTarget=targetModel;local dashKey=strafeKey;local right=dashKey==Enum.KeyCode.A and -direction or direction
+    tapJump();local _,current=updateTarget();local h,root=rig();if targetModel~=attemptedTarget or not current or not h then return nil end
+    if rearSide(current) then markJumpBehind();return true end;local distance=spacing(current)
+    if distance and distance>CATCHUP_DISTANCE then return false end
+    if not distance or distance<SIDE_MIN or not dashPathClearOfTarget(root,current,direction) or objectInRoute(root,current,direction,17.5) then return false end
+    strafeKey=dashKey;move("side",direction);local dashStart=os.clock();nextDash=dashStart+2;routeCache=nil;key(Enum.KeyCode.Q,true)
+    local function finishDash(result) key(Enum.KeyCode.Q,false);flickCameraAfterSideDash(dashKey,right);return result end
+    repeat
+     check();local _,target=updateTarget();local d=spacing(target)
+     if targetModel~=attemptedTarget then return finishDash(nil) end;if d and d>CATCHUP_DISTANCE then return finishDash(false) end
+     if not d or rearSide(target) or d<SIDE_MIN or phase~="side" then break end
+     local _,_,_,movingRoot=spacing(target);if movingRoot and objectInRoute(movingRoot,target,direction,3) then return finishDash(false) end
+     if os.clock()-dashStart>=.035 then key(Enum.KeyCode.Q,false) end;RS.Heartbeat:Wait()
+    until os.clock()-dashStart>=.500
+    local _,latest=updateTarget();if targetModel~=attemptedTarget then return finishDash(nil) end;return finishDash(rearSide(latest))
+   end
+   local function steerOverTarget(tr)
+    local h,r=rig();if not h or not tr then return end;local d=spacing(tr)
+    if d and d>CATCHUP_DISTANCE then local toward=flat(tr.Position-r.Position);move("catchup",toward.Magnitude>.01 and toward.Unit or Vector3.zero)
+    else local look=flat(tr.CFrame.LookVector);if look.Magnitude>.01 then local delta=flat(tr.Position-look.Unit*ATTACK_CENTER-r.Position);move("jumpOver",delta.Magnitude>.05 and delta.Unit or Vector3.zero) end end
+   end
+   local function jumpOverTarget()
+    check();local attemptedTarget=targetModel;local _,tr=updateTarget();local h=rig();if not tr or not h or h.FloorMaterial==Enum.Material.Air then return false end
+    releasePositioning();say("V2: dash unavailable - immediate jump-over, no punches")
+    local began=os.clock();local wasAirborne=false;steerOverTarget(tr);tapJump();recoveryJumpActive=true
+    repeat
+     check();local _,current=updateTarget();local hum=rig();if not current or targetModel~=attemptedTarget or not hum then releasePositioning();return false end
+     if hum.FloorMaterial==Enum.Material.Air then wasAirborne=true end;steerOverTarget(current)
+     if os.clock()-began>=.12 and rearSide(current) and attackReady(current,false) then markJumpBehind();say("V2: behind after jump - back to >=5 studs");return true end
+     if not wasAirborne and os.clock()-began>.35 then break end
+     if wasAirborne and hum.FloorMaterial~=Enum.Material.Air and os.clock()-began>.2 then break end;RS.Heartbeat:Wait()
+    until os.clock()-began>=2.5
+    local _,current=updateTarget();if wasAirborne and rearSide(current) then markJumpBehind() else releasePositioning() end;return false
+   end
+   local function recoverByJump(tr,h)
+    check();recoveringOver=true;key(Enum.KeyCode.Q,false);say("V2: immediate jump-over recovery - no fallback punches")
+    if h.FloorMaterial~=Enum.Material.Air then jumpOverTarget();RS.Heartbeat:Wait() else recoveryJumpActive=true;steerOverTarget(tr);RS.Heartbeat:Wait() end
+   end
+   local function turnaroundBackdash(tr,away)
+    check()
+    local d,_,h,r=spacing(tr)
+    if not d or not frontSide(tr) or d<ATTACK_MIN or d>ATTACK_MAX then return false end
+    local authorizedModel=targetModel
+    releasePositioning();mixupUsed=true;recoveringOver=false;recoveryJumpActive=false;jumpPrimed=false;needPostJumpBackoff=false
+    previousLockOn=lockOn;borrowedLock=true;lockOn=false;lockSuppressed=true;flickUntil=0;flickRotation=nil
+    mixFacing=away;phase="turnAway";steering=Vector3.zero
+    r.CFrame=CFrame.lookAt(r.Position,r.Position+away)
+    local cam=workspace.CurrentCamera;if cam then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,cam.CFrame.Position+away) end
+    say("V2: front-only variant - lock OFF, turn around")
+    waitFor(.05,false)
+    local _,current=updateTarget()
+    if targetModel~=authorizedModel or not frontSide(current) then releasePositioning();restoreLockOn();return false end
+    move("backMixup",-away)
+    say("V2: facing away - holding S before Q")
+    waitFor(.035,false)
+    local _,beforeDash=updateTarget()
+    if targetModel~=authorizedModel or not frontSide(beforeDash) then releasePositioning();restoreLockOn();return false end
+    key(Enum.KeyCode.Q,true)
+    waitFor(.035,false);key(Enum.KeyCode.Q,false);waitFor(.215,false)
+    releasePositioning();restoreLockOn();flickUntil=0
+    if targetModel==authorizedModel then
+     frontSequenceArmed=true;frontSequenceModel=authorizedModel
+     say("V2: S + Q sent from front - lock ON, Black Flash next")
+     return true
+    end
+    return false
+   end
+   local function step()
+    check();local p,tr=updateTarget();if not tr then releasePositioning();say("V2: waiting for a live target");RS.Heartbeat:Wait();return end
+    local distance,offset,h,r=spacing(tr);local away=offset.Magnitude>.01 and offset.Unit or Vector3.new(0,0,1)
+    if recoveringOver and recoveryJumpActive and rearSide(tr) and distance<=ATTACK_MAX then markJumpBehind() end
+    if needPostJumpBackoff then
+     if distance<POST_JUMP_MIN then move("postJumpBackoff",away);say("V2: post-jump backoff to >=5 studs");RS.Heartbeat:Wait();return else needPostJumpBackoff=false;releasePositioning() end
+    end
+    if distance>CATCHUP_DISTANCE then
+     if recoveringOver then recoverByJump(tr,h) else move("catchup",-away);say("V2: gap >7 - W toward target");if objectInRoute(r,tr,-away,3) then recoverByJump(tr,h) else RS.Heartbeat:Wait() end end
+    elseif turnaroundMixups and not mixupUsed and not frontSequenceArmed and frontSide(tr) and distance>=ATTACK_MIN and distance<=ATTACK_MAX and h.FloorMaterial~=Enum.Material.Air and math.random(1,3)==1 then
+     turnaroundBackdash(tr,away)
+    elseif rearSide(tr) or authorizedFrontVariant(tr) then
+     recoveringOver=false
+     if distance>ATTACK_MAX then move("attackApproach",-away);say("V2: approach to 2-6 attack range");RS.Heartbeat:Wait()
+     elseif distance<ATTACK_MIN then releasePositioning();say("V2: too close - stopped");RS.Heartbeat:Wait()
+     else
+      releasePositioning()
+      if h.FloorMaterial==Enum.Material.Air and not jumpPrimed then say("V2: waiting to land");RS.Heartbeat:Wait()
+      elseif not attackReady(tr,false) then RS.Heartbeat:Wait()
+      else
+       mixupUsed=true;say("V2: jump + Black Flash "..(completed+1).."/3"..(runVersion==3 and(" | cycle "..(cyclesFinished+1)) or ""))
+       if jumpBeforeBlackflash() then local _,current=updateTarget()
+        if attackReady(current,true) then
+         local healthBefore=fightHumanoid and fightHumanoid.Health or nil
+         local began=os.clock();tapThree();local remaining=math.max(0,delayMs/1000-(os.clock()-began))
+         if waitFor(remaining,true) then local _,latest=updateTarget()
+          if attackReady(latest,true) then
+           tapThree()
+           -- Require damage from this Black Flash pair; miss stops until 3 is pressed again
+           local damaged=false
+           if healthBefore and fightHumanoid then
+            local deadline=os.clock()+.55
+            while os.clock()<deadline do
+             check()
+             if fightHumanoid.Health<healthBefore-.5 then damaged=true; break end
+             if fightHumanoid.Health<=0 then damaged=true; break end
+             RS.Heartbeat:Wait()
+            end
+           else
+            damaged=true -- no health baseline; do not force-stop
+           end
+           if not damaged then
+            stop("Black Flash miss (no damage). Press 3 to restart.")
+            bindCapture()
+            return
+           end
+           completed+=1
+           if completed>=3 then
+            if runVersion==3 then
+             releasePositioning();say("V3: 3 sequences sent - wait 300 ms, then LMB")
+             waitFor(V3_FIXED.CycleWait/1000,false)
+             clickLMB()
+             cyclesFinished+=1;completed=0;resetRoute()
+             say("V3: cycle "..cyclesFinished.." complete - repeating against the same target")
+             return
+            else clickLMB();stop("V2 finished: 3 Black Flash sequences + LMB; fourth not started. Press 3 again.");bindCapture();return end
+           end
+           resetRoute();waitFor(setting("RepeatGap")/1000,false)
+          end
+         end
+        end
+       end
+      end
+     end
+    elseif recoveringOver then recoverByJump(tr,h)
+    elseif os.clock()<nextDash or distance<SIDE_MIN then recoverByJump(tr,h)
+    else
+     local right=navigationRight(away);local direction=useAvailableSide(r,tr,right)
+     if not direction then recoverByJump(tr,h)
+     else
+      move("side",direction);say("V2: preferred "..(strafeKey==Enum.KeyCode.A and "A" or "D").." side dash")
+      local success=sideDash(r,tr,direction)
+      if success==false then local _,current=updateTarget();local currentHumanoid=rig();if current and currentHumanoid then recoverByJump(current,currentHumanoid) end end
+     end
+    end
+   end
+   local ok,err=pcall(function()
+    while active and generation==id do
+     valid()
+     if typing() then pauseForTyping();jumpPrimed=false;repeat valid();RS.Heartbeat:Wait() until not typing();bindCapture()
+     else local stepOK,stepError=pcall(step);if not stepOK then if stepError==PAUSED_FOR_TYPING then pauseForTyping();jumpPrimed=false else error(stepError,0) end end end
+    end
+   end)
+   if generation==id then stop(ok and "Chain stopped" or tostring(err));bindCapture() end
+  end)
+ end
+ blackflashV2Trigger=function() if not(enabledV2 or enabledV3) then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
+ toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v and active and runVersion==2 then stop("V2 off") end;feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture() end)
+ toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v) enabledV3=v;if not v and active and runVersion==3 then stop("V3 off") end;feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture() end)
+ make("TextLabel",boxV3,{Size=UDim2.new(1,0,0,100),BackgroundTransparency=1,Text="Fixed V3: turn 75 degrees, camera hold 200 ms, repeat gap 340 ms, jump lead 35 ms. Three BF input sequences, wait 300 ms, LMB, repeat on the same target until death/despawn or off. V3 takes priority on 3 if both enabled. Front-only S+Q variant and target-death stop apply to both versions.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(boxV3)+2})
+ toggle(box,"Include NPCs (shared V2/V3)",function() return includeNPCsV2 end,function(v)
+  includeNPCsV2=v;targetRoot=nil;invalidateCaches()
+  if not v and active and runVersion==3 and fightModel and not Players:GetPlayerFromCharacter(fightModel) then stop("V3 stopped: NPC targeting disabled. Press 3 again.");bindCapture() end
+ end)
+ toggle(box,"Front-only turnaround S + Q (shared)",function() return turnaroundMixups end,function(v) turnaroundMixups=v end)
+ moduleSlider(box,"V2 jump lead",35,350,jumpLeadMs," ms",function() return jumpLeadMs end,function(v) jumpLeadMs=v end)
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,128),BackgroundTransparency=1,Text="Optional S+Q starts only in front at 2-6 studs: lock off, turn around, hold S first, then Q, restore lock, then jump/BF. Normal attempts still require behind position. Dash failure goes straight to jump-over; no fallback punches. Back to >=5 after jump-over. V2 ends after 3 pairs + LMB; V3 waits 300 ms, LMB, loops until death.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(box)+2})
+ toggle(calcBox,"Route Calculator / Auto Side",function() return calculatorEnabled end,function(v) calculatorEnabled=v;routeCache=nil end)
+ toggle(calcBox,"Auto camera angle (override slider/fixed turn)",function() return autoCameraAngle end,function(v) autoCameraAngle=v end)
+ make("TextLabel",calcBox,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Cached estimates, not measured game timings. Auto camera angle uses the live target direction; off uses the V2 slider or V3 fixed 75-degree turn. Both routes blocked: jump recovery.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=10,LayoutOrder=nextOrder(calcBox)+2})
+ local lastCalc=-math.huge
+ connect(RS.Heartbeat,function()
+  if not running or not gui.Parent then return end;if active and not ensureFightAlive() then return end
+  if os.clock()-lastCalc<.25 then return end;lastCalc=os.clock();local text
+  if not calculatorEnabled then text="Calculator off - direct D/A selection"
+  else
+   local p,tr=closest();local d,offset=spacing(tr)
+   if not p or not tr then text="No live target available" elseif not d or d<.5 then text="Too close to calculate orbit"
+   else local plan=calculateRoute(tr,navigationRight(offset.Unit))
+    if not plan then text="Unable to estimate route"
+    else
+     local function line(route) return string.format("%.1f deg / %.1f studs / %s",route.Degrees,route.Distance,route.Blocked and "blocked" or string.format("~%.2f s",route.Time)) end
+     local recommendation=plan.Side==Enum.KeyCode.A and "LEFT (A)" or plan.Side==Enum.KeyCode.D and "RIGHT (D)" or "JUMP OVER (both blocked)"
+     text=table.concat({"Target: "..p.DisplayName,"Left: "..line(plan.Left),"Right: "..line(plan.Right),"Estimated faster clear route: "..recommendation,string.format("Predicted post-dash yaw: %.1f deg %s",math.abs(plan.PredictedYaw),plan.PredictedYaw>=0 and "left" or "right")},string.char(10))
+    end
+   end
+  end
+  if calcStatus.Text~=text then calcStatus.Text=text end
+ end)
+ RS:BindToRenderStep(cameraBind,Enum.RenderPriority.Camera.Value+2,function()
+  if not active or typing() or not ensureFightAlive() then return end;local p,tr=closest();watchFight(p);if not active then return end;targetRoot=tr;enforceMovementPriority();local cam=workspace.CurrentCamera
+  if cam then
+   if lockSuppressed and mixFacing.Magnitude>.01 then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,cam.CFrame.Position+mixFacing)
+   elseif os.clock()<flickUntil and flickRotation then cam.CFrame=CFrame.new(cam.CFrame.Position)*flickRotation
+   elseif tr and(tr.Position-cam.CFrame.Position).Magnitude>.05 then cam.CFrame=CFrame.lookAt(cam.CFrame.Position,tr.Position+Vector3.new(0,1,0)) end
+  end
+ end)
+ RS:BindToRenderStep(faceBind,Enum.RenderPriority.Character.Value+7,function(dt)
+  if not active or typing() or not ensureFightAlive() or not targetRoot or not targetRoot.Parent then return end;enforceMovementPriority();local distance,offset,h,r=spacing(targetRoot);if not distance then return end
+  if ownedHumanoid~=h then restoreFacing();ownedHumanoid=h;previousAutoRotate=h.AutoRotate end;h.AutoRotate=false
+  local vector=steering;local remaining=nil
+  if phase=="postJumpBackoff" then remaining=math.max(0,POST_JUMP_AIM-distance)
+  elseif phase=="catchup" then remaining=math.max(0,distance-CATCHUP_DISTANCE)
+  elseif phase=="attackApproach" then remaining=math.max(0,distance-ATTACK_CENTER)
+  elseif phase=="jumpOver" then local look=flat(targetRoot.CFrame.LookVector);if look.Magnitude>.01 then local delta=flat(targetRoot.Position-look.Unit*ATTACK_CENTER-r.Position);remaining=delta.Magnitude;vector=delta.Magnitude>.05 and delta.Unit or Vector3.zero end end
+  if remaining then local alpha=math.clamp(remaining/math.max(h.WalkSpeed*math.max(dt,1/240),.01),0,1);vector=vector*alpha;if remaining<=.05 and phase~="jumpOver" then releasePositioning();vector=Vector3.zero end end
+  h:Move(vector,false);local aim=lockSuppressed and(r.Position+mixFacing) or Vector3.new(targetRoot.Position.X,r.Position.Y,targetRoot.Position.Z);if(aim-r.Position).Magnitude>.05 then r.CFrame=CFrame.lookAt(r.Position,aim) end
+ end)
+ connect(LP.CharacterRemoving,function() stop("Your character removed. Press 3 again.");bindCapture() end)
+ connect(UIS.WindowFocusReleased,function() if active then stop("Window lost focus. Press 3 again.");bindCapture() end end)
+ local function shutdown() enabledV2=false;enabledV3=false;CAS:UnbindAction(action);stop("Off");blackflashV2Trigger=nil;RS:UnbindFromRenderStep(cameraBind);RS:UnbindFromRenderStep(faceBind) end
+ connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
+end
+local function cleanup()
+ if fxShutdown then pcall(fxShutdown) end
+ if not running then return end
+ running=false; enabled=false; todoEnabled=false; perfectClapEnabled=false; tripleJumpEnabled=false; pullEnabled=false; lockOn=false; chainEnabled=false; release()
+ RS:UnbindFromRenderStep(bind)
+ for _,conn in ipairs(conns) do conn:Disconnect() end
+ if gui.Parent then gui:Destroy() end
+end
+connect(gui.Destroying,cleanup)
+connect(unload.Activated,cleanup)
+connect(close.Activated,function() main.Visible=false end)
+local tjClicks,tjLast=0,0
+connect(UIS.InputBegan,function(i)
+ if UIS:GetFocusedTextBox() then return end
+ if i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end
+ if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled then
+  task.spawn(runPerfectClap)
+ end
+ if i.UserInputType==Enum.UserInputType.MouseButton1 and tripleJumpEnabled and not busy and not todoBusy and not tripleJumpBusy then
+  local now=os.clock()
+  if now-tjLast>0.6 then tjClicks=0 end
+  tjLast=now
+  tjClicks+=1
+  if tjClicks>=3 then
+   tjClicks=0
+   task.spawn(runTripleJump)
+  end
+ end
+ if i.KeyCode==Enum.KeyCode.Three and blackflashV2Trigger and blackflashV2Trigger() then return end
+ if i.KeyCode==Enum.KeyCode.Three and not busy then
+  local now=os.clock()
+  lastThreeTime=now
+  if todoEnabled then task.spawn(runTodo); return end
+  task.spawn(run)
+  if chainEnabled and now>=chainCooldownUntil then task.spawn(runChain) end
+ end
+end)
+local dragging,start,pos,touch
+connect(top.InputBegan,function(i)
+ if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=true; start=i.Position; pos=main.Position; touch=i end
+end)
+connect(UIS.InputEnded,function(i) if i==touch then dragging=false end end)
+connect(UIS.InputChanged,function(i)
+ if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i==touch) then local d=i.Position-start; main.Position=UDim2.new(pos.X.Scale,pos.X.Offset+d.X,pos.Y.Scale,pos.Y.Offset+d.Y) end
+end)
+connect(RS.Heartbeat,function()
+ local cam=workspace.CurrentCamera
+ if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
+end)
+status.Text="Default: 325 ms | Combos on Combos tab"
+
+-- Right-side toggle/action notifications.
+do
+ local holder=make("Frame",gui,{Name="SideNotifications",AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),Size=UDim2.new(0,300,.8,0),BackgroundTransparency=1});make("UIListLayout",holder,{Padding=UDim.new(0,8),VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder})
+ local alive=true;local serial=0;local cards,links,recent={},{},{};local watched=setmetatable({},{__mode="k"});local function listen(s,f) local c=s:Connect(f);table.insert(links,c) end
+ local function notify(title,text,color)
+  if not alive then return end;local key=title..text;local now=os.clock();if recent[key] and now-recent[key]<1.5 then return end;recent[key]=now;while #cards>=5 do local f=table.remove(cards,1);f:Destroy() end;serial+=1
+  local f=make("Frame",holder,{Size=UDim2.fromOffset(300,74),BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=serial});corner(f,8);make("UIStroke",f,{Color=color,Transparency=.3})
+  make("TextLabel",f,{BackgroundTransparency=1,Position=UDim2.fromOffset(12,8),Size=UDim2.new(1,-24,0,18),Text=title,TextColor3=color,Font=Enum.Font.GothamBold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
+  make("TextLabel",f,{BackgroundTransparency=1,Position=UDim2.fromOffset(12,29),Size=UDim2.new(1,-24,0,36),Text=text,TextWrapped=true,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left});table.insert(cards,f)
+  task.delay(3.5,function() if not alive then return end;local i=table.find(cards,f);if i then table.remove(cards,i) end;f:Destroy() end)
+ end
+ local function hook(o)
+  if watched[o] or o:IsDescendantOf(holder) then return end;watched[o]=true
+  if o:IsA("TextButton") and o.Text=="" then
+   local label=o:FindFirstChildWhichIsA("TextLabel");local track=nil;for _,child in ipairs(o:GetChildren()) do if child:IsA("Frame") and child.Size==UDim2.fromOffset(36,18) then track=child;break end end
+   if label and track then listen(track:GetPropertyChangedSignal("BackgroundColor3"),function() local c=track.BackgroundColor3;local enabled=math.abs(c.R-T.acc.R)+math.abs(c.G-T.acc.G)+math.abs(c.B-T.acc.B)<.03;notify(enabled and "Enabled" or "Disabled",label.Text,enabled and T.ok or T.warn) end) end
+  elseif o:IsA("TextLabel") then
+   local last=o.Text;listen(o:GetPropertyChangedSignal("Text"),function() local text=o.Text;if text==last then return end;last=text;local s=text:lower();local err=s:find("failed",1,true) or s:find("unavailable",1,true) or s:find("error",1,true);local event=s:find("finished",1,true) or s:find("inputs sent",1,true) or s:find("cancelled",1,true) or s:find("playing:",1,true);if err or event then notify(err and "Notice" or "Activity",text,err and T.warn or T.acc) end end)
+  end
+ end
+ for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
+ notify("Ready","V2/V3: front-only turnaround, hold S first, then Q, then Black Flash.",T.acc)
+end
+local okFX,errFX=pcall(function()
+-- ===== Popups, voices, kill finisher and audio ducking (merged from AutoBlackflash) =====
+do
+local Players=game:GetService("Players")
+local RS=game:GetService("RunService")
+local UIS=game:GetService("UserInputService")
 local TS=game:GetService("TweenService")
 local ReplicatedStorage=game:GetService("ReplicatedStorage")
 local SoundService=game:GetService("SoundService")
 local ContentProvider=game:GetService("ContentProvider")
-local VIM;pcall(function() VIM=game:GetService("VirtualInputManager") end)
-local LP=assert(Players.LocalPlayer,"Client required");assert(RS:IsClient(),"Client required")
-local UI_ROOT=assert(gethui and gethui(),"Executor gethui() unavailable")
-local previous=UI_ROOT:FindFirstChild("AutoBlackflash")
-if previous then local e=previous:FindFirstChild("Shutdown");if e then pcall(function() e:Fire() end) end;if previous.Parent then previous:Destroy() end end
-local ACTION,MOVE_ACTION="AutoBlackflash_RearChain","AutoBlackflash_JumpRear"
-CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
+local LP=Players.LocalPlayer
+local PGui=LP:WaitForChild("PlayerGui")
+local oldFX=PGui:FindFirstChild("AutoBlackflashFX");if oldFX then oldFX:Destroy() end
 local running,focused,cleanedUp=true,true,false
 local macroEnabled,chainEnabled,popupEnabled,impactEnabled=false,false,true,false
 local confirmationMode,reducedFlash="ConfirmedOnly",true
@@ -78,57 +1571,16 @@ local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) 
 local function text(p,caption,pos,size,fontSize)
  return make("TextLabel",p,{Text=caption,Position=pos or UDim2.new(),Size=size or UDim2.new(1,0,0,30),BackgroundTransparency=1,TextColor3=T.txt,TextSize=fontSize or 12,Font=Enum.Font.Gotham,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left})
 end
-local gui=make("ScreenGui",UI_ROOT,{Name="AutoBlackflash",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
-local shutdown=make("BindableEvent",gui,{Name="Shutdown"})
-local targetRef=make("ObjectValue",gui,{Name="BlackflashChainV2Target"})
-gui:SetAttribute("BlackflashChainV2Enabled",false);gui:SetAttribute("KillFinisherFrameCount",16);gui:SetAttribute("KillFinisherFPS",16/IMPACT_DURATION)
-gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);gui:SetAttribute("PopupStreakWindowSeconds",STREAK_WINDOW);gui:SetAttribute("PopupSequenceLength",#SEQUENCE)
+local gui=make("ScreenGui",PGui,{Name="AutoBlackflashFX",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=1000,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 local root=make("Frame",gui,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1})
-local main=make("Frame",root,{Name="Window",AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(760,540),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true});corner(main,12);make("UIStroke",main,{Color=T.stroke,Thickness=1})
-local scale=make("UIScale",main,{Scale=1})
-local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
-text(top,"JJS / CHEAT MENU",UDim2.fromOffset(16,0),UDim2.fromOffset(230,44),15).Font=Enum.Font.GothamBold
-local badge=text(top,"350",UDim2.fromOffset(240,12),UDim2.fromOffset(48,20),11);badge.TextColor3=T.acc
-local minimize=make("TextButton",top,{Text="-",Position=UDim2.new(1,-72,.5,-14),Size=UDim2.fromOffset(28,28),BackgroundColor3=T.p2,TextColor3=T.txt});corner(minimize,6)
-local close=make("TextButton",top,{Text="x",Position=UDim2.new(1,-36,.5,-14),Size=UDim2.fromOffset(28,28),BackgroundColor3=T.p2,TextColor3=T.txt});corner(close,6)
-local side=make("ScrollingFrame",main,{Name="Categories",Position=UDim2.fromOffset(0,44),Size=UDim2.new(0,168,1,-44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
-make("UIListLayout",side,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder});make("UIPadding",side,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,8),PaddingRight=UDim.new(0,8)})
-local content=make("Frame",main,{Position=UDim2.fromOffset(168,44),Size=UDim2.new(1,-168,1,-44),BackgroundTransparency=1,ClipsDescendants=true})
-local title=text(content,"Yuji",UDim2.fromOffset(16,10),UDim2.new(1,-24,0,22),18)
-local desc=text(content,"Black Flash controls",UDim2.fromOffset(16,32),UDim2.new(1,-24,0,18),11);desc.TextColor3=T.mut
-local search=make("TextBox",content,{Position=UDim2.fromOffset(16,57),Size=UDim2.new(1,-32,0,30),BackgroundColor3=T.p2,Text="",PlaceholderText="Search modules or settings...",TextColor3=T.txt,PlaceholderColor3=T.mut,ClearTextOnFocus=false,Font=Enum.Font.Gotham,TextSize=12});corner(search)
-local empty=text(content,"No modules or categories match this search.",UDim2.fromOffset(16,150),UDim2.new(1,-32,0,40),12);empty.Visible=false;empty.ZIndex=5
-local pages,buttons,sections={},{},{}
-local cats={{"Yuji","Black Flash controls and rear-gated chain","CHARACTERS"},{"Gojo","Quick Combo and editable timing","CHARACTERS"},{"Mahito","Focus Strike variants","CHARACTERS"},{"Megumi","The Well's Unknown Abyss","CHARACTERS"},{"Todo","Todo macro and Perfect Clap","CHARACTERS"},{"Combos","Named combo sequences","COMBAT"},{"Defense","Automatic blocking","COMBAT"},{"Targeting","Camera ta
-local selected="Yuji"
-local filter,selectPage
-local lastGroup
-for i,cat in ipairs(cats) do
- local name=cat[1]
- if cat[3]~=lastGroup then lastGroup=cat[3];local t=text(side,lastGroup,nil,UDim2.new(1,0,0,18),9);t.LayoutOrder=i*10-1;t.TextColor3=T.mut end
- local b=make("TextButton",side,{Text=name,Size=UDim2.new(1,0,0,30),LayoutOrder=i*10,BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12});corner(b);buttons[name]=b
- local p=make("ScrollingFrame",content,{Name=name,Position=UDim2.fromOffset(0,96),Size=UDim2.new(1,0,1,-96),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=4,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1});pages[name]=p
- make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)});make("UIListLayout",p,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder})
- connect(b.Activated,function() selectPage(name,true) end)
+local killLabel,statusLabel
+local function updateKillStatus()
+ if not killLabel then return end
+ if confirmationMode=="EstimatedLethal" then killLabel.Text="ESTIMATED LETHAL: cannot verify attacker or Black Flash."
+ elseif confirmedRemote and confirmedRemote.Parent then killLabel.Text="CONFIRMED ONLY: package server remote connected."
+ else killLabel.Text="CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote." end
 end
-local orders={}
-local function order(p) orders[p]=(orders[p] or 0)+1;return orders[p] end
-local function card(page,name,description)
- local c=make("Frame",pages[page],{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=order(pages[page])});corner(c,10);make("UIStroke",c,{Color=T.stroke})
- make("UIPadding",c,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)});make("UIListLayout",c,{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder})
- local heading=text(c,name,nil,UDim2.new(1,0,0,22),13);heading.LayoutOrder=0;heading.Font=Enum.Font.GothamBold
- local sub=text(c,description,nil,UDim2.new(1,0,0,56),10);sub.LayoutOrder=1;sub.TextColor3=T.mut
- sections[c]={page=page,query=string.lower(name.." "..description)};return c
-end
-local function note(p,message,height) local t=text(p,message,nil,UDim2.new(1,0,0,height or 42),10);t.TextColor3=T.mut;t.LayoutOrder=order(p)+2;return t end
-local function toggle(p,name,get,set)
- local b=make("TextButton",p,{Text="",Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,LayoutOrder=order(p)+2})
- text(b,name,nil,UDim2.new(1,-55,1,0),12);local state=text(b,"OFF",UDim2.new(1,-48,0,0),UDim2.fromOffset(48,30),11)
- local function paint() state.Text=get() and "ON" or "OFF";state.TextColor3=get() and T.acc or T.mut end
- connect(b.Activated,function() set(not get());paint() end);paint();return paint
-end
-local function actionButton(p,name) local b=make("TextButton",p,{Text=name,Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=order(p)+2});corner(b,6);return b end
-for _,cat in ipairs(cats) do if cat[1]~="Yuji" and cat[1]~="Visuals" and cat[1]~="Settings" then card(cat[1],"No modules added",cat[2]) end end
+setImpactImageStatus=function(m) if statusLabel then statusLabel.Text=m end end
 local streakTimerLabel=text(gui,"STREAK 0/10 | 0.00s",UDim2.fromScale(.5,.065),UDim2.fromOffset(330,28),13)
 streakTimerLabel.Name="PopupStreakTimer";streakTimerLabel.AnchorPoint=Vector2.new(.5,0);streakTimerLabel.TextXAlignment=Enum.TextXAlignment.Center;streakTimerLabel.Font=Enum.Font.GothamBold;streakTimerLabel.ZIndex=83
 make("UIStroke",streakTimerLabel,{Color=Color3.new(0,0,0),Thickness=2})
@@ -258,19 +1710,6 @@ local function showPopup(preview)
  end)
  task.delay(hold+fade,function() if holder.Parent then holder:Destroy() end;local at=table.find(popupRecords,record);if at then table.remove(popupRecords,at) end;if running then reflowPopups() end end)
 end
-local macroCard=card("Yuji","Black Flash Follow-up","Tap/release 3; follow-up targets +350ms. Input backend required.")
-local macroSettings=make("Frame",macroCard,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,Visible=false,LayoutOrder=20});make("UIListLayout",macroSettings,{Padding=UDim.new(0,4),SortOrder=Enum.SortOrder.LayoutOrder})
-local settingsArrow=actionButton(macroCard,"> Macro settings");settingsArrow.LayoutOrder=2
-connect(settingsArrow.Activated,function() macroSettings.Visible=not macroSettings.Visible;settingsArrow.Text=macroSettings.Visible and "v Macro settings" or "> Macro settings" end)
-local chainCard=card("Yuji","Rear-gated Blackflash Chain","Press 3 within 8 studs. D+Q side dash; camera flicks toward the enemy during the dash, D stays held until behind. Four estimated rounds. No server perfect-hit guarantee.")
-chainStatus=note(chainCard,"OFF - enable, then press 3.",64)
-local function say(message) if running then chainStatus.Text=message;gui:SetAttribute("BlackflashChainStatus",message) end end
-paintMacro=toggle(macroSettings,"Auto Blackflash",function() return macroEnabled end,function(v) stop(nil,false);macroEnabled=v;if v then chainEnabled=false;if paintChain then paintChain() end end end)
-paintChain=toggle(chainCard,"Blackflash Chain",function() return chainEnabled end,function(v) stop(nil,false);chainEnabled=v;if v then macroEnabled=false;if paintMacro then paintMacro() end end;say(v and "Ready: tap 3 to lock and position." or "Chain OFF.") end)
-local popupCard=card("Visuals","Ordered Blackflash Popups","1/10 to 10/10. Signals refresh 3.5s without resetting progress. Five random default sounds; four custom stage sounds. At 10/10 hold until timeout.")
-toggle(popupCard,"Blackflash Popup",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
-local popupPreview=actionButton(popupCard,"PREVIEW GREAT! - NO STREAK / NO SOUND");connect(popupPreview.Activated,function() showPopup(true) end)
-note(popupCard,"Voices: volume 10; game audio ducks to 12%. Stage 9: Plus Ultra!, purple, 7s + tiny purple sparks. Stage 10: SON GOKU!, white, 10s + gold/orange sparkles.",78)
 -- Optional PNG finisher art (16 frames, 0.8 s). Only loaded while the finisher is enabled; the set follows "Reduced flashes".
 local function impactKind() return reducedFlash and "soft" or "full" end
 local function releaseImpactSeq()
@@ -340,20 +1779,6 @@ local function playImageImpact(token)
  impactConnection=RS.RenderStepped:Connect(step)
  return true
 end
-local killCard=card("Visuals","Blackflash Kill Finisher","16 frames in 0.8 s (20 FPS). Confirmed-only by default; lethal estimate mode is explicitly unverified.")
-toggle(killCard,"Kill Finisher: 16 frames / 0.8 s",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
-local function updateKillStatus() if not killStatus then return end;killStatus.Text=confirmationMode=="EstimatedLethal" and "ESTIMATED LETHAL: cannot verify attacker or Black Flash." or (confirmedRemote and confirmedRemote.Parent and "CONFIRMED ONLY: package server remote connected." or "CONFIRMED ONLY: waiting for BlackflashKillConfirmed server remote.") end
-toggle(killCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";gui:SetAttribute("KillFinisherConfirmationMode",confirmationMode);cancelImpact();updateKillStatus() end)
-toggle(killCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
-killStatus=note(killCard,"",68);updateKillStatus()
-local imageStatus=note(killCard,"Finisher images: load when the finisher is enabled (workspace PNGs, built-in vector fallback).",44)
-setImpactImageStatus=function(message) if running and imageStatus.Parent then imageStatus.Text=message end end
-local finisherPreview=actionButton(killCard,"PREVIEW KILL FINISHER - NOT A KILL")
-local session=card("Settings","Session","Unload cancels input, camera, movement, UI, particles, animation, voices and cached audio controller; restores game audio.")
-local unloadButton=actionButton(session,"UNLOAD SCRIPT")
-local reopen=make("TextButton",gui,{Text="OPEN JJS MENU",Size=UDim2.fromOffset(138,36),Position=UDim2.new(0,14,1,-50),BackgroundColor3=T.panel,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,Visible=false});corner(reopen)
-local function show(v) main.Visible=v;reopen.Visible=not v end
-connect(minimize.Activated,function() show(false) end);connect(reopen.Activated,function() show(true) end)
 cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end;if impactSeq then impactSeq.holder.Visible=false;impactSeq.holder.Position=UDim2.fromScale(.5,.5);for _,label in ipairs(impactSeq.labels) do label.Visible=false end end end
 local function playImpact(preview)
  if not running or not impactEnabled then return end
@@ -385,8 +1810,6 @@ local function playImpact(preview)
  local started=os.clock();local lastFrame=1;draw(1)
  impactConnection=RS.RenderStepped:Connect(function() if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end;local elapsed=os.clock()-started;if elapsed>=IMPACT_DURATION then cancelImpact();return end;local frame=math.min(16,math.floor(elapsed*16/IMPACT_DURATION)+1);if frame~=lastFrame then lastFrame=frame;draw(frame) end end)
 end
--- Manual test only. Automatic playback stays gated by the confirmed-kill remote / estimated-lethal mode below.
-connect(finisherPreview.Activated,function() if not impactEnabled then setImpactImageStatus("Enable the Kill Finisher first, then preview.");return end;playImpact(true) end)
 local function bindKillRemote(remote)
  if remote.Name~="BlackflashKillConfirmed" or not remote:IsA("RemoteEvent") or remote==confirmedRemote then return end
  if confirmedConnection then confirmedConnection:Disconnect() end;confirmedRemote=remote;lastKillId=0
@@ -420,210 +1843,6 @@ local function track(h)
 end
 local function untrack(h) local r=tracked[h];if r then r.connection:Disconnect();tracked[h]=nil end end
 connect(workspace.DescendantAdded,track);connect(workspace.DescendantRemoving,untrack);for _,o in ipairs(workspace:GetDescendants()) do track(o) end
-local function nearest()
- local best,d=nil,math.huge
- for h in pairs(tracked) do if rootOf(h) and h.Health>0 and h.Parent~=LP.Character then local other=Players:GetPlayerFromCharacter(h.Parent);local same=other and not LP.Neutral and not other.Neutral and LP.Team and LP.Team==other.Team;local gap=distance(h);if not same and gap<d then best,d=h,gap end end end;return best
-end
-local function rearFraction(h)
- local a,b=localRoot(),rootOf(h);if not a or not b then return 0 end
- local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);if look.Magnitude<.01 then return 0 end;look=look.Unit;local count=0
- for _,z in ipairs({-.4,.4}) do for _,x in ipairs({-.9,-.45,0,.45,.9}) do local p=a.CFrame:PointToWorldSpace(Vector3.new(x,0,z));if (p-b.Position):Dot(look)<-.1 then count+=1 end end end
- gui:SetAttribute("BlackflashRearSamples",count);return count/10
-end
-local function rearGround(j)
- local a,b=localRoot(),rootOf(j.target);local h=localHumanoid()
- return a and b and h and h.FloorMaterial~=Enum.Material.Air and math.abs(a.Position.Y-b.Position.Y)<=2 and distance(j.target)<=8 and rearFraction(j.target)>=.3
-end
-local function valid(j)
- local h=localHumanoid()
- return running and focused and current==j and LP.Character==j.character and h and h.Health>0 and not UIS:GetFocusedTextBox() and (j.mode=="CHAIN" and chainEnabled or j.mode=="MACRO" and macroEnabled) and (j.mode~="CHAIN" or (j.target.Health>0 and j.target:IsDescendantOf(workspace) and rootOf(j.target) and workspace.CurrentCamera==j.camera))
-end
-local function waitUntil(j,deadline) while valid(j) do local left=deadline-os.clock();if left<=0 then return true end;task.wait(math.min(left,.015)) end;return false end
-local function key(j,k,down)
- if down then j.keys[k]=true end;injecting=true;if k==Enum.KeyCode.Three then echoUntil=os.clock()+.08 end
- local ok,err=pcall(function() VIM:SendKeyEvent(down,k,false,game) end);injecting=false;if not ok then error(err,0) end;if not down then j.keys[k]=nil end
-end
-stop=function(message,disable)
- local j=current;current=nil
- if disable then macroEnabled=false;chainEnabled=false;if paintMacro then paintMacro() end;if paintChain then paintChain() end end
- if j then
-  if j.thread and j.thread~=coroutine.running() then pcall(task.cancel,j.thread) end;if j.cameraConnection then j.cameraConnection:Disconnect() end;for _,c in ipairs(j.connections) do c:Disconnect() end
-  if j.camera then pcall(function() j.camera.CameraType=j.savedType;j.camera.CameraSubject=j.savedSubject and j.savedSubject.Parent and j.savedSubject or localHumanoid() end);pcall(function() UIS.MouseBehavior=j.savedMouse end) end
-  injecting=true;local failed=false
-  for k in pairs(j.keys) do if k==Enum.KeyCode.Three then echoUntil=os.clock()+.08 end;if not pcall(function() VIM:SendKeyEvent(false,k,false,game) end) then failed=true end end;injecting=false
-  if failed then macroEnabled=false;chainEnabled=false;paintMacro();paintChain();message=(message or "Stopped").." | Release failed; OFF." end
- end
- if disable or not focused or UIS:GetFocusedTextBox() then pending=nil elseif pending and pending.owner==j then pending.owner=nil end
- lastTap=nil;targetRef.Value=nil;gui:SetAttribute("BlackflashChainV2Enabled",false);if message then say(message) end
-end
-local function angle(a,b) return math.atan2(math.sin(b-a),math.cos(b-a)) end
-local function lock(j)
- local camera=assert(workspace.CurrentCamera,"Camera unavailable");local a=assert(localRoot(),"Root unavailable")
- j.camera=camera;j.savedType=camera.CameraType;j.savedSubject=camera.CameraSubject;j.savedMouse=UIS.MouseBehavior;j.cameraDistance=math.clamp((camera.CFrame.Position-a.Position).Magnitude,4,18)
- local look=camera.CFrame.LookVector;j.yaw=math.atan2(-look.X,-look.Z);j.pitch=math.asin(math.clamp(look.Y,-1,1));j.pivot=camera.CFrame.Position+look*j.cameraDistance
- camera.CameraType=Enum.CameraType.Scriptable;UIS.MouseBehavior=Enum.MouseBehavior.LockCenter
- local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={j.character,j.target.Parent}
- j.cameraConnection=RS.RenderStepped:Connect(function(dt)
-  if current~=j then return end;local a,b=localRoot(),rootOf(j.target);if not a or not b then return end
-  UIS.MouseBehavior=Enum.MouseBehavior.LockCenter;local mouse=UIS:GetMouseDelta();if not j.sideDashing then j.yaw-=mouse.X*.0025;j.pitch=math.clamp(j.pitch-mouse.Y*.0025,-1.15,1.15) end
-  j.pivot=j.pivot:Lerp(a.Position+Vector3.new(0,1.8,0),1-math.exp(-18*dt));local back=(j.sideDashing and b.Position or b.Position-b.CFrame.LookVector*.65)+Vector3.new(0,.65,0);local d=back-j.pivot;if d.Magnitude<.01 then return end;d=d.Unit
-  if j.flickStart then
-   local t=math.clamp((os.clock()-j.flickStart)/.08,0,1)
-   local desired=math.atan2(-d.X,-d.Z)
-   j.yaw=j.flickFrom+angle(j.flickFrom,desired)*(t*t*(3-2*t))
-   j.pitch=j.flickPitchFrom+(math.asin(math.clamp(d.Y,-1,1))-j.flickPitchFrom)*(t*t*(3-2*t))
-   if t>=1 then j.flickStart=nil end
-  else
-   local desired=math.atan2(-d.X,-d.Z)
-   local rate=j.sideDashing and 32 or (j.approaching and 15 or 7)
-   local resistance=j.sideDashing and 1 or (1+mouse.Magnitude*.06)
-   j.yaw+=angle(j.yaw,desired)*(1-math.exp(-rate*dt))/resistance
-   j.pitch+=(math.asin(math.clamp(d.Y,-1,1))-j.pitch)*(1-math.exp(-(j.sideDashing and 32 or 7)*dt))
-  end;local rotation=CFrame.Angles(0,j.yaw,0)*CFrame.Angles(j.pitch,0,0);local proposed=j.pivot-rotation.LookVector*j.cameraDistance;local hit=workspace:Raycast(j.pivot,proposed-j.pivot,params)
-  camera.CFrame=CFrame.new(hit and hit.Position+hit.Normal*.3 or proposed)*rotation;camera.Focus=CFrame.new(back)
- end)
- targetRef.Value=j.target;gui:SetAttribute("BlackflashChainV2Enabled",true)
-end
-local function approach(j)
- if distance(j.target)<=8 then return true end
- say("Approaching target: W until within 8 studs.");j.approaching=true
- if not waitUntil(j,os.clock()+.12) then return false end;key(j,Enum.KeyCode.W,true)
- local best=distance(j.target);local progressAt=os.clock();local deadline=os.clock()+6
- while valid(j) and distance(j.target)>8 and os.clock()<deadline do local d=distance(j.target);if d<best-.35 then best=d;progressAt=os.clock() end;if os.clock()-progressAt>1.5 then break end;task.wait() end
- key(j,Enum.KeyCode.W,false);j.approaching=false;return valid(j) and distance(j.target)<=8
-end
-local function jumpBehind(j)
- if distance(j.target)>8 and not approach(j) then return false end;say("Jump fallback: move to rear ground, not target's head.")
- local h=localHumanoid();if not h then return false end;key(j,Enum.KeyCode.W,false);local moving=true
- local function endMove() if not moving then return end;moving=false;RS:UnbindFromRenderStep(MOVE_ACTION);pcall(function() h:Move(Vector3.zero,false) end) end
- table.insert(j.connections,{Disconnect=endMove});RS:UnbindFromRenderStep(MOVE_ACTION)
- RS:BindToRenderStep(MOVE_ACTION,Enum.RenderPriority.Last.Value+1,function()
-  if not valid(j) then endMove();return end;local a,b=localRoot(),rootOf(j.target);if not a or not b then endMove();return end
-  local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);if look.Magnitude<.01 then return end
-  local d=b.Position-look.Unit*4-a.Position;d=Vector3.new(d.X,0,d.Z);h:Move(d.Magnitude>.65 and d.Unit or Vector3.zero,false)
- end)
- key(j,Enum.KeyCode.Space,true);h.Jump=true;if not waitUntil(j,os.clock()+.05) then endMove();return false end;key(j,Enum.KeyCode.Space,false)
- local deadline=os.clock()+1.5;local landedAt
- while valid(j) and os.clock()<deadline do
-  local a,b=localRoot(),rootOf(j.target);if not a or not b then break end;local look=b.CFrame.LookVector;look=Vector3.new(look.X,0,look.Z);local offset=a.Position-b.Position;local flat=Vector3.new(offset.X,0,offset.Z);local depth=look.Magnitude>.01 and -flat:Dot(look.Unit) or 0
-  if rearGround(j) and depth>=2.5 then landedAt=landedAt or os.clock();if os.clock()-landedAt>=.08 then endMove();return true end else landedAt=nil end;task.wait()
- end;endMove();return false
-end
-local function positionBehind(j)
- if not approach(j) then return false end;if rearGround(j) then return true end
- if os.clock()-lastSide<2 then return jumpBehind(j) end
- say("Side dash: hold D + tap Q; flick camera at the enemy during dash; keep D held until behind.")
- j.approaching=false;key(j,Enum.KeyCode.W,false);key(j,Enum.KeyCode.S,false);key(j,Enum.KeyCode.A,false)
- if not waitUntil(j,os.clock()+.035) then return false end;key(j,Enum.KeyCode.D,true)
- if not waitUntil(j,os.clock()+.05) then return false end
- if not rootOf(j.target) then key(j,Enum.KeyCode.D,false);return false end
- -- Arm the enemy-facing flick in the same input slice as Q; D remains down.
- j.sideDashing=true
- j.flickFrom=j.yaw;j.flickPitchFrom=j.pitch
- j.flickStart=os.clock()
- key(j,Enum.KeyCode.Q,true);lastSide=os.clock()
- if not waitUntil(j,lastSide+.035) then return false end;key(j,Enum.KeyCode.Q,false)
- local deadline=lastSide+1.5
- while valid(j) and os.clock()<deadline do
-  if rearGround(j) and not j.flickStart then
-   key(j,Enum.KeyCode.D,false);j.sideDashing=false;return true
-  end
-  task.wait()
- end
- key(j,Enum.KeyCode.D,false);j.sideDashing=false;j.flickStart=nil
- if not valid(j) then return false end;return jumpBehind(j)
-end
-
-local function stableRear(j)
- local since;local deadline=os.clock()+1.2;say("Waiting 200ms continuously behind and grounded.")
- while valid(j) and os.clock()<deadline do local now=os.clock();if rearGround(j) then since=since or now;if now-since>=.2 then return true end else since=nil end;task.wait() end;return false
-end
-local function start(started)
- if current or not VIM or not living() then return end
- local mode=chainEnabled and "CHAIN" or macroEnabled and "MACRO" or nil;if not mode then return end
- local target=mode=="CHAIN" and nearest() or nil;if mode=="CHAIN" and not target then say("No living target. Press 3 to retry.");return end
- if mode=="CHAIN" and distance(target)>8 then say("Chain requires a target within 8 studs. Move closer, then press 3.");return end
- local j={mode=mode,target=target,character=LP.Character,keys={},connections={},physicalReleased=false};current=j
- local h=localHumanoid();table.insert(j.connections,h.Died:Connect(function() if current==j then stop("Player died; OFF.",true) end end))
- if target then table.insert(j.connections,target.Died:Connect(function() if current==j then stop("Target died; chain stopped. Press 3 again.",false) end end)) end
- j.thread=task.defer(function()
-  local complete=false
-  local ok,err=xpcall(function()
-   if mode=="CHAIN" then lock(j) end
-   for round=1,(mode=="CHAIN" and 4 or 1) do
-    if not valid(j) then return end
-    if mode=="CHAIN" and distance(j.target)>8 then say("Target moved beyond 8 studs. Chain stopped; press 3 when closer.");return end
-    if mode=="CHAIN" and (not positionBehind(j) or not stableRear(j) or not rearGround(j)) then say("Positioning failed. Stopped until 3 is pressed again.");return end
-    local first=started
-    if mode=="CHAIN" then first=os.clock();key(j,Enum.KeyCode.Three,true);if not waitUntil(j,first+.035) then return end;key(j,Enum.KeyCode.Three,false) end
-    say(string.format("Round %d/%d: follow-up targeted at +350ms.",round,mode=="CHAIN" and 4 or 1))
-    if not waitUntil(j,first+.350) then return end
-    if mode=="MACRO" and not j.physicalReleased then say("Release initial 3 before 350ms.");return end
-    if mode=="CHAIN" and not rearGround(j) then say("Rear/range/ground lost before follow-up; stopped.");return end
-    local second=os.clock();local gap=second-first
-    if mode=="CHAIN" and (gap<.325 or gap>.4) then say("Follow-up deadline missed; cancelled rather than sending a late pair.");return end
-    local candidate=arm(first,second,target,j);key(j,Enum.KeyCode.Three,true);gui:SetAttribute("LastBlackflashPairGapMs",gap*1000)
-    if not waitUntil(j,second+.035) then return end;key(j,Enum.KeyCode.Three,false)
-    if mode=="CHAIN" then
-     if not candidate then say("Timing not qualified; stopped.");return end
-     while valid(j) and not candidate.hit and os.clock()<=candidate.deadline do task.wait() end
-     if not valid(j) then return end;if not candidate.hit then say("No estimated target hit. Lock released; press 3 to retry.");return end
-     gui:SetAttribute("BlackflashChainRound",round);if round<4 and not waitUntil(j,os.clock()+.25) then return end
-    end
-   end;complete=true
-  end,function(e) return debug.traceback(tostring(e),2) end)
-  if current~=j then return end
-  if not ok then stop("Input/camera error: "..tostring(err),true)
-  elseif complete then stop(mode=="CHAIN" and "Four estimated rounds complete. Lock OFF; press 3 again." or "Macro ready.",false)
-  else stop(chainStatus.Text.." | Lock OFF; waiting for 3.",false) end
- end)
-end
-CAS:BindActionAtPriority(ACTION,function(_,state)
- if injecting or os.clock()<echoUntil or not running or not focused or UIS:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
- if state==Enum.UserInputState.End or state==Enum.UserInputState.Cancel then heldThree=false;if current and current.mode=="MACRO" then current.physicalReleased=true end;return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end
- if state~=Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
- if heldThree then return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end;heldThree=true
- if current then return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass end
- if macroEnabled or chainEnabled then if not VIM then say("Virtual input backend unavailable.") else start(os.clock()) end
- else local now=os.clock();if lastTap and now-lastTap>=.325 and now-lastTap<=.4 then arm(lastTap,now);lastTap=nil else lastTap=now end end
- return chainEnabled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass
-end,false,Enum.ContextActionPriority.High.Value+100,Enum.KeyCode.Three)
-connect(UIS.InputEnded,function(i) if i.KeyCode==Enum.KeyCode.Three and not injecting and os.clock()>=echoUntil then heldThree=false;if current and current.mode=="MACRO" then current.physicalReleased=true end end end)
-connect(UIS.InputBegan,function(i,processed)
- if UIS:GetFocusedTextBox() then return end;if i.KeyCode==Enum.KeyCode.RightShift then show(not main.Visible);return end
- if not processed and i.KeyCode==Enum.KeyCode.Q and (UIS:IsKeyDown(Enum.KeyCode.A) or UIS:IsKeyDown(Enum.KeyCode.D)) then local now=os.clock();if now-lastSide>=2 then lastSide=now end end
-end)
-connect(UIS.WindowFocusReleased,function() focused=false;heldThree=false;stop("Focus lost; press 3 again.",false);cancelImpact();resetStreak() end)
-connect(UIS.WindowFocused,function() focused=true end)
-connect(UIS.TextBoxFocused,function() heldThree=false;stop("Text entry; stopped.",false);resetStreak() end)
-connect(LP.CharacterRemoving,function() heldThree=false;stop("Character removed; OFF.",true);cancelImpact();clearPopups() end)
-local function cleanup()
- if cleanedUp then return end;cleanedUp=true;running=false;stop(nil,true);cancelImpact();releaseImpactSeq();clearPopups();CAS:UnbindAction(ACTION);RS:UnbindFromRenderStep(MOVE_ACTION)
- for h in pairs(tracked) do untrack(h) end;for _,c in ipairs(connections) do pcall(function() c:Disconnect() end) end;table.clear(connections)
-end
-local function unload() cleanup();if gui.Parent then gui:Destroy() end end
-connect(shutdown.Event,unload);connect(close.Activated,unload);connect(unloadButton.Activated,unload);connect(gui.Destroying,cleanup)
-selectPage=function(name,clear) if not pages[name] then return end;selected=name;if clear then search.Text="" end;if filter then filter() end end
-filter=function()
- local q=string.lower(search.Text):match("^%s*(.-)%s*$");local matches={};local any=false
- for _,cat in ipairs(cats) do local name=cat[1];local category=q~="" and (string.find(string.lower(name),q,1,true) or string.find(string.lower(cat[2]),q,1,true));local found=not not category
-  for item,s in pairs(sections) do if s.page==name then local match=q=="" or category or string.find(s.query,q,1,true);item.Visible=not not match;if match then found=true end end end
-  matches[name]=found;if found then any=true end
- end
- if q~="" and not matches[selected] then for _,cat in ipairs(cats) do if matches[cat[1]] then selected=cat[1];break end end end
- for _,cat in ipairs(cats) do local name=cat[1];local on=selected==name;pages[name].Visible=on;buttons[name].BackgroundTransparency=on and 0 or 1;if on then title.Text=name;desc.Text=cat[2] end end;empty.Visible=q~="" and not any
-end
-connect(search:GetPropertyChangedSignal("Text"),filter);filter()
-local drag
-local function clampWindow()
- local size=root.AbsoluteSize;local ws=main.AbsoluteSize;if size.X<=0 or size.Y<=0 then return end
- local p=main.AbsolutePosition-root.AbsolutePosition;main.Position=UDim2.fromOffset(math.clamp(p.X,0,math.max(0,size.X-ws.X))+ws.X*.5,math.clamp(p.Y,0,math.max(0,size.Y-ws.Y))+ws.Y*.5)
-end
-local function fit() local size=root.AbsoluteSize;if size.X<=0 or size.Y<=0 then return end;scale.Scale=math.max(.05,math.min(1,size.X/760,size.Y/540));clampWindow();reflowPopups();task.defer(function() if running then clampWindow() end end) end
-connect(root:GetPropertyChangedSignal("AbsoluteSize"),fit)
-connect(top.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag={input=i,start=Vector2.new(i.Position.X,i.Position.Y),origin=main.AbsolutePosition-root.AbsolutePosition} end end)
-connect(UIS.InputChanged,function(i) if not drag or (i.UserInputType~=Enum.UserInputType.MouseMovement and i~=drag.input) then return end;local delta=Vector2.new(i.Position.X,i.Position.Y)-drag.start;local p=drag.origin+delta;local ws=main.AbsoluteSize;main.Position=UDim2.fromOffset(p.X+ws.X*.5,p.Y+ws.Y*.5);clampWindow() end)
-connect(UIS.InputEnded,function(i) if drag and i==drag.input then drag=nil end end);connect(UIS.WindowFocusReleased,function() drag=nil end);fit()
 -- Optimized audio controller, integrated. No per-voice full-game scans or sound tweens.
 do
  local DUCK_MULTIPLIER,ATTACK,RELEASE=.12,.08,.30
@@ -694,530 +1913,60 @@ do
  for _,o in ipairs(SoundService:GetChildren()) do if supported(o) then observe(o) end end
 end
 
-
--- =============================================================================
--- IMPROVEMENTS PASS (auto, 5m)
--- - safer unload / double-load guard
--- - status HUD strip
--- - keybind help overlay (RightShift still toggles menu)
--- - stricter focus / textbox guards already present; reinforced
--- - soft performance: throttle heavy Heartbeat work when menu hidden
--- - clear attribute bus for external tools
--- =============================================================================
-
-do
-  if not gui or not gui.Parent then return end
-
-  -- Status strip under the window
-  local statusStrip = make("Frame", root, {
-    Name = "StatusStrip",
-    AnchorPoint = Vector2.new(0.5, 0),
-    Position = UDim2.new(0.5, 0, 0, 8),
-    Size = UDim2.fromOffset(420, 22),
-    BackgroundColor3 = T.panel,
-    BorderSizePixel = 0,
-    ZIndex = 50,
-  })
-  corner(statusStrip, 6)
-  make("UIStroke", statusStrip, {Color = T.stroke, Thickness = 1})
-  local statusText = make("TextLabel", statusStrip, {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Text = "JJS · Ready · 3 = chain/macro · RightShift = menu",
-    TextColor3 = T.mut,
-    Font = Enum.Font.Gotham,
-    TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Center,
-  })
-
-  local function setStatus(msg)
-    if statusText and statusText.Parent then
-      statusText.Text = tostring(msg)
-    end
-    pcall(function() gui:SetAttribute("StatusMessage", tostring(msg)) end)
-  end
-  setStatus("JJS · Ready · 3 = chain/macro · RightShift = menu")
-
-  -- Attribute bus for other tools / debug
-  pcall(function()
-    gui:SetAttribute("ScriptBuild", "COMBINED-IMPROVED")
-    gui:SetAttribute("NoDashTimers", true)
-    gui:SetAttribute("BlackflashDelayMs", 350)
-  end)
-
-  -- Help overlay (toggle with H while menu open)
-  local help = make("Frame", root, {
-    Name = "HelpOverlay",
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.fromOffset(360, 220),
-    BackgroundColor3 = T.bg,
-    BorderSizePixel = 0,
-    Visible = false,
-    ZIndex = 200,
-  })
-  corner(help, 10)
-  make("UIStroke", help, {Color = T.acc, Thickness = 1})
-  make("TextLabel", help, {
-    Size = UDim2.new(1, -24, 1, -24),
-    Position = UDim2.fromOffset(12, 12),
-    BackgroundTransparency = 1,
-    Text = "CONTROLS\n\n3  — Black Flash macro / rear chain\nRightShift — show/hide menu\nH — this help\n\nChain needs target within ~8 studs,\nbehind + grounded (200ms stable).\nFollow-up window ~325–400 ms.\n\nUnload from Settings or destroy GUI.",
-    TextColor3 = T.txt,
-    Font = Enum.Font.Gotham,
-    TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    TextWrapped = true,
-  })
-
-  connect(UIS.InputBegan, function(input, processed)
-    if processed or UIS:GetFocusedTextBox() then return end
-    if input.KeyCode == Enum.KeyCode.H and main.Visible then
-      help.Visible = not help.Visible
-    end
-  end)
-
-  -- Throttle: when menu hidden, skip some UI-only work (status still updates lightly)
-  local lastStatusPulse = 0
-  connect(RS.Heartbeat, function()
-    if not running or not gui.Parent then return end
-    local now = os.clock()
-    if now - lastStatusPulse < 0.35 then return end
-    lastStatusPulse = now
-    local mode = (chainEnabled and "CHAIN") or (macroEnabled and "MACRO") or "OFF"
-    local focus = focused and "focus" or "unfocused"
-    setStatus(string.format("JJS · %s · %s · 3 ready", mode, focus))
-  end)
-
-  -- Safer re-entry: if Shutdown exists, fire it before we would have been replaced
-  -- (already handled at top of main script via previous:Destroy pattern)
-
-  -- Quick quality-of-life: click status strip to flash current delay attribute
-  statusStrip.Active = true
-  connect(statusStrip.InputBegan, function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-      local d = gui:GetAttribute("LastBlackflashPairGapMs") or gui:GetAttribute("BlackflashDelayMs") or 350
-      setStatus(string.format("Last/configured gap: %s ms", tostring(d)))
-    end
-  end)
+local pairLastPress=-math.huge
+onBlackflashPair=function()
+ if not running then return end
+ local now=os.clock();local gap=now-pairLastPress;pairLastPress=now
+ if gap>=.325 and gap<=.4 then
+  local targets={}
+  for h in pairs(tracked) do if h.Health>0 and nearby(h) then targets[h]=true end end
+  pending={targets=targets,deadline=now+.6,hit=false,character=LP.Character}
+ end
 end
-
-
--- =============================================================================
--- CONTINUOUS IMPROVE BATCH 1
--- =============================================================================
-do
-  if not gui or not gui.Parent then return end
-
-  -- Double-load soft lock: mark instance id
-  local instanceId = tostring(os.clock()) .. "-" .. tostring(math.random(1000,9999))
-  pcall(function() gui:SetAttribute("InstanceId", instanceId) end)
-
-  -- Scale limits so tiny viewports don't crush UI
-  if scale then
-    connect(RS.Heartbeat, function()
-      if not running or not gui.Parent then return end
-      if scale.Scale < 0.35 then scale.Scale = 0.35 end
-      if scale.Scale > 1.25 then scale.Scale = 1.25 end
-    end)
-  end
-
-  -- Failsafe: if main window somehow nil-parented, try recover visibility
-  connect(RS.Heartbeat, function()
-    if not running then return end
-    if main and not main.Parent and gui.Parent then
-      pcall(function() main.Parent = root or gui end)
-    end
-  end)
+connect(UIS.InputBegan,function(i,processed)
+ if i.KeyCode~=Enum.KeyCode.Three or UIS:GetFocusedTextBox() then return end
+ if onBlackflashPair then onBlackflashPair() end
+end)
+local fxCard=card(pages.Visuals,"Popups, voices and kill finisher","Ordered popup stages 1-10, random voices, stage sounds, kill finisher and game-audio ducking.")
+toggle(fxCard,"Blackflash popups",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
+toggle(fxCard,"Kill finisher (16 frames / 0.8 s)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
+toggle(fxCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
+toggle(fxCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";cancelImpact();updateKillStatus() end)
+local bPop=make("TextButton",fxCard,{Text="PREVIEW POPUP - NOT A HIT",Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=40});corner(bPop,6)
+connect(bPop.Activated,function() showPopup(true) end)
+local bKill=make("TextButton",fxCard,{Text="PREVIEW KILL FINISHER - NOT A KILL",Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=41});corner(bKill,6)
+connect(bKill.Activated,function()
+ if not impactEnabled then setImpactImageStatus("Enable the Kill Finisher first, then preview.") return end
+ playImpact(true)
+end)
+killLabel=make("TextLabel",fxCard,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,Text="",LayoutOrder=42})
+statusLabel=make("TextLabel",fxCard,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,Text="Finisher images load when the finisher is enabled (workspace PNGs, built-in vector fallback).",LayoutOrder=43})
+updateKillStatus()
+fxShutdown=function()
+ if not running then return end
+ running=false
+ pcall(clearPopups);pcall(cancelImpact);pcall(releaseImpactSeq)
+ for h in pairs(tracked) do pcall(untrack,h) end
+ for _,c in ipairs(connections) do pcall(function() c:Disconnect() end) end
+ if gui.Parent then gui:Destroy() end
 end
-
-
--- =============================================================================
--- CONTINUOUS IMPROVE BATCH 2 — search UX
--- =============================================================================
-do
-  if not search or not empty then return end
-  -- Placeholder clarity
-  pcall(function()
-    search.PlaceholderText = "Search modules, categories..."
-  end)
-  -- Debounced empty label (avoid flicker)
-  local lastQ = ""
-  connect(search:GetPropertyChangedSignal("Text"), function()
-    local q = string.lower(search.Text or ""):match("^%s*(.-)%s*$") or ""
-    if q == lastQ then return end
-    lastQ = q
-    if empty then
-      empty.Text = q == "" and "" or ("No match for \"" .. q .. "\"")
-    end
-  end)
 end
-
-
--- =============================================================================
--- CONTINUOUS IMPROVE BATCH 3 — feedback attributes for tuning
--- =============================================================================
-do
-  if not gui then return end
-  pcall(function()
-    gui:SetAttribute("RearGateStuds", 8)
-    gui:SetAttribute("RearStableMs", 200)
-    gui:SetAttribute("PairWindowMinMs", 325)
-    gui:SetAttribute("PairWindowMaxMs", 400)
-    gui:SetAttribute("FollowUpDelayMs", 350)
-  end)
-  -- Pulse a simple debug line into status when chain attributes update
-  if gui.GetAttributeChangedSignal then
-    pcall(function()
-      connect(gui:GetAttributeChangedSignal("LastBlackflashPairGapMs"), function()
-        local g = gui:GetAttribute("LastBlackflashPairGapMs")
-        if g and statusText then
-          statusText.Text = string.format("Pair gap: %.0f ms", tonumber(g) or 0)
-        end
-      end)
-    end)
-  end
-end
-
-
--- =============================================================================
--- CONTINUOUS IMPROVE BATCH 4 — reopen chip if minimized
--- =============================================================================
-do
-  if not gui or not main then return end
-  local reopen = gui:FindFirstChild("ReopenChip")
-  if not reopen then
-    reopen = make("TextButton", gui, {
-      Name = "ReopenChip",
-      Size = UDim2.fromOffset(150, 34),
-      Position = UDim2.new(0, 14, 1, -54),
-      BackgroundColor3 = T.panel,
-      Text = "OPEN JJS MENU",
-      TextColor3 = T.acc,
-      Font = Enum.Font.GothamBold,
-      TextSize = 11,
-      Visible = false,
-      ZIndex = 60,
-    })
-    corner(reopen, 8)
-    connect(reopen.Activated, function()
-      main.Visible = true
-      reopen.Visible = false
-    end)
-  end
-  -- Hook minimize if present
-  if minimize then
-    connect(minimize.Activated, function()
-      main.Visible = false
-      reopen.Visible = true
-    end)
-  end
-  -- Sync: if main hidden, show chip
-  connect(main:GetPropertyChangedSignal("Visible"), function()
-    reopen.Visible = not main.Visible
-  end)
-end
-
-
--- =============================================================================
--- CONTINUOUS IMPROVEMENTS (ongoing until Maker says stop)
--- No dash timers. QoL, safety, feedback, reopen chip, search, attributes.
--- =============================================================================
-
-do
-  if not gui or not gui.Parent then return end
-
-  -- Instance stamp
-  pcall(function()
-    gui:SetAttribute("ScriptBuild", "COMBINED-IMPROVED-CONTINUOUS")
-    gui:SetAttribute("NoDashTimers", true)
-    gui:SetAttribute("RearGateStuds", 8)
-    gui:SetAttribute("RearStableMs", 200)
-    gui:SetAttribute("PairWindowMinMs", 325)
-    gui:SetAttribute("PairWindowMaxMs", 400)
-    gui:SetAttribute("FollowUpDelayMs", 350)
-    gui:SetAttribute("InstanceId", tostring(os.clock()) .. "-" .. tostring(math.random(1000, 9999)))
-  end)
-
-  -- Status strip
-  local statusStrip = gui:FindFirstChild("StatusStrip") or make("Frame", root or gui, {
-    Name = "StatusStrip",
-    AnchorPoint = Vector2.new(0.5, 0),
-    Position = UDim2.new(0.5, 0, 0, 8),
-    Size = UDim2.fromOffset(440, 22),
-    BackgroundColor3 = T.panel,
-    BorderSizePixel = 0,
-    ZIndex = 50,
-  })
-  if not statusStrip:FindFirstChildOfClass("UICorner") then corner(statusStrip, 6) end
-  local statusText = statusStrip:FindFirstChild("StatusText") or make("TextLabel", statusStrip, {
-    Name = "StatusText",
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Text = "JJS · Ready · 3 = chain/macro · RightShift = menu · H = help",
-    TextColor3 = T.mut,
-    Font = Enum.Font.Gotham,
-    TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Center,
-  })
-
-  local function setStatus(msg)
-    if statusText and statusText.Parent then statusText.Text = tostring(msg) end
-    pcall(function() gui:SetAttribute("StatusMessage", tostring(msg)) end)
-  end
-
-  -- Help overlay
-  local help = gui:FindFirstChild("HelpOverlay") or make("Frame", root or gui, {
-    Name = "HelpOverlay",
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    Size = UDim2.fromOffset(380, 240),
-    BackgroundColor3 = T.bg,
-    BorderSizePixel = 0,
-    Visible = false,
-    ZIndex = 200,
-  })
-  if not help:FindFirstChildOfClass("UICorner") then corner(help, 10) end
-  if not help:FindFirstChildOfClass("UIStroke") then make("UIStroke", help, {Color = T.acc, Thickness = 1}) end
-  local helpLabel = help:FindFirstChild("HelpLabel") or make("TextLabel", help, {
-    Name = "HelpLabel",
-    Size = UDim2.new(1, -24, 1, -24),
-    Position = UDim2.fromOffset(12, 12),
-    BackgroundTransparency = 1,
-    Text = "CONTROLS\n\n3 — Black Flash macro / rear chain\nRightShift — show/hide menu\nH — toggle this help\n\nChain: target <=8 studs, behind + grounded,\n200ms stable rear gate.\nFollow-up window ~325-400ms after first 3.\n\nUnload from Settings or destroy GUI.\nNo dash timers in this build.",
-    TextColor3 = T.txt,
-    Font = Enum.Font.Gotham,
-    TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextYAlignment = Enum.TextYAlignment.Top,
-    TextWrapped = true,
-  })
-
-  connect(UIS.InputBegan, function(input, processed)
-    if processed or UIS:GetFocusedTextBox() then return end
-    if input.KeyCode == Enum.KeyCode.H and main and main.Visible then
-      help.Visible = not help.Visible
-    end
-  end)
-
-  -- Reopen chip
-  local reopen = gui:FindFirstChild("ReopenChip") or make("TextButton", gui, {
-    Name = "ReopenChip",
-    Size = UDim2.fromOffset(150, 34),
-    Position = UDim2.new(0, 14, 1, -54),
-    BackgroundColor3 = T.panel,
-    Text = "OPEN JJS MENU",
-    TextColor3 = T.acc,
-    Font = Enum.Font.GothamBold,
-    TextSize = 11,
-    Visible = false,
-    ZIndex = 60,
-  })
-  if not reopen:FindFirstChildOfClass("UICorner") then corner(reopen, 8) end
-  connect(reopen.Activated, function()
-    if main then main.Visible = true end
-    reopen.Visible = false
-  end)
-  if minimize then
-    connect(minimize.Activated, function()
-      if main then main.Visible = false end
-      reopen.Visible = true
-    end)
-  end
-  if main then
-    connect(main:GetPropertyChangedSignal("Visible"), function()
-      reopen.Visible = not main.Visible
-    end)
-  end
-
-  -- Status pulse
-  local lastPulse = 0
-  connect(RS.Heartbeat, function()
-    if not running or not gui.Parent then return end
-    local now = os.clock()
-    if now - lastPulse < 0.4 then return end
-    lastPulse = now
-    local mode = "OFF"
-    pcall(function()
-      if chainEnabled then mode = "CHAIN"
-      elseif macroEnabled then mode = "MACRO"
-      end
-    end)
-    local focus = (focused ~= false) and "focus" or "unfocused"
-    setStatus(string.format("JJS · %s · %s · 3 ready", mode, focus))
-  end)
-
-  -- Click status for gap info
-  statusStrip.Active = true
-  connect(statusStrip.InputBegan, function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-      local d = gui:GetAttribute("LastBlackflashPairGapMs") or gui:GetAttribute("FollowUpDelayMs") or 350
-      setStatus(string.format("Gap / delay: %s ms", tostring(d)))
-    end
-  end)
-
-  -- Scale clamp
-  if scale then
-    connect(RS.Heartbeat, function()
-      if not running or not scale.Parent then return end
-      if scale.Scale < 0.35 then scale.Scale = 0.35 end
-      if scale.Scale > 1.25 then scale.Scale = 1.25 end
-    end)
-  end
-
-  -- Search empty polish
-  if search and empty then
-    pcall(function() search.PlaceholderText = "Search modules, categories..." end)
-    connect(search:GetPropertyChangedSignal("Text"), function()
-      local q = string.lower(search.Text or ""):match("^%s*(.-)%s*$") or ""
-      if empty then
-        empty.Text = (q == "") and "" or ('No match for "' .. q .. '"')
-      end
-    end)
-  end
-
-  -- Focus hygiene messages
-  connect(UIS.WindowFocusReleased, function()
-    setStatus("Unfocused — input paused")
-  end)
-  connect(UIS.WindowFocused, function()
-    setStatus("Focused — ready")
-  end)
-
-  setStatus("JJS · Ready · continuous build · no dash timers")
-end
-
-
--- =============================================================================
--- CONTINUOUS BATCH — performance + unload hardness
--- =============================================================================
-do
-  if not gui or not gui.Parent then return end
-
-  -- Hard unload helper exposed on gui
-  local function hardUnload()
-    pcall(function()
-      running = false
-      if typeof(stop) == "function" then stop(nil, true) end
-      if typeof(cancelImpact) == "function" then cancelImpact() end
-      if typeof(clearPopups) == "function" then clearPopups() end
-      if typeof(cleanup) == "function" then cleanup() end
-    end)
-    pcall(function()
-      if gui and gui.Parent then gui:Destroy() end
-    end)
-  end
-  pcall(function() gui:SetAttribute("HardUnloadReady", true) end)
-
-  -- If Shutdown bindable exists, also wire hard unload
-  local sh = gui:FindFirstChild("Shutdown")
-  if sh and sh:IsA("BindableEvent") then
-    connect(sh.Event, function()
-      hardUnload()
-    end)
-  end
-
-  -- Lightweight FPS-ish pulse into attribute (not a real profiler)
-  local frames, acc, last = 0, 0, os.clock()
-  connect(RS.Heartbeat, function(dt)
-    if not running then return end
-    frames += 1
-    acc += dt
-    if acc >= 1 then
-      pcall(function() gui:SetAttribute("ClientHeartbeatFps", frames) end)
-      frames, acc = 0, 0
-    end
-  end)
-end
-
-
--- =============================================================================
--- CONTINUOUS WAVE — JJS-tuned defaults from research digest
--- Pair window 325-400ms, follow-up ~350ms, rear 8 studs, stable 200ms
--- =============================================================================
-do
-  if not gui then return end
-  pcall(function()
-    -- Align attributes to documented JJS-style windows (community research)
-    gui:SetAttribute("PairWindowMinMs", 325)
-    gui:SetAttribute("PairWindowMaxMs", 400)
-    gui:SetAttribute("FollowUpDelayMs", 350)
-    gui:SetAttribute("RearGateStuds", 8)
-    gui:SetAttribute("RearStableMs", 200)
-    gui:SetAttribute("ChainRounds", 4)
-    gui:SetAttribute("ResearchSnapshot", "2026-10-21-JJS-digest")
-  end)
-
-  -- If badge exists in UI, reflect 350 default
-  pcall(function()
-    if badge and badge:IsA("TextLabel") then
-      badge.Text = "350"
-    end
-  end)
-end
-
-
-
--- =============================================================================
--- CONTINUOUS — notification toast helper (no dash timers)
--- =============================================================================
-do
-  if not gui or not gui.Parent then return end
-  if gui:FindFirstChild("SideNotifications") then
-    -- already present
-  else
-    local holder = make("Frame", gui, {
-      Name = "SideNotifications",
-      AnchorPoint = Vector2.new(1, 0.5),
-      Position = UDim2.new(1, -16, 0.5, 0),
-      Size = UDim2.new(0, 300, 0.8, 0),
-      BackgroundTransparency = 1,
-      ZIndex = 70,
-    })
-    make("UIListLayout", holder, {
-      Padding = UDim.new(0, 8),
-      VerticalAlignment = Enum.VerticalAlignment.Center,
-      SortOrder = Enum.SortOrder.LayoutOrder,
-    })
-    local serial = 0
-    local function toast(title, body, color)
-      serial += 1
-      local f = make("Frame", holder, {
-        Size = UDim2.fromOffset(300, 70),
-        BackgroundColor3 = T.card,
-        BorderSizePixel = 0,
-        LayoutOrder = serial,
-      })
-      corner(f, 8)
-      make("UIStroke", f, {Color = color or T.acc, Transparency = 0.3})
-      make("TextLabel", f, {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 8),
-        Size = UDim2.new(1, -24, 0, 18),
-        Text = title,
-        TextColor3 = color or T.acc,
-        Font = Enum.Font.GothamBold,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-      })
-      make("TextLabel", f, {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 28),
-        Size = UDim2.new(1, -24, 0, 34),
-        Text = body,
-        TextWrapped = true,
-        TextColor3 = T.txt,
-        Font = Enum.Font.Gotham,
-        TextSize = 11,
-        TextXAlignment = Enum.TextXAlignment.Left,
-      })
-      task.delay(3.2, function()
-        if f.Parent then f:Destroy() end
-      end)
-    end
-    pcall(function()
-      toast("Build", "Continuous improve active · no dash timers · H for help", T.acc)
-    end)
-  end
+end)
+if not okFX then warn("Popup section failed (rest of script still loaded): "..tostring(errFX)) end
+end,function(e) return debug.traceback(tostring(e),2) end)
+if not __okMain then
+ warn("AutoBlackflash failed: "..tostring(__errMain))
+ pcall(function()
+  local pg=game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui",5)
+  if not pg then return end
+  local sg=Instance.new("ScreenGui");sg.Name="AutoBlackflashError";sg.ResetOnSpawn=false;sg.DisplayOrder=2000;sg.Parent=pg
+  local box=Instance.new("TextBox")
+  box.Size=UDim2.fromScale(.8,.5);box.Position=UDim2.fromScale(.1,.25)
+  box.BackgroundColor3=Color3.fromRGB(25,18,30);box.TextColor3=Color3.fromRGB(255,210,220)
+  box.TextWrapped=true;box.MultiLine=true;box.ClearTextOnFocus=false;box.TextEditable=false
+  box.TextXAlignment=Enum.TextXAlignment.Left;box.TextYAlignment=Enum.TextYAlignment.Top
+  box.Font=Enum.Font.Code;box.TextSize=14
+  box.Text="AutoBlackflash failed. Send this text:\n"..tostring(__errMain)
+  box.Parent=sg
+ end)
 end
