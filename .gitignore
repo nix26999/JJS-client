@@ -7,7 +7,7 @@ local UIS=game:GetService("UserInputService")
 local LP=Players.LocalPlayer
 assert(LP,"Client required")
 local PG=LP:WaitForChild("PlayerGui")
-local old=PG:FindFirstChild("AutoBlackflash")
+local old=PG:FindFirstChild("JJS HUB") or PG:FindFirstChild("AutoBlackflash")
 if old then old:Destroy() end
 local running=true
 local todoEnabled,todoBusy=false,false
@@ -53,14 +53,31 @@ end
 local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns,c); return c end
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
 local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
-local gui=make("ScreenGui",PG,{Name="AutoBlackflash",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+-- ===== PART 1: Halloween palette =====
+do
+ T.bg=Color3.fromRGB(14,8,20)          -- midnight black-purple window
+ T.panel=Color3.fromRGB(28,14,38)      -- top bar and sidebar
+ T.p2=Color3.fromRGB(44,22,56)         -- buttons, inputs, selected tab
+ T.card=Color3.fromRGB(31,16,42)       -- module cards
+ T.stroke=Color3.fromRGB(255,122,26)   -- pumpkin orange outlines
+ T.acc=Color3.fromRGB(255,138,40)      -- accent (ON states, selected text)
+ T.txt=Color3.fromRGB(255,242,224)     -- warm cream text
+ T.dim=Color3.fromRGB(200,160,180)     -- unselected labels
+ T.mut=Color3.fromRGB(150,110,140)     -- hints and descriptions
+ T.ok=Color3.fromRGB(160,255,120)      -- slime green
+ T.warn=Color3.fromRGB(255,84,64)      -- blood red
+ T.purple=Color3.fromRGB(150,80,255)   -- witch purple
+ T.ghost=Color3.fromRGB(190,255,210)   -- ghost glow
+end
+
+local gui=make("ScreenGui",PG,{Name="JJS HUB",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),Position=UDim2.new(.5,-380,.5,-270),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true})
 corner(main,12); stroke(main)
 local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="AUTO BLACKFLASH",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
 local side=make("ScrollingFrame",main,{Size=UDim2.new(0,150,1,-44),Position=UDim2.fromOffset(0,44),BackgroundColor3=T.panel,BorderSizePixel=0,ScrollBarThickness=2,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new()})
@@ -73,7 +90,9 @@ local pages,buttons={},{}
 local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Settings",""}}
 for i,cat in ipairs(cats) do
  local name,description=cat[1],cat[2]
- local b=make("TextButton",side,{Size=UDim2.new(1,0,0,32),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.txt or T.dim,Font=Enum.Font.GothamMedium,TextSize=13,LayoutOrder=i}); corner(b,8); buttons[name]=b
+ local groupStart={Macros="MAIN",Combat="COMBAT",Movement="MOVEMENT",Visuals="VISUALS"}
+ if groupStart[name] then make("TextLabel",side,{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text="~ "..groupStart[name].." ~",TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=10,LayoutOrder=i*10-5}) end
+ local b=make("TextButton",side,{Size=UDim2.new(1,0,0,32),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.acc or T.dim,Font=Enum.Font.GothamMedium,TextSize=13,LayoutOrder=i*10}); corner(b,8); buttons[name]=b
  local p=make("ScrollingFrame",content,{Size=UDim2.new(1,0,1,-40),Position=UDim2.fromOffset(0,40),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1})
  make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)})
  make("UIListLayout",p,{Padding=UDim.new(0,10),SortOrder=Enum.SortOrder.LayoutOrder}); pages[name]=p
@@ -1421,127 +1440,82 @@ do
 end
 
 do
- local espEnabled=false
- local espNames=true
- local espHealth=true
- local espDistance=true
- local espHighlights=true
- local espTeamCheck=false
- local espThroughWalls=false
- local espMaxDistance=1000
- local espClosed=false
+ local on,names,health,distance,highlights,teamCheck,throughWalls=false,true,true,true,true,false,false
+ local maxDistance=1000
+ local closed=false
  local entries={}
- local espPanel=card(pages.ESP,"Player ESP","")
+ local panel=card(pages.ESP,"Player ESP","")
  local folder=Instance.new("Folder")
- folder.Name="AutoBlackflashESP_"..tostring(LP.UserId)
+ folder.Name="JJS_HUB_ESP_"..tostring(LP.UserId)
  folder.Parent=workspace
  local function drop(player)
-  local entry=entries[player]
-  if not entry then return end
-  entry.highlight:Destroy()
-  entry.billboard:Destroy()
-  entries[player]=nil
+  local e=entries[player]
+  if not e then return end
+  e.highlight:Destroy();e.billboard:Destroy();entries[player]=nil
  end
- local function clearEntries()
-  local players={}
-  for player in pairs(entries) do table.insert(players,player) end
-  for _,player in ipairs(players) do drop(player) end
+ local function clear()
+  local list={}
+  for player in pairs(entries) do table.insert(list,player) end
+  for _,player in ipairs(list) do drop(player) end
  end
- local function shutdownESP()
-  if espClosed then return end
-  espClosed=true
-  espEnabled=false
-  clearEntries()
-  folder:Destroy()
+ local function stop()
+  if closed then return end
+  closed=true;on=false;clear();folder:Destroy()
  end
- local function getEntry(player,character,root)
-  local entry=entries[player]
-  if entry and entry.character~=character then drop(player);entry=nil end
-  if not entry then
-   local highlight=Instance.new("Highlight")
-   highlight.Name="PlayerHighlight"
-   highlight.Adornee=character
-   highlight.FillTransparency=.78
-   highlight.OutlineTransparency=0
-   highlight.Parent=folder
-   local billboard=Instance.new("BillboardGui")
-   billboard.Name="PlayerLabel"
-   billboard.Size=UDim2.fromOffset(230,52)
-   billboard.StudsOffsetWorldSpace=Vector3.new(0,3.5,0)
-   billboard.LightInfluence=0
-   billboard.Parent=gui
-   local label=Instance.new("TextLabel")
-   label.Size=UDim2.fromScale(1,1)
-   label.BackgroundTransparency=1
-   label.TextColor3=T.txt
-   label.TextStrokeColor3=Color3.new(0,0,0)
-   label.TextStrokeTransparency=.25
-   label.Font=Enum.Font.GothamBold
-   label.TextSize=12
-   label.TextWrapped=true
-   label.Parent=billboard
-   entry={character=character,highlight=highlight,billboard=billboard,label=label}
-   entries[player]=entry
+ local function entryFor(player,character,root)
+  local e=entries[player]
+  if e and e.character~=character then drop(player);e=nil end
+  if not e then
+   local h=Instance.new("Highlight");h.Name="PlayerHighlight";h.Adornee=character;h.FillTransparency=.78;h.OutlineTransparency=0;h.Parent=folder
+   local b=Instance.new("BillboardGui");b.Name="PlayerLabel";b.Size=UDim2.fromOffset(230,52);b.StudsOffsetWorldSpace=Vector3.new(0,3.5,0);b.LightInfluence=0;b.Parent=gui
+   local l=Instance.new("TextLabel");l.Size=UDim2.fromScale(1,1);l.BackgroundTransparency=1;l.TextColor3=T.txt;l.TextStrokeColor3=Color3.new(0,0,0);l.TextStrokeTransparency=.25;l.Font=Enum.Font.GothamBold;l.TextSize=12;l.TextWrapped=true;l.Parent=b
+   e={character=character,highlight=h,billboard=b,label=l};entries[player]=e
   end
-  entry.billboard.Adornee=character:FindFirstChild("Head") or root
-  return entry
+  e.billboard.Adornee=character:FindFirstChild("Head") or root
+  return e
  end
- toggle(espPanel,"Enable ESP",function() return espEnabled end,function(v) espEnabled=v;if not v then clearEntries() end end)
- toggle(espPanel,"Highlights",function() return espHighlights end,function(v) espHighlights=v end)
- toggle(espPanel,"Names",function() return espNames end,function(v) espNames=v end)
- toggle(espPanel,"Health",function() return espHealth end,function(v) espHealth=v end)
- toggle(espPanel,"Distance",function() return espDistance end,function(v) espDistance=v end)
- toggle(espPanel,"Hide teammates",function() return espTeamCheck end,function(v) espTeamCheck=v end)
- toggle(espPanel,"Through walls",function() return espThroughWalls end,function(v) espThroughWalls=v end)
- moduleSlider(espPanel,"Maximum distance",50,5000,espMaxDistance," studs",function() return espMaxDistance end,function(v) espMaxDistance=v end)
+ toggle(panel,"Enable ESP",function() return on end,function(v) on=v;if not v then clear() end end)
+ toggle(panel,"Highlights",function() return highlights end,function(v) highlights=v end)
+ toggle(panel,"Names",function() return names end,function(v) names=v end)
+ toggle(panel,"Health",function() return health end,function(v) health=v end)
+ toggle(panel,"Distance",function() return distance end,function(v) distance=v end)
+ toggle(panel,"Hide teammates",function() return teamCheck end,function(v) teamCheck=v end)
+ toggle(panel,"Through walls",function() return throughWalls end,function(v) throughWalls=v end)
+ moduleSlider(panel,"Maximum distance",50,5000,maxDistance," studs",function() return maxDistance end,function(v) maxDistance=v end)
  connect(Players.PlayerRemoving,drop)
- connect(LP.CharacterRemoving,function() clearEntries() end)
- connect(unload.Activated,shutdownESP)
- connect(gui.Destroying,shutdownESP)
+ connect(LP.CharacterRemoving,clear)
+ connect(unload.Activated,stop)
+ connect(gui.Destroying,stop)
  local elapsed=0
  connect(RS.Heartbeat,function(dt)
-  elapsed+=dt
-  if elapsed<.15 then return end
-  elapsed=0
-  if espClosed then return end
-  if not running or not gui.Parent then shutdownESP();return end
-  if not espEnabled then return end
-  local own=LP.Character
-  local ownRoot=own and own:FindFirstChild("HumanoidRootPart")
-  if not ownRoot then clearEntries();return end
+  elapsed+=dt;if elapsed<.15 then return end;elapsed=0
+  if closed then return end
+  if not running or not gui.Parent then stop();return end
+  if not on then return end
+  local own=LP.Character;local ownRoot=own and own:FindFirstChild("HumanoidRootPart")
+  if not ownRoot then clear();return end
   local seen={}
-  for _,player in ipairs(Players:GetPlayers()) do
-   if player~=LP then
-    local character=player.Character
-    local hum=character and character:FindFirstChildOfClass("Humanoid")
-    local root=character and character:FindFirstChild("HumanoidRootPart")
-    local teammate=not LP.Neutral and not player.Neutral and LP.Team~=nil and player.Team==LP.Team
-    local distance=root and(root.Position-ownRoot.Position).Magnitude or math.huge
-    if hum and root and hum.Health>0 and distance<=espMaxDistance and not(espTeamCheck and teammate) then
-     seen[player]=true
-     local entry=getEntry(player,character,root)
-     local color=teammate and T.ok or T.acc
-     entry.highlight.Enabled=espHighlights
-     entry.highlight.FillColor=color
-     entry.highlight.OutlineColor=color
-     entry.highlight.DepthMode=espThroughWalls and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-     entry.billboard.AlwaysOnTop=espThroughWalls
-     entry.billboard.MaxDistance=espMaxDistance
-     local text={}
-     if espNames then table.insert(text,player.DisplayName.." (@"..player.Name..")") end
-     local details={}
-     if espHealth then table.insert(details,string.format("%d/%d HP",math.floor(hum.Health+.5),math.floor(hum.MaxHealth+.5))) end
-     if espDistance then table.insert(details,string.format("%d studs",math.floor(distance+.5))) end
-     if #details>0 then table.insert(text,table.concat(details," | ")) end
-     entry.billboard.Enabled=#text>0
-     entry.label.Text=table.concat(text,"\n")
-     entry.label.TextColor3=color
+  for _,p in ipairs(Players:GetPlayers()) do
+   if p~=LP then
+    local c=p.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart")
+    local teammate=not LP.Neutral and not p.Neutral and LP.Team~=nil and p.Team==LP.Team
+    local d=r and(r.Position-ownRoot.Position).Magnitude or math.huge
+    if h and r and h.Health>0 and d<=maxDistance and not(teamCheck and teammate) then
+     seen[p]=true;local e=entryFor(p,c,r);local color=teammate and T.ok or T.acc
+     e.highlight.Enabled=highlights;e.highlight.FillColor=color;e.highlight.OutlineColor=color
+     e.highlight.DepthMode=throughWalls and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
+     e.billboard.AlwaysOnTop=throughWalls;e.billboard.MaxDistance=maxDistance
+     local text,detail={},{}
+     if names then table.insert(text,p.DisplayName.." (@"..p.Name..")") end
+     if health then table.insert(detail,string.format("%d/%d HP",math.floor(h.Health+.5),math.floor(h.MaxHealth+.5))) end
+     if distance then table.insert(detail,string.format("%d studs",math.floor(d+.5))) end
+     if #detail>0 then table.insert(text,table.concat(detail," | ")) end
+     e.billboard.Enabled=#text>0;e.label.Text=table.concat(text,"\n");e.label.TextColor3=color
     end
    end
   end
-  local stale={}
-  for player in pairs(entries) do if not seen[player] then table.insert(stale,player) end end
-  for _,player in ipairs(stale) do drop(player) end
+  local stale={};for p in pairs(entries) do if not seen[p] then table.insert(stale,p) end end
+  for _,p in ipairs(stale) do drop(p) end
  end)
 end
 
@@ -1594,6 +1568,114 @@ connect(RS.Heartbeat,function()
  local cam=workspace.CurrentCamera
  if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
 end)
+-- ===== PART 2: gradients, glow, pumpkins and labels =====
+do
+ -- window: layered gradient from purple haze down to black
+ make("UIGradient",main,{Color=ColorSequence.new(Color3.fromRGB(44,16,60),Color3.fromRGB(8,4,12)),Rotation=90})
+ -- extra orange glow outline on the window (layer above the base stroke)
+ make("UIStroke",main,{Color=T.acc,Thickness=2,Transparency=.35})
+
+ -- top bar: blood-orange to purple gradient
+ make("UIGradient",top,{Color=ColorSequence.new(Color3.fromRGB(124,42,18),Color3.fromRGB(52,18,74)),Rotation=0})
+
+ -- title text: orange with dark outline for the spooky look
+ for _,o in ipairs(top:GetChildren()) do
+  if o:IsA("TextLabel") and o.Text=="JJS HUB" then
+   o.TextColor3=Color3.fromRGB(255,150,50)
+   o.TextStrokeColor3=Color3.fromRGB(40,10,0)
+   o.TextStrokeTransparency=0
+  end
+ end
+
+ -- pumpkin face in the top bar (layered above the gradient)
+ make("TextLabel",top,{Size=UDim2.fromOffset(64,28),Position=UDim2.new(1,-118,.5,-14),BackgroundTransparency=1,Text="^ ^",TextColor3=Color3.fromRGB(255,170,60),Font=Enum.Font.GothamBlack,TextSize=20,ZIndex=5})
+
+ -- sidebar header in the coven style
+ make("TextLabel",side,{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,Text="~ COVEN ~",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=0})
+
+ -- page title in orange
+ title.TextColor3=Color3.fromRGB(255,150,50)
+
+ -- footer on the window, layered above the content
+ make("TextLabel",main,{Size=UDim2.new(1,-160,0,14),Position=UDim2.new(0,160,1,-16),BackgroundTransparency=1,Text="~ boo ~ happy halloween ~",TextColor3=T.mut,Font=Enum.Font.GothamMedium,TextSize=10,ZIndex=5})
+end
+
+-- ===== PART 3: layered Halloween scenery (drawn with frames, no uploads needed) =====
+do
+ local function shape(parent,props) return make("Frame",parent,props) end
+ local function rounded(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 999)}) end
+ local ink=Color3.fromRGB(12,6,18)
+ local orange=Color3.fromRGB(255,120,30)
+
+ -- LAYER 0: moon, fog and spider web (behind everything)
+ local moon=shape(main,{Size=UDim2.fromOffset(70,70),Position=UDim2.new(1,-100,0,56),BackgroundColor3=Color3.fromRGB(255,236,190),BorderSizePixel=0,ZIndex=0})
+ rounded(moon); make("UIGradient",moon,{Color=ColorSequence.new(Color3.fromRGB(255,240,200),Color3.fromRGB(255,160,80)),Rotation=45})
+ make("UIStroke",moon,{Color=Color3.fromRGB(255,170,80),Thickness=3,Transparency=.5})
+
+ local fog=shape(main,{Size=UDim2.new(1,0,0,130),Position=UDim2.new(0,0,1,-130),BackgroundColor3=Color3.fromRGB(80,30,100),BorderSizePixel=0,ZIndex=0})
+ make("UIGradient",fog,{Color=ColorSequence.new(Color3.fromRGB(90,35,120),Color3.fromRGB(10,4,16)),Rotation=90,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.35),NumberSequenceKeypoint.new(1,1)})})
+
+ for _,a in ipairs({8,24,42,60}) do
+  local rad=math.rad(a);local dx,dy=-math.cos(rad),math.sin(rad)
+  local web=shape(main,{AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(180,1),Position=UDim2.new(1,dx*90,0,dy*90),Rotation=math.deg(math.atan2(dy,dx)),BackgroundColor3=Color3.fromRGB(170,150,190),BackgroundTransparency=.45,BorderSizePixel=0,ZIndex=0})
+ end
+
+ -- LAYER 0: bats in the background
+ local function bat(x,y,s,rot)
+  local body=shape(main,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(x,y),Size=UDim2.fromOffset(s*.35,s*.4),BackgroundColor3=ink,BorderSizePixel=0,Rotation=rot,ZIndex=0}); rounded(body)
+  for _,side in ipairs({-1,1}) do
+   local wing=shape(main,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(x+side*s*.35,y-s*.05),Size=UDim2.fromOffset(s*.6,s*.22),BackgroundColor3=ink,BorderSizePixel=0,Rotation=rot+side*-22,ZIndex=0}); rounded(wing,6)
+  end
+ end
+ bat(230,90,34,-8); bat(560,140,26,10); bat(120,300,22,-14)
+
+ -- LAYER 0: pumpkins on the bottom-right (behind the cards, visible through the gaps)
+ local function pumpkin(x,y,s)
+  local body=shape(main,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,x,1,y),Size=UDim2.fromOffset(s,s*.82),BackgroundColor3=orange,BorderSizePixel=0,ZIndex=0}); rounded(body,s)
+  make("UIGradient",body,{Color=ColorSequence.new(Color3.fromRGB(255,175,70),Color3.fromRGB(190,60,10)),Rotation=90})
+  local stem=shape(main,{AnchorPoint=Vector2.new(.5,1),Position=UDim2.new(0,x,1,y-s*.4),Size=UDim2.fromOffset(s*.14,s*.24),BackgroundColor3=Color3.fromRGB(90,60,20),BorderSizePixel=0,ZIndex=0}); rounded(stem,4)
+  for _,ex in ipairs({-s*.2,s*.2}) do shape(main,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,x+ex,1,y-s*.08),Size=UDim2.fromOffset(s*.18,s*.18),BackgroundColor3=ink,BorderSizePixel=0,Rotation=45,ZIndex=1}) end
+  local mouth=shape(main,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,x,1,y+s*.16),Size=UDim2.fromOffset(s*.5,s*.13),BackgroundColor3=ink,BorderSizePixel=0,ZIndex=1}); rounded(mouth,6)
+ end
+ pumpkin(700,-58,64); pumpkin(664,-30,38)
+
+ -- LAYER 0: floating embers
+ local embers={}
+ for i=1,12 do
+  local e=shape(main,{AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(4,4),BackgroundColor3=Color3.fromRGB(255,160,60),BorderSizePixel=0,ZIndex=0}); rounded(e)
+  table.insert(embers,{f=e,x=math.random()*760,y=math.random()*540,s=8+math.random()*18})
+ end
+
+ -- LAYER 1: ghost that floats across the page
+ local ghost=shape(main,{AnchorPoint=Vector2.new(.5,.5),Size=UDim2.fromOffset(44,50),Position=UDim2.fromOffset(640,220),BackgroundColor3=Color3.fromRGB(230,235,255),BackgroundTransparency=.25,BorderSizePixel=0,ZIndex=1})
+ make("UICorner",ghost,{CornerRadius=UDim.new(0,22)})
+ for _,ex in ipairs({12,30}) do shape(ghost,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(ex,20),Size=UDim2.fromOffset(6,9),BackgroundColor3=ink,BorderSizePixel=0,ZIndex=2}) end
+
+ -- LAYER 2: witch-hat avatar of the player (live headshot + drawn hat on top)
+ local holder=shape(main,{Size=UDim2.fromOffset(62,62),Position=UDim2.new(0,12,1,-74),BackgroundColor3=T.panel,BorderSizePixel=0,ZIndex=6}); rounded(holder,62)
+ make("UIStroke",holder,{Color=T.acc,Thickness=2})
+ local face=make("ImageLabel",holder,{Size=UDim2.fromOffset(52,52),Position=UDim2.fromOffset(5,5),BackgroundColor3=Color3.fromRGB(255,140,40),BorderSizePixel=0,ScaleType=Enum.ScaleType.Crop,ZIndex=7}); rounded(face,52)
+ local okThumb,thumb=pcall(function() return (Players:GetUserThumbnailAsync(LP.UserId,Enum.ThumbnailType.HeadShot,Enum.ThumbnailSize.Size100x100)) end)
+ if okThumb and thumb then face.Image=thumb end
+ local brim=shape(holder,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromOffset(31,14),Size=UDim2.fromOffset(58,10),BackgroundColor3=Color3.fromRGB(40,20,56),BorderSizePixel=0,ZIndex=9}); rounded(brim,6)
+ local crown=shape(holder,{AnchorPoint=Vector2.new(.5,1),Position=UDim2.fromOffset(31,15),Size=UDim2.fromOffset(32,30),BackgroundColor3=Color3.fromRGB(40,20,56),BorderSizePixel=0,ZIndex=8}); rounded(crown,8)
+ shape(holder,{AnchorPoint=Vector2.new(.5,1),Position=UDim2.fromOffset(31,13),Size=UDim2.fromOffset(32,5),BackgroundColor3=orange,BorderSizePixel=0,ZIndex=10})
+
+ -- ambient motion for ghost and embers
+ connect(RS.Heartbeat,function(dt)
+  local t=os.clock()
+  ghost.Position=UDim2.fromOffset(640+math.sin(t*.6)*22,220+math.sin(t*1.3)*12)
+  for _,e in ipairs(embers) do
+   e.y-=e.s*dt
+   if e.y<-10 then e.y=560;e.x=math.random()*760 end
+   e.f.Position=UDim2.fromOffset(e.x+math.sin(t+e.x)*6,e.y)
+  end
+ end)
+
+ -- LAYER 3: thin orange border glow over the whole window
+ make("UIStroke",main,{Color=orange,Thickness=1,Transparency=.6})
+end
+
 status.Text="Default: 325 ms | Combos on Combos tab"
 
 do
@@ -2057,7 +2139,7 @@ end)
 if not okFX then warn("Popup section failed (rest of script still loaded): "..tostring(errFX)) end
 end,function(e) return debug.traceback(tostring(e),2) end)
 if not __okMain then
- warn("AutoBlackflash failed: "..tostring(__errMain))
+ warn("JJS HUB failed: "..tostring(__errMain))
  pcall(function()
   local pg=game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui",5)
   if not pg then return end
@@ -2068,7 +2150,7 @@ if not __okMain then
   box.TextWrapped=true;box.MultiLine=true;box.ClearTextOnFocus=false;box.TextEditable=false
   box.TextXAlignment=Enum.TextXAlignment.Left;box.TextYAlignment=Enum.TextYAlignment.Top
   box.Font=Enum.Font.Code;box.TextSize=14
-  box.Text="AutoBlackflash failed. Send this text:\n"..tostring(__errMain)
+  box.Text="JJS HUB failed. Send this text:\n"..tostring(__errMain)
   box.Parent=sg
  end)
 end
