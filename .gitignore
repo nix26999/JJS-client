@@ -2508,35 +2508,117 @@ local function playImageImpact(token)
  return true
 end
 cancelImpact=function() impactToken+=1;if impactConnection then impactConnection:Disconnect();impactConnection=nil end;if impactLayer then impactLayer:Destroy();impactLayer=nil end;if impactSeq then impactSeq.holder.Visible=false;impactSeq.holder.Position=UDim2.fromScale(.5,.5);for _,label in ipairs(impactSeq.labels) do label.Visible=false end end end
+local FIN_FRAMES,FIN_FPS=124,24
+local function finSmooth(a,b,x) local t=math.clamp((x-a)/(b-a),0,1);return t*t*(3-2*t) end
 local function playImpact(preview)
  if not running or not impactEnabled then return end
  if not preview and not reducedFlash and os.clock()-lastImpactAt<IMPACT_COOLDOWN then return end
  lastImpactAt=os.clock();cancelImpact();local token=impactToken
- if impactSeq and impactSeq.kind==impactKind() and playImageImpact(token) then return end
- local layer=make("Frame",gui,{Name="BlackflashKillFinisher16",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
- local bg=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
- local random=Random.new(21);local pieces={}
- local function seg(a,b,w,born,red)
-  local glow=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(255,45,85),ZIndex=92})
-  local ink=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,ZIndex=93});table.insert(pieces,{a=a,b=b,w=w,born=born,red=red,glow=glow,ink=ink})
+ local K=reducedFlash and .45 or 1
+ local layer=make("Frame",gui,{Name="BlackflashKillFinisher124",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ClipsDescendants=true,ZIndex=90});impactLayer=layer
+ local rng=Random.new(math.floor(os.clock()*1000))
+ local wash=make("Frame",layer,{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=91})
+ local core={}
+ local coreColors={Color3.new(1,1,1),Color3.fromRGB(255,200,60),Color3.fromRGB(230,30,60)}
+ local coreFactors={.25,.5,.9}
+ for i=1,3 do local c=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=coreColors[i],BackgroundTransparency=1,ZIndex=92});corner(c,999);core[i]=c end
+ local rings={}
+ for i=1,6 do
+  local r=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=93});corner(r,999)
+  local st=make("UIStroke",r,{Color=Color3.new(1,1,1),Thickness=6})
+  rings[i]={f=r,s=st,t0=(i-1)*.1,hue=i*.13}
  end
- for branch=1,9 do local p=branch<=6 and Vector2.new(90,170) or Vector2.new(random:NextNumber(800,1920),-20);local a=branch<=6 and random:NextNumber(-.1,1.3) or random:NextNumber(1.3,3.4);local width=random:NextNumber(12,26)
-  for k=1,13 do a+=random:NextNumber(-.6,.6);local q=p+Vector2.new(math.cos(a),math.sin(a))*random:NextNumber(50,150);seg(p,q,math.max(1.5,width*(1-k/15)),(k-1)/17,false);if k%3==0 then local aa=a+random:NextNumber(-1,1);seg(p,p+Vector2.new(math.cos(aa),math.sin(aa))*random:NextNumber(100,280),4,k/17,true) end;p=q end
+ local slashes={}
+ for i=1,14 do
+  local s=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,ZIndex=94})
+  table.insert(slashes,{f=s,ang=rng:NextNumber(-60,60)+(i%2==0 and 35 or -35),off=Vector2.new(rng:NextNumber(-260,260),rng:NextNumber(-180,180)),t0=.05+i*.025,len=rng:NextNumber(500,1100),hue=i*.07})
  end
- for i=1,34 do local a=2*math.pi*i/34;local d=Vector2.new(math.cos(a),math.sin(a));local p=Vector2.new(1150,620)+d*70;seg(p,p+d*random:NextNumber(200,850),random:NextNumber(3,10),0,i%3==0) end
- local ring=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BackgroundTransparency=1,ZIndex=94});corner(ring,999);local outline=make("UIStroke",ring,{Color=Color3.fromRGB(220,25,55),Thickness=8})
- local growth={.10,.28,.46,.62,.74,.84,.92,.97,1,1,1,1,1,1,1,1};local alpha={1,1,1,1,1,.92,.75,.55,.35,.20,.08,0,0,0,0,0}
- local function draw(frame)
-  local size=layer.AbsoluteSize;local sx,sy=size.X/1920,size.Y/1080;local sf=math.min(sx,sy);local fade=frame<=11 and 1 or math.max(0,(16-frame)/5);local inverse=not reducedFlash and frame>=2 and frame<=4
-  bg.BackgroundColor3=inverse and Color3.new(0,0,0) or Color3.new(1,1,1);bg.BackgroundTransparency=1-(reducedFlash and math.min(.16,alpha[frame]) or alpha[frame])*fade
-  for _,s in ipairs(pieces) do local progress=math.clamp((growth[frame]-s.born)/.22,0,1);local a=Vector2.new(s.a.X*sx,s.a.Y*sy);local b=Vector2.new(s.b.X*sx,s.b.Y*sy);local d=(b-a)*progress;local mid=a+d/2;local width=math.max(1,s.w*sf)
-   for _,o in ipairs({s.glow,s.ink}) do o.Visible=progress>0 and fade>0;o.Position=UDim2.fromOffset(mid.X,mid.Y);o.Rotation=math.deg(math.atan2(d.Y,d.X)) end
-   s.glow.Size=UDim2.fromOffset(d.Magnitude,width+8*sf);s.glow.BackgroundTransparency=1-.35*fade;s.ink.Size=UDim2.fromOffset(d.Magnitude,width);s.ink.BackgroundTransparency=1-fade;s.ink.BackgroundColor3=s.red and Color3.fromRGB(193,18,31) or (inverse and Color3.new(1,1,1) or Color3.new(0,0,0))
+ local parts={}
+ for i=1,60 do
+  local p=make("Frame",layer,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,ZIndex=95});corner(p,999)
+  local ang=rng:NextNumber(0,math.pi*2);local sp=rng:NextNumber(300,1100)
+  table.insert(parts,{f=p,dx=math.cos(ang)*sp,dy=math.sin(ang)*sp,sz=rng:NextNumber(4,12),hue=i/60,t0=.08+rng:NextNumber(0,.12)})
+ end
+ local word=make("TextLabel",layer,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.42),Size=UDim2.fromOffset(900,120),BackgroundTransparency=1,Text="BLACK FLASH",TextScaled=true,Font=Enum.Font.GothamBlack,TextColor3=Color3.new(1,1,1),TextTransparency=1,ZIndex=96})
+ make("UIStroke",word,{Color=Color3.fromRGB(40,0,10),Thickness=4})
+ make("UITextSizeConstraint",word,{MinTextSize=20,MaxTextSize=110})
+
+ local function draw(f)
+  local t=(f-1)/FIN_FPS
+  local A=layer.AbsoluteSize;local cx,cy=A.X*.5,A.Y*.5;local unit=math.min(A.X,A.Y)/720
+  local fade=1-finSmooth(4.3,FIN_FRAMES/FIN_FPS,t)
+  -- screen wash: white flash, then a crimson -> gold -> violet tint
+  local tint=Color3.fromHSV((.97+t*.55)%1,.8,1)
+  wash.BackgroundColor3=Color3.new(1,1,1):Lerp(tint,finSmooth(.03,.3,t))
+  local flash=K*(1-finSmooth(.05,.35,t))
+  wash.BackgroundTransparency=1-math.clamp(math.max(flash,.16*fade*K),0,1)
+  -- core glow: white centre, gold, then crimson
+  for i,c in ipairs(core) do
+   local grow=finSmooth(0,.45,t)
+   local r=(90+320*grow)*unit*coreFactors[i]
+   c.Size=UDim2.fromOffset(r*2,r*2);c.Position=UDim2.fromOffset(cx,cy)
+   local a=(1-finSmooth(.9,2.0,t))*fade*(i==1 and .9 or .55)
+   c.BackgroundTransparency=1-math.clamp(a,0,1)
   end
-  local p=math.clamp((frame-1)/8,0,1);ring.Visible=frame>=2 and frame<=9;ring.Position=UDim2.fromOffset(1150*sx,620*sy);ring.Size=UDim2.fromOffset((160+1240*p)*sx,(100+800*p)*sy);outline.Thickness=math.max(1,(22*(1-p)+3)*sf);outline.Transparency=1-fade
+  -- expanding rainbow shockwave rings
+  for _,r in ipairs(rings) do
+   local p=finSmooth(0,1,(t-r.t0)/.9)
+   local rad=(40+560*p)*unit
+   r.f.Size=UDim2.fromOffset(rad*2,rad*2);r.f.Position=UDim2.fromOffset(cx,cy)
+   r.s.Thickness=math.max(1,(18*(1-p)+2)*unit)
+   r.s.Color=Color3.fromHSV((r.hue+t*.4)%1,.9,1)
+   local a=t<r.t0 and 1 or math.clamp((.05+p*.85)*fade,0,1)
+   r.s.Transparency=a
+  end
+  -- diagonal slash streaks
+  for _,s in ipairs(slashes) do
+   local p=finSmooth(s.t0,s.t0+.22,t)
+   local life=1-finSmooth(s.t0+.5,s.t0+1.1,t)
+   local len=s.len*unit*p
+   s.f.Size=UDim2.fromOffset(math.max(len,1),(10+8*life)*unit)
+   s.f.Position=UDim2.fromOffset(cx+s.off.X*unit,cy+s.off.Y*unit)
+   s.f.Rotation=s.ang
+   s.f.BackgroundColor3=Color3.fromHSV((s.hue+t*.6)%1,.85,1)
+   s.f.BackgroundTransparency=1-math.clamp(life*fade,0,1)*(t>=s.t0 and 1 or 0)
+  end
+  -- sparks flying out with a little gravity
+  for _,p in ipairs(parts) do
+   local dt=t-p.t0
+   if dt<0 then p.f.BackgroundTransparency=1 else
+    local k=1-math.exp(-dt*2.8)
+    local x=cx+p.dx*unit*k*.5
+    local y=cy+p.dy*unit*k*.5+130*unit*dt*dt
+    local sz=p.sz*unit*(1-finSmooth(1,1.7,dt))
+    p.f.Size=UDim2.fromOffset(sz,sz);p.f.Position=UDim2.fromOffset(x,y)
+    p.f.BackgroundColor3=Color3.fromHSV((p.hue+t*.5)%1,.9,1)
+    p.f.BackgroundTransparency=1-math.clamp((1-finSmooth(1.0,1.8,dt))*fade,0,1)
+   end
+  end
+  -- title word: pops in, cycles colour, fades out at the end
+  local wt=t-.22
+  if wt<0 then word.TextTransparency=1 else
+   local pop=1+.6*(1-finSmooth(0,.22,wt))
+   word.Size=UDim2.fromOffset(900*pop,120*pop)
+   word.TextTransparency=finSmooth(4.0,4.4,t)
+   word.TextColor3=Color3.new(1,1,1):Lerp(Color3.fromHSV((t*.6)%1,.7,1),.5)
+  end
+  -- short shake on impact
+  if not reducedFlash and t<.35 then
+   local amp=(1-t/.35)*10*unit
+   layer.Position=UDim2.fromOffset(rng:NextNumber(-amp,amp),rng:NextNumber(-amp,amp))
+  else
+   layer.Position=UDim2.fromOffset(0,0)
+  end
  end
- local started=os.clock();local lastFrame=1;draw(1)
- impactConnection=RS.RenderStepped:Connect(function() if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end;local elapsed=os.clock()-started;if elapsed>=IMPACT_DURATION then cancelImpact();return end;local frame=math.min(16,math.floor(elapsed*16/IMPACT_DURATION)+1);if frame~=lastFrame then lastFrame=frame;draw(frame) end end)
+
+ draw(1)
+ local started=os.clock();local last=1
+ impactConnection=RS.RenderStepped:Connect(function()
+  if not running or not impactEnabled or token~=impactToken or not layer.Parent then cancelImpact();return end
+  local f=math.min(FIN_FRAMES,math.floor((os.clock()-started)*FIN_FPS)+1)
+  if f~=last then last=f;draw(f) end
+  if f>=FIN_FRAMES then cancelImpact() end
+ end)
 end
 local function bindKillRemote(remote)
  if remote.Name~="BlackflashKillConfirmed" or not remote:IsA("RemoteEvent") or remote==confirmedRemote then return end
@@ -2657,7 +2739,7 @@ connect(UIS.InputBegan,function(i,processed)
 end)
 local fxCard=card(pages.Visuals,"Popups, voices and kill finisher","")
 toggle(fxCard,"Blackflash popups",function() return popupEnabled end,function(v) popupEnabled=v;if not v then clearPopups() else updateStreakDisplay(0) end end)
-toggle(fxCard,"Kill finisher (16 frames / 0.8 s)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
+toggle(fxCard,"Kill finisher (124 frames / 24 fps)",function() return impactEnabled end,function(v) impactEnabled=v;if v then ensureImpactSeq() else cancelImpact();releaseImpactSeq() end end)
 toggle(fxCard,"Reduced flashes",function() return reducedFlash end,function(v) reducedFlash=v;cancelImpact();if impactEnabled then ensureImpactSeq() end end)
 toggle(fxCard,"Allow ESTIMATED lethal triggers",function() return confirmationMode=="EstimatedLethal" end,function(v) confirmationMode=v and "EstimatedLethal" or "ConfirmedOnly";cancelImpact();updateKillStatus() end)
 local bPop=make("TextButton",fxCard,{Text="PREVIEW POPUP - NOT A HIT",Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=40});corner(bPop,6)
