@@ -1,8 +1,64 @@
--- JJS HUB v2.4 -- recovery branch (not the optional v2.1 Spotty additions).
--- All top-level module blocks isolated in independent function register frames.
--- Original key gate and theme preserved. Background toggle included.
--- No full-screen startup/error panels; failures remain logged with warn().
--- Block structure checked offline; not compiled or executed in Xeno here.
+-- JJS HUB v2.6: sequential initialization + device badge + inspected additions.
+local __JJSBoot=(function()
+ local b={done=0,failed=0,total=33,ready=false,screen=nil,label=nil,fill=nil}
+ local Players=game:GetService("Players")
+ local Input=game:GetService("UserInputService")
+ local mobile=Input.TouchEnabled and not Input.KeyboardEnabled
+ b.device=mobile and "MOBILE" or "PC"
+ b.color=mobile and Color3.fromRGB(255,209,64) or Color3.fromRGB(65,160,255)
+ function b:icon(parent,position,size)
+  local icon=Instance.new("Frame");icon.Name="DeviceIcon";icon.BackgroundTransparency=1;icon.Position=position;icon.Size=UDim2.fromOffset(size,size);icon.Parent=parent
+  local outline=Instance.new("Frame");outline.BackgroundColor3=self.color;outline.BorderSizePixel=0
+  if self.device=="PC" then outline.Size=UDim2.new(1,0,.65,0);outline.Position=UDim2.new(0,0,.05,0)
+  else outline.Size=UDim2.new(.6,0,.95,0);outline.Position=UDim2.new(.2,0,0,0) end
+  outline.Parent=icon
+  local radius=Instance.new("UICorner");radius.CornerRadius=UDim.new(0,3);radius.Parent=outline
+  local inset=Instance.new("Frame");inset.Size=UDim2.new(1,-4,1,-5);inset.Position=UDim2.fromOffset(2,2);inset.BorderSizePixel=0;inset.BackgroundColor3=Color3.fromRGB(34,26,22);inset.Parent=outline
+  if self.device=="PC" then
+   local stand=Instance.new("Frame");stand.BackgroundColor3=self.color;stand.BorderSizePixel=0;stand.Size=UDim2.new(.14,0,.19,0);stand.Position=UDim2.new(.43,0,.7,0);stand.Parent=icon
+   local foot=Instance.new("Frame");foot.BackgroundColor3=self.color;foot.BorderSizePixel=0;foot.Size=UDim2.new(.55,0,.09,0);foot.Position=UDim2.new(.225,0,.88,0);foot.Parent=icon
+  end
+  return icon
+ end
+ local player=Players.LocalPlayer
+ local pg=player and (player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui",10))
+ if pg then
+  local old=pg:FindFirstChild("JJSLoadingScreen");if old then old:Destroy() end
+  for _,name in ipairs({"JJSStartupStatus","JJSHubStartupDiagnostic"}) do local stale=pg:FindFirstChild(name);if stale then stale:Destroy() end end
+  local screen=Instance.new("ScreenGui");screen.Name="JJSLoadingScreen";screen.IgnoreGuiInset=true;screen.ResetOnSpawn=false;screen.DisplayOrder=2147483647;b.screen=screen
+  local dim=Instance.new("TextButton");dim.Name="InputShield";dim.Text="";dim.AutoButtonColor=false;dim.Size=UDim2.fromScale(1,1);dim.BackgroundColor3=Color3.fromRGB(10,7,6);dim.BackgroundTransparency=.15;dim.BorderSizePixel=0;dim.Modal=true;dim.Parent=screen
+  local panel=Instance.new("Frame");panel.Size=UDim2.fromOffset(500,250);panel.AnchorPoint=Vector2.new(.5,.5);panel.Position=UDim2.fromScale(.5,.5);panel.BackgroundColor3=Color3.fromRGB(34,26,22);panel.BorderSizePixel=0;panel.Parent=dim
+  local scale=Instance.new("UIScale");local camera=workspace.CurrentCamera;local viewport=camera and camera.ViewportSize or Vector2.new(760,540);scale.Scale=math.min(1,(viewport.X-30)/500,(viewport.Y-30)/250);scale.Parent=panel
+  local corner=Instance.new("UICorner");corner.CornerRadius=UDim.new(0,12);corner.Parent=panel
+  local stroke=Instance.new("UIStroke");stroke.Color=Color3.fromRGB(255,122,26);stroke.Thickness=1;stroke.Parent=panel
+  local title=Instance.new("TextLabel");title.Size=UDim2.fromOffset(450,34);title.Position=UDim2.fromOffset(24,22);title.BackgroundTransparency=1;title.Font=Enum.Font.GothamBold;title.TextSize=22;title.TextColor3=Color3.fromRGB(255,242,224);title.TextXAlignment=Enum.TextXAlignment.Left;title.Text="JJS HUB  /  v2.6";title.Parent=panel
+  b:icon(panel,UDim2.fromOffset(26,72),34)
+  local device=Instance.new("TextLabel");device.Size=UDim2.fromOffset(390,32);device.Position=UDim2.fromOffset(74,74);device.BackgroundTransparency=1;device.Font=Enum.Font.GothamBold;device.TextSize=15;device.TextColor3=b.color;device.TextXAlignment=Enum.TextXAlignment.Left;device.Text="Detected "..b.device.."  -  preparing modules";device.Parent=panel
+  local label=Instance.new("TextLabel");label.Size=UDim2.fromOffset(450,48);label.Position=UDim2.fromOffset(24,120);label.BackgroundTransparency=1;label.Font=Enum.Font.Gotham;label.TextSize=12;label.TextColor3=Color3.fromRGB(200,160,180);label.TextXAlignment=Enum.TextXAlignment.Left;label.TextWrapped=true;label.Text="Device checked. Initializing interface...";label.Parent=panel;b.label=label
+  local bar=Instance.new("Frame");bar.Size=UDim2.fromOffset(450,8);bar.Position=UDim2.fromOffset(24,185);bar.BackgroundColor3=Color3.fromRGB(52,40,32);bar.BorderSizePixel=0;bar.Parent=panel
+  local fill=Instance.new("Frame");fill.Size=UDim2.fromScale(0,1);fill.BackgroundColor3=Color3.fromRGB(255,138,40);fill.BorderSizePixel=0;fill.Parent=bar;b.fill=fill
+  local foot=Instance.new("TextLabel");foot.Size=UDim2.fromOffset(450,24);foot.Position=UDim2.fromOffset(24,205);foot.BackgroundTransparency=1;foot.Font=Enum.Font.Gotham;foot.TextSize=10;foot.TextColor3=Color3.fromRGB(150,110,140);foot.Text="Sequential startup - optional features remain off";foot.Parent=panel
+  screen.Parent=pg
+ end
+ function b:run(name,fn)
+  if self.label and self.label.Parent then self.label.Text=string.format("Loading %d / %d: %s",self.done+1,self.total,name) end
+  task.wait(.025)
+  local ok,err=xpcall(fn,function(e) return tostring(e) end)
+  if not ok then self.failed+=1;warn("JJS v2.6 ["..name.."]: "..tostring(err)) end
+  self.done+=1
+  if self.fill and self.fill.Parent then self.fill.Size=UDim2.fromScale(math.clamp(self.done/self.total,0,1),1) end
+  task.wait(.025)
+  return ok,err
+ end
+ function b:finish(ok)
+  self.ready=ok and true or false
+  if self.label and self.label.Parent then self.label.Text=ok and (self.failed==0 and "Ready. Opening hub..." or "Hub ready; "..self.failed.." component(s) unavailable. See console.") or "Startup incomplete. See console." end
+  task.wait(.3)
+  if self.screen then self.screen:Destroy();self.screen=nil;self.label=nil;self.fill=nil end
+ end
+ task.wait(.05)
+ return b
+end)()
 local __okMain,__errMain=xpcall(function()
 local fxShutdown,onBlackflashPair
 
@@ -21,7 +77,7 @@ local running=true
 -- when the hub window is open (Visible), combat macros pause; when closed they resume
 local scriptsPaused=false
 local hubUnlocked=false -- set true after key gate (or saved key)
-local function scriptsActive() return running and not scriptsPaused and hubUnlocked end
+local function scriptsActive() return running and not scriptsPaused and hubUnlocked and __JJSBoot.ready end
 local todoEnabled,todoBusy=false,false
 local perfectClapEnabled=false
 local clapState={generation=0,pending=false}
@@ -73,7 +129,7 @@ local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
 local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
 -- ===== PART 1: Halloween palette =====
-;xpcall(function() -- v2.4 isolated module 1
+;__JJSBoot:run("Halloween theme",function()
 
  T.bg=Color3.fromRGB(20,16,14)          -- midnight black-purple window
  T.panel=Color3.fromRGB(34,26,22)      -- top bar and sidebar
@@ -89,7 +145,7 @@ local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
  T.purple=Color3.fromRGB(255,190,90)   -- witch purple
  T.ghost=Color3.fromRGB(190,255,210)   -- ghost glow
 
-end,function(err) warn("JJS v2.4 module 1 failed: "..tostring(err));return err end)
+end)
 
 local gui=make("ScreenGui",PG,{Name="JJS HUB",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 -- Key gate: join Discord to get the key, then unlock the hub
@@ -113,7 +169,7 @@ local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.4",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.6",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local DISCORD_URL="https://discord.gg/RrQQh6B4nP"
 local discordBtn=make("TextButton",top,{Size=UDim2.fromOffset(86,28),Position=UDim2.new(1,-130,.5,-14),BackgroundColor3=Color3.fromRGB(88,101,242),Text="Discord",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=12}); corner(discordBtn,6)
@@ -240,7 +296,7 @@ local content=make("Frame",main,{Size=UDim2.new(1,-150,1,-44),Position=UDim2.fro
 local title=make("TextLabel",content,{Size=UDim2.new(1,-24,0,22),Position=UDim2.fromOffset(16,10),BackgroundTransparency=1,Text="Macros",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left})
 local desc=make("TextLabel",content,{Size=UDim2.new(1,-24,0,0),Position=UDim2.fromOffset(16,32),Visible=false,BackgroundTransparency=1,Text="",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left})
 local pages,buttons={},{}
-local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Settings",""}}
+local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Animations",""},{"Settings",""}}
 for i,cat in ipairs(cats) do
  local name,description=cat[1],cat[2]
  local groupStart={Macros="MAIN",Combat="COMBAT",Movement="MOVEMENT",Visuals="VISUALS"}
@@ -572,7 +628,7 @@ local function runTripleJump()
  end
 end
 
-;xpcall(function() -- v2.4 isolated module 2
+;__JJSBoot:run("Standard True Stun Lock",function()
 
  local active=false
  local token=0
@@ -701,9 +757,9 @@ end
  connect(gui.Destroying,cancel)
  connect(unload.Activated,cancel)
 
-end,function(err) warn("JJS v2.4 module 2 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 3
+;__JJSBoot:run("Hyper King 90% DMG",function()
 
  local active=false
  local token=0
@@ -842,9 +898,9 @@ end,function(err) warn("JJS v2.4 module 2 failed: "..tostring(err));return err e
  connect(gui.Destroying,cancel)
  connect(unload.Activated,cancel)
 
-end,function(err) warn("JJS v2.4 module 3 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 4
+;__JJSBoot:run("Follow Behind - Automatic Path Jumps",function()
 
  local PFS=game:GetService("PathfindingService")
  local on,dashes,autoJump=false,true,true;local selectedId,target=nil,nil;local direction=Vector3.zero
@@ -961,9 +1017,9 @@ end,function(err) warn("JJS v2.4 module 3 failed: "..tostring(err));return err e
  local function shutdown() on=false;reset();RS:UnbindFromRenderStep(renderName);for _,e in ipairs(rows) do e.c:Disconnect() end end
  connect(LP.CharacterRemoving,reset);connect(gui.Destroying,shutdown);connect(unload.Activated,shutdown)
 
-end,function(err) warn("JJS v2.4 module 4 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 5
+;__JJSBoot:run("Slow Spin",function()
 
  local spinEnabled=false;local spinSpeed=30;local spinHumanoid,spinRoot,previousAutoRotate=nil,nil,nil;local spinAngle=0;local spinBind="JJSIntegratedSlowSpin"
  local panel=card(pages.Movement,"Slow Spin","")
@@ -976,9 +1032,9 @@ end,function(err) warn("JJS v2.4 module 4 failed: "..tostring(err));return err e
  end)
  local function stopSpin() spinEnabled=false;RS:UnbindFromRenderStep(spinBind);restoreSpin() end;connect(LP.CharacterRemoving,restoreSpin);connect(unload.Activated,stopSpin);connect(gui.Destroying,stopSpin)
 
-end,function(err) warn("JJS v2.4 module 5 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 6
+;__JJSBoot:run("Invisible (Local Only)",function()
 
  local invisible=false;local saved={};local characterConnection=nil;local bind="JJSLocalInvisibility"
  local panel=card(pages.Player,"Invisible (Local Only)","")
@@ -993,9 +1049,9 @@ end,function(err) warn("JJS v2.4 module 5 failed: "..tostring(err));return err e
  RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+4,function() if not running or not invisible then return end;for o,e in pairs(saved) do if o.Parent then pcall(function() o[e.property]=e.hidden end) end end end)
  local function shutdown() invisible=false;RS:UnbindFromRenderStep(bind);restore() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 6 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 7
+;__JJSBoot:run("Speed",function()
 
  local speedEnabled=false;local selectedSpeed=24;local ownedHumanoid,originalSpeed=nil,nil;local bind="JJSIntegratedSpeed"
  local panel=card(pages.Movement,"Speed","")
@@ -1005,9 +1061,9 @@ end,function(err) warn("JJS v2.4 module 6 failed: "..tostring(err));return err e
  connect(LP.CharacterRemoving,restoreSpeed);RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+3,function() if speedEnabled and not gui:GetAttribute("FlingSequenceActive") then applySpeed() end end)
  local function shutdown() speedEnabled=false;RS:UnbindFromRenderStep(bind);restoreSpeed() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 7 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 8
+;__JJSBoot:run("Build Speed",function()
 
  local on=false;local startSpeed,acceleration,maxSpeed=16,10,10000;local currentSpeed=startSpeed;local resetOnStop=false;local owned,previousSpeed=nil,nil;local bind="JJSBuildSpeed";gui:SetAttribute("BuildSpeedActive",false)
  local panel=card(pages.Movement,"Build Speed","")
@@ -1024,9 +1080,9 @@ end,function(err) warn("JJS v2.4 module 7 failed: "..tostring(err));return err e
  end)
  connect(LP.CharacterRemoving,function() restore();currentSpeed=math.min(startSpeed,maxSpeed) end);local function shutdown() on=false;restore();RS:UnbindFromRenderStep(bind);pcall(function() gui:SetAttribute("BuildSpeedActive",false) end) end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 8 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 9
+;__JJSBoot:run("Jump Power",function()
 
  local on=false;local selectedPower=50;local assist=true;local owned,original=nil,nil;local lastLaunch=-math.huge;local graceUntil=0;local bind="JJSJumpPower";gui:SetAttribute("JumpPowerAirborne",false)
  local panel=card(pages.Movement,"Jump Power","")
@@ -1050,9 +1106,9 @@ end,function(err) warn("JJS v2.4 module 8 failed: "..tostring(err));return err e
  RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+6,function() if on and not gui:GetAttribute("FlingSequenceActive") then apply() end end);connect(LP.CharacterRemoving,function() restore();clearAir();lastLaunch=-math.huge end)
  local function shutdown() on=false;RS:UnbindFromRenderStep(bind);restore();clearAir() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 9 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 10
+;__JJSBoot:run("Style Combo",function()
 
  local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
  local timings={punchGap=.60,downslamLead=.12,afterDownslam=.30,afterStrikes=2.0,afterSecondM1s=.30,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
@@ -1086,9 +1142,9 @@ end,function(err) warn("JJS v2.4 module 9 failed: "..tostring(err));return err e
  end
  connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.B then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
 
-end,function(err) warn("JJS v2.4 module 10 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 11
+;__JJSBoot:run("Cursed Partners Blackflash",function()
 
  local active=false;local generation=0;local held=nil
  local box=card(pages.Combat,"Cursed Partners Blackflash","")
@@ -1107,9 +1163,9 @@ end,function(err) warn("JJS v2.4 module 10 failed: "..tostring(err));return err 
  end
  connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.N then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
 
-end,function(err) warn("JJS v2.4 module 11 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 12
+;__JJSBoot:run("Loop Teleport Behind",function()
 
  local on=false;local selectedId=nil;local intervalMs=150;local behindDistance=4;local lastTeleport=-math.huge;gui:SetAttribute("BehindTeleportActive",false)
  local box=card(pages.Movement,"Loop Teleport Behind","")
@@ -1141,9 +1197,9 @@ end,function(err) warn("JJS v2.4 module 11 failed: "..tostring(err));return err 
  end)
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 12 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 13
+;__JJSBoot:run("Blackflash V2 / V3",function()
 
  local CAS=game:GetService("ContextActionService")
  local enabledV2,enabledV3,active=false,false,false;local runVersion=2
@@ -1635,9 +1691,9 @@ end,function(err) warn("JJS v2.4 module 12 failed: "..tostring(err));return err 
  local function shutdown() enabledV2=false;enabledV3=false;CAS:UnbindAction(action);stop("Off");blackflashV2Trigger=nil;RS:UnbindFromRenderStep(cameraBind);RS:UnbindFromRenderStep(faceBind) end
  connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 13 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 14
+;__JJSBoot:run("Player ESP",function()
 
  local on,names,health,distance,highlights,teamCheck,throughWalls=false,true,true,true,true,false,false
  local maxDistance=1000
@@ -1717,10 +1773,10 @@ end,function(err) warn("JJS v2.4 module 13 failed: "..tostring(err));return err 
   for _,p in ipairs(stale) do drop(p) end
  end)
 
-end,function(err) warn("JJS v2.4 module 14 failed: "..tostring(err));return err end)
+end)
 
 
-;xpcall(function() -- v2.4 isolated module 15
+;__JJSBoot:run("Fling Kill All",function()
 
  local active=false
  local closed=false
@@ -1918,15 +1974,206 @@ end,function(err) warn("JJS v2.4 module 14 failed: "..tostring(err));return err 
  connect(unload.Activated,shutdown)
  connect(gui.Destroying,shutdown)
 
-end,function(err) warn("JJS v2.4 module 15 failed: "..tostring(err));return err end)
+end)
 
-;xpcall(function() -- v2.4 isolated module 16
 
+;__JJSBoot:run("Device Indicator",function()
+ -- JJS25: Device Indicator
+ __JJSBoot:icon(top,UDim2.fromOffset(290,9),24)
+ make("TextLabel",top,{Size=UDim2.fromOffset(92,24),Position=UDim2.fromOffset(320,10),BackgroundTransparency=1,Text=__JJSBoot.device,TextColor3=__JJSBoot.color,Font=Enum.Font.GothamBold,TextSize=11})
+
+end)
+
+;__JJSBoot:run("Background Toggle",function()
+ -- JJS25: Background Toggle
  gui:SetAttribute("BackdropEnabled",true)
  local box=card(pages.Visuals,"Decorative Background","")
  toggle(box,"Show decorative background",function() return gui:GetAttribute("BackdropEnabled")~=false end,function(v) gui:SetAttribute("BackdropEnabled",v) end)
 
-end,function(err) warn("JJS v2.4 module 16 failed: "..tostring(err));return err end)
+end)
+
+;__JJSBoot:run("Low Gravity",function()
+ -- JJS25: Low Gravity
+ local on=false;local previous=nil;local value=20
+ local box=card(pages.Movement,"Low Gravity - Local","")
+ local function restore() if previous~=nil then workspace.Gravity=previous;previous=nil end end
+ toggle(box,"Low gravity",function() return on end,function(v) if v and not on then previous=workspace.Gravity end;on=v;if v then workspace.Gravity=value else restore() end end)
+ moduleSlider(box,"Gravity",0,196,20,"",function() return value end,function(v) value=v;if on then workspace.Gravity=v end end)
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,Text="Local physics only; restores captured gravity. Avoid combining with other gravity writers.",TextWrapped=true,TextColor3=T.mut,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=20})
+ local function stop() on=false;restore() end
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Item and Dummy ESP",function()
+ -- JJS25: Item and Dummy ESP
+ local itemOn,dummyOn=false,false;local alive=true;local elapsed=0;local entries={}
+ local folder=make("Folder",gui,{Name="JJS25WorldESP"})
+ local box=card(pages.ESP,"Items and Non-player Dummies","")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,45),Text="Items: workspace.Items. Dummies: non-player humanoids in workspace.Characters. Local markers only.",TextWrapped=true,BackgroundTransparency=1,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[box]=3
+ local function clear() for o,e in pairs(entries) do e.tag:Destroy();e.highlight:Destroy();entries[o]=nil end end
+ toggle(box,"Item ESP",function() return itemOn end,function(v) itemOn=v;clear() end)
+ toggle(box,"Dummy ESP",function() return dummyOn end,function(v) dummyOn=v;clear() end)
+ local function add(o,part,caption)
+  if entries[o] then entries[o].label.Text=caption;return end
+  local h=make("Highlight",folder,{Adornee=o,FillColor=T.acc,FillTransparency=.8,OutlineColor=T.txt,DepthMode=Enum.HighlightDepthMode.Occluded})
+  local tag=make("BillboardGui",folder,{Adornee=part,Size=UDim2.fromOffset(180,26),StudsOffset=Vector3.new(0,2.5,0),AlwaysOnTop=false})
+  local label=make("TextLabel",tag,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text=caption,TextColor3=T.txt,TextStrokeTransparency=.3,TextSize=12,Font=Enum.Font.Gotham})
+  entries[o]={tag=tag,highlight=h,label=label}
+ end
+ connect(RS.Heartbeat,function(dt)
+  if not alive or not itemOn and not dummyOn then return end
+  elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+  local seen={};local count=0
+  local items=workspace:FindFirstChild("Items")
+  if itemOn and items then for _,o in ipairs(items:GetChildren()) do
+   local p=o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart",true)
+   if p and (o:IsA("BasePart") or o:IsA("Model")) then add(o,p,o.Name);seen[o]=true;count+=1 end
+  end end
+  local chars=workspace:FindFirstChild("Characters")
+  if dummyOn and chars then for _,m in ipairs(chars:GetChildren()) do
+   if m:IsA("Model") and not Players:GetPlayerFromCharacter(m) then
+    local h=m:FindFirstChildOfClass("Humanoid");local p=m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
+    if h and p and h.Health>0 then add(m,p,string.format("%s | %.0f/%.0f HP",m.Name,h.Health,h.MaxHealth));seen[m]=true;count+=1 end
+   end
+  end end
+  for o,e in pairs(entries) do if not seen[o] then e.tag:Destroy();e.highlight:Destroy();entries[o]=nil end end
+  feedback.Text="Tracked: "..count.." | Items: "..(items and "found" or "unavailable").." | Characters: "..(chars and "found" or "unavailable")
+ end)
+ local function stop() if not alive then return end;alive=false;clear();folder:Destroy() end
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Skeleton Overlay",function()
+ -- JJS25: Skeleton Overlay
+ local on=false;local alive=true;local elapsed=0;local records={}
+ local folder=make("Folder",gui,{Name="JJS25Skeletons"})
+ local box=card(pages.ESP,"Skeleton Overlay","")
+ local function clear() for c,e in pairs(records) do e.folder:Destroy();records[c]=nil end end
+ toggle(box,"Player skeletons",function() return on end,function(v) on=v;if not v then clear() end end)
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,Text="Motor6D screen-space lines; 500 stud limit. Overlay is not occlusion filtered. Indexes at most two new rigs per scan.",TextWrapped=true,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=20})
+ connect(RS.Heartbeat,function(dt)
+  if not alive or not on then return end
+  elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+  local seen={};local indexed=0
+  for _,p in ipairs(Players:GetPlayers()) do
+   local c=p.Character
+   if p~=LP and c then
+    seen[c]=true
+    if not records[c] and indexed<2 then
+     indexed+=1
+     local e={folder=make("Folder",folder,{Name=tostring(p.UserId)}),joints={}};records[c]=e
+     for _,j in ipairs(c:GetDescendants()) do if j:IsA("Motor6D") and j.Part0 and j.Part1 then
+      local line=make("Frame",e.folder,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=T.acc,Visible=false,ZIndex=30})
+      table.insert(e.joints,{joint=j,line=line})
+     end end
+    end
+   end
+  end
+  for c,e in pairs(records) do if not seen[c] then e.folder:Destroy();records[c]=nil end end
+ end)
+ connect(RS.RenderStepped,function()
+  if not alive or not on then return end
+  local camera=workspace.CurrentCamera;if not camera then return end
+  for _,e in pairs(records) do for _,v in ipairs(e.joints) do
+   v.line.Visible=false;local j=v.joint
+   if j.Parent and j.Part0 and j.Part1 and (j.Part0.Position-camera.CFrame.Position).Magnitude<500 then
+    local a,va=camera:WorldToScreenPoint(j.Part0.Position);local b,vb=camera:WorldToScreenPoint(j.Part1.Position)
+    if va and vb and a.Z>0 and b.Z>0 then local d=Vector2.new(b.X-a.X,b.Y-a.Y)
+     if d.Magnitude>.5 then v.line.Size=UDim2.fromOffset(d.Magnitude,2);v.line.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);v.line.Rotation=math.deg(math.atan2(d.Y,d.X));v.line.Visible=true end
+    end
+   end
+  end end
+ end)
+ local function stop() if not alive then return end;alive=false;on=false;clear();folder:Destroy() end
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Build Logic Visibility",function()
+ -- JJS25: Build Logic Visibility
+ local on=false;local alive=true;local saved={};local elapsed=0
+ local box=card(pages.ESP,"Build Logic Visibility","")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,45),BackgroundTransparency=1,Text="Reveals build markers under workspace.Logic, NOT player movesets. Off restores captured marker visibility.",TextWrapped=true,TextColor3=T.mut,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=3});ord[box]=3
+ local function restore() for o,e in pairs(saved) do if o.Parent then pcall(function() o[e.property]=e.value end) end end;saved={} end
+ local function apply(o,prop) if not saved[o] then saved[o]={property=prop,value=o[prop]} end;o[prop]=true end
+ toggle(box,"Show build markers",function() return on end,function(v) on=v;if not v then restore() end end)
+ connect(RS.Heartbeat,function(dt)
+  if not alive or not on then return end;elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+  local logic=workspace:FindFirstChild("Logic");if not logic then feedback.Text="workspace.Logic unavailable in this server.";return end
+  local count=0
+  for _,o in ipairs(logic:GetChildren()) do local core=o:FindFirstChild("Core");local icon=core and core:FindFirstChild("Icon");local outline=o:FindFirstChild("Outline")
+   if icon and icon:IsA("BillboardGui") then apply(icon,"Enabled");count+=1 end
+   if outline and outline:IsA("SelectionBox") then apply(outline,"Visible");count+=1 end
+  end
+  local expired={};for o in pairs(saved) do if not o:IsDescendantOf(logic) then table.insert(expired,o) end end
+  for _,o in ipairs(expired) do local e=saved[o];if o.Parent then pcall(function() o[e.property]=e.value end) end;saved[o]=nil end
+  feedback.Text="Visible markers: "..count..". Toggle off to restore."
+ end)
+ local function stop() if not alive then return end;alive=false;on=false;restore() end
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Player Scanner",function()
+ -- JJS25: Player Scanner
+ local on=false;local alive=true;local selected=nil;local elapsed=0
+ local box=card(pages.Player,"Player Scanner","")
+ local text=make("TextLabel",box,{Size=UDim2.new(1,0,0,100),BackgroundTransparency=1,Text="Scanner off. Replicated attributes only; unavailable values show Unknown.",TextWrapped=true,TextColor3=T.mut,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=3});ord[box]=3
+ local function cycle()
+  local options={};for _,p in ipairs(Players:GetPlayers()) do if p~=LP then table.insert(options,p) end end
+  table.sort(options,function(a,b) return a.UserId<b.UserId end)
+  local index=0;for i,p in ipairs(options) do if p==selected then index=i;break end end
+  selected=#options>0 and options[index%#options+1] or nil
+ end
+ local button=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Next player",TextColor3=T.txt,TextSize=12,Font=Enum.Font.Gotham,LayoutOrder=nextOrder(box)+2});corner(button,6);connect(button.Activated,cycle)
+ toggle(box,"Enable scanner",function() return on end,function(v) on=v;if on and not selected then cycle() end;if not on then text.Text="Scanner off." end end)
+ connect(RS.Heartbeat,function(dt)
+  if not alive or not on then return end;elapsed+=dt;if elapsed<.25 then return end;elapsed=0
+  if not selected or selected.Parent~=Players then selected=nil;text.Text="No target. Use Next player.";return end
+  local c=selected.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local moveset=selected:GetAttribute("Moveset");local ult=selected:GetAttribute("Ultimate")
+  text.Text=selected.DisplayName.." (@"..selected.Name..")\nHP: "..(h and string.format("%.0f / %.0f",h.Health,h.MaxHealth) or "Unknown").."\nMoveset: "..(moveset~=nil and tostring(moveset) or "Unknown").."\nUltimate attribute: "..(ult~=nil and tostring(ult) or "Unknown")
+ end)
+ local function stop() alive=false;on=false;selected=nil end
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Animation Previews",function()
+ -- JJS25: Animation Previews
+ local current,track,object=nil,nil,nil;local paints={}
+ local box=card(pages.Animations,"Cosmetic Animation Previews","")
+ local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,50),BackgroundTransparency=1,Text="Optional cosmetic clips, not extra abilities. One at a time. Asset permissions may prevent playback; poses do not include hover physics.",TextWrapped=true,TextColor3=T.mut,TextSize=11,Font=Enum.Font.Gotham,LayoutOrder=3});ord[box]=3
+ local function stop()
+  if track then pcall(function() track:Stop(.1);track:Destroy() end);track=nil end
+  if object then object:Destroy();object=nil end
+  current=nil;for _,paint in ipairs(paints) do paint() end
+ end
+ for _,spec in ipairs({{"Gangnam","140557689031802"},{"Head Twitch","121158593063065"},{"Pose 1","91496614952968"},{"Pose 2","102765720260431"},{"Pose 3","91428863336534"}}) do
+  local name,id=spec[1],spec[2]
+  local paint=toggle(box,name,function() return current==id end,function(v)
+   stop();if not v then return end
+   local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid");local animator=h and h:FindFirstChildOfClass("Animator")
+   if not hubUnlocked or not h or h.Health<=0 or not animator then feedback.Text="Unlock hub and wait for a live character/Animator.";return end
+   local ok,err=pcall(function() object=Instance.new("Animation");object.AnimationId="rbxassetid://"..id;track=animator:LoadAnimation(object);track.Looped=true;track:Play(.1);current=id end)
+   if ok then feedback.Text="Playing "..name.." (cosmetic)." else stop();feedback.Text="Playback unavailable: "..tostring(err) end
+  end)
+  table.insert(paints,paint)
+ end
+ connect(LP.CharacterRemoving,stop);connect(UIS.WindowFocusReleased,stop)
+ connect(RS.Heartbeat,function() if current then local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then stop() end end end)
+ connect(unload.Activated,stop);connect(gui.Destroying,stop)
+
+end)
+
+;__JJSBoot:run("Loading Settings and Device Details",function()
+ -- JJS25: Loading Settings and Device Details
+ local box=card(pages.Settings,"v2.6 Device and Loading","")
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,125),BackgroundTransparency=1,Text="Detected: "..__JJSBoot.device.."\nBlue monitor: PC. Yellow phone: touch-first/mobile. Hybrid touch + keyboard is classed PC. This is input-capability detection, not exact hardware identification.\nModules initialize sequentially with short yields. New optional features start OFF. Original key gate remains. Optional additions are included; further modules remain pending review.",TextWrapped=true,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
+
+end)
+
 local function destroyBackdrop()
  local bg=PG:FindFirstChild("JJSHalloweenBackdrop")
  if bg then bg:Destroy() end
@@ -2003,7 +2250,7 @@ connect(RS.Heartbeat,function()
  if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
 end)
 -- ===== PART 2: gradients, glow, pumpkins and labels =====
-;xpcall(function() -- v2.4 isolated module 17
+;__JJSBoot:run("UI component 25",function()
 
  -- window: layered gradient from purple haze down to black
  make("UIGradient",main,{Color=ColorSequence.new(Color3.fromRGB(40,28,22),Color3.fromRGB(12,8,6)),Rotation=90})
@@ -2034,10 +2281,10 @@ end)
  -- footer on the window, layered above the content
  make("TextLabel",main,{Size=UDim2.new(1,-160,0,14),Position=UDim2.new(0,160,1,-16),BackgroundTransparency=1,Text="~ boo ~ happy halloween ~",TextColor3=T.mut,Font=Enum.Font.GothamMedium,TextSize=10,ZIndex=5})
 
-end,function(err) warn("JJS v2.4 module 17 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 3: layered Halloween scenery (drawn with frames, no uploads needed) =====
-;xpcall(function() -- v2.4 isolated module 18
+;__JJSBoot:run("UI component 26",function()
 
  local function shape(parent,props) return make("Frame",parent,props) end
  local function rounded(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 999)}) end
@@ -2112,10 +2359,10 @@ end,function(err) warn("JJS v2.4 module 17 failed: "..tostring(err));return err 
  -- LAYER 3: thin orange border glow over the whole window
  make("UIStroke",main,{Color=orange,Thickness=1,Transparency=.6})
 
-end,function(err) warn("JJS v2.4 module 18 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 4: depth (parallax, vignette, shadows, lightning) =====
-;xpcall(function() -- v2.4 isolated module 19
+;__JJSBoot:run("UI component 27",function()
 
  local ink=Color3.fromRGB(8,4,12)
  local TweenS=game:GetService("TweenService")
@@ -2171,7 +2418,7 @@ end,function(err) warn("JJS v2.4 module 18 failed: "..tostring(err));return err 
  end
 
  
-end,function(err) warn("JJS v2.4 module 19 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 5: depth stack (back to front) =====
 --  Z0  back wall      main gradient (Part 2)
@@ -2187,7 +2434,7 @@ end,function(err) warn("JJS v2.4 module 19 failed: "..tostring(err));return err 
 --  Z10 corners+glow   HUD corner brackets, top glow (new)
 --  Z11 vignette       dark edges                    (Part 4)
 --  Z12 flash          lightning overlay             (Part 4)
-;xpcall(function() -- v2.4 isolated module 20
+;__JJSBoot:run("UI component 28",function()
 
  local TweenS=game:GetService("TweenService")
  -- Z1 starfield
@@ -2222,10 +2469,10 @@ end,function(err) warn("JJS v2.4 module 19 failed: "..tostring(err));return err 
   halo.BackgroundTransparency=.8+.07*math.sin(t*1.1)
  end)
 
-end,function(err) warn("JJS v2.4 module 20 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 6 (clarity pass): gallery frame, gold title, warm glow =====
-;xpcall(function() -- v2.4 isolated module 21
+;__JJSBoot:run("UI component 29",function()
 
  local gold1=Color3.fromRGB(255,220,140)
  local gold2=Color3.fromRGB(170,110,40)
@@ -2246,14 +2493,14 @@ end,function(err) warn("JJS v2.4 module 20 failed: "..tostring(err));return err 
  local glowBar=make("Frame",top,{Size=UDim2.fromOffset(300,44),BackgroundColor3=gold1,BackgroundTransparency=.9,BorderSizePixel=0,ZIndex=2})
  make("UIGradient",glowBar,{Color=ColorSequence.new(gold1,gold1),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.85),NumberSequenceKeypoint.new(1,1)}),Rotation=0})
 
-end,function(err) warn("JJS v2.4 module 21 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 7: the world outside the menu (full-screen Halloween backdrop) =====
 --  shown only while the menu is open (follows the menu's Visible state)
 --  B1 sky  B2 horizon glow  B3 stars  B4 moon halo rings  B5 moon  B6 clouds
 --  B7 far hill + trees  B8 bats  B9 fog bands  B10 mid hill + tombstones
 --  B11 pumpkin patch  B12 torches  B13 falling ash  B14 front hill  B15 vignette
-;xpcall(function() -- v2.4 isolated module 22
+;__JJSBoot:run("Halloween background",function()
 
  local TweenS=game:GetService("TweenService")
  local old=PG:FindFirstChild("JJSHalloweenBackdrop");if old then old:Destroy() end
@@ -2395,10 +2642,10 @@ end,function(err) warn("JJS v2.4 module 21 failed: "..tostring(err));return err 
  connect(gui.Destroying,killBackdrop)
  connect(unload.Activated,killBackdrop)
 
-end,function(err) warn("JJS v2.4 module 22 failed: "..tostring(err));return err end)
+end)
 
 -- ===== PART 8: menu ornaments (straight corners, category pumpkins, moon mark) =====
-;xpcall(function() -- v2.4 isolated module 23
+;__JJSBoot:run("UI component 31",function()
 
  local gold1=Color3.fromRGB(255,220,140)
  -- straight L-shaped gold corners at each corner of the gallery frame (no rotation)
@@ -2425,11 +2672,11 @@ end,function(err) warn("JJS v2.4 module 22 failed: "..tostring(err));return err 
  local moonHalo=make("Frame",top,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,104,.5,0),Size=UDim2.fromOffset(28,28),BackgroundColor3=gold1,BackgroundTransparency=.85,BorderSizePixel=0,ZIndex=2})
  make("UICorner",moonHalo,{CornerRadius=UDim.new(0,999)})
 
-end,function(err) warn("JJS v2.4 module 23 failed: "..tostring(err));return err end)
+end)
 
 status.Text="Default: 325 ms | Combos on Combos tab"
 
-;xpcall(function() -- v2.4 isolated module 24
+;__JJSBoot:run("UI component 32",function()
 
  local holder=make("Frame",gui,{Name="SideNotifications",AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),Size=UDim2.new(0,300,.8,0),BackgroundTransparency=1});make("UIListLayout",holder,{Padding=UDim.new(0,8),VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder})
  local alive=true;local serial=0;local cards,links,recent={},{},{};local watched=setmetatable({},{__mode="k"});local function listen(s,f) local c=s:Connect(f);table.insert(links,c) end
@@ -2452,8 +2699,8 @@ status.Text="Default: 325 ms | Combos on Combos tab"
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
  notify("Ready","V2/V3: front-only turnaround, hold S first, then Q, then Black Flash.",T.acc)
 
-end,function(err) warn("JJS v2.4 module 24 failed: "..tostring(err));return err end)
-local okFX,errFX=pcall(function()
+end)
+local okFX,errFX=__JJSBoot:run("Popup and audio effects",function()
 
 do
 local Players=game:GetService("Players")
@@ -2891,6 +3138,5 @@ end
 end)
 if not okFX then warn("Popup section failed (rest of script still loaded): "..tostring(errFX)) end
 end,function(e) return debug.traceback(tostring(e),2) end)
-if not __okMain then
- warn("JJS HUB v2.4 startup failed: "..tostring(__errMain))
-end
+if not __okMain then warn("JJS HUB v2.6: "..tostring(__errMain)) end
+__JJSBoot:finish(__okMain)
