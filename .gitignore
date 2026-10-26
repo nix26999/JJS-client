@@ -1,19 +1,8 @@
--- JJS HUB v2.3 Recovery. Complete recovery hub, not the optional v2.1 Spotty pack.
--- Fix: V2/V3 uses a separate function frame to reduce local-register pressure.
-local function boot()
- local player=game:GetService("Players").LocalPlayer
- if not player then warn("JJS v2.3: no LocalPlayer");return end
- local pg=player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui",10)
- if not pg then warn("JJS v2.3: PlayerGui unavailable");return end
- local old=pg:FindFirstChild("JJSStartupStatus");if old then old:Destroy() end
- local previous=pg:FindFirstChild("AutoBlackflashError");if previous then previous:Destroy() end
- local screen=Instance.new("ScreenGui");screen.Name="JJSStartupStatus";screen.ResetOnSpawn=false;screen.DisplayOrder=2147483647
- local box=Instance.new("TextBox");box.Size=UDim2.new(.9,0,0,180);box.Position=UDim2.new(.05,0,.05,0);box.BackgroundColor3=Color3.fromRGB(25,18,30);box.TextColor3=Color3.fromRGB(255,230,210);box.Font=Enum.Font.Code;box.TextSize=14;box.TextWrapped=true;box.MultiLine=true;box.ClearTextOnFocus=false;box.TextEditable=false;box.Text="JJS v2.3: compiling...";box.Parent=screen
- local close=Instance.new("TextButton");close.Size=UDim2.fromOffset(90,28);close.Position=UDim2.new(.95,-90,.05,184);close.Text="Close status";close.Parent=screen;close.Activated:Connect(function() screen:Destroy() end)
- screen.Parent=pg
- local function status(message) warn(message);if box.Parent then box.Text=message end end
- if type(loadstring)~="function" then status("JJS v2.3: loadstring unavailable.");return end
- local source=[====[
+-- JJS HUB v2.4 -- recovery branch (not the optional v2.1 Spotty additions).
+-- All top-level module blocks isolated in independent function register frames.
+-- Original key gate and theme preserved. Background toggle included.
+-- No full-screen startup/error panels; failures remain logged with warn().
+-- Block structure checked offline; not compiled or executed in Xeno here.
 local __okMain,__errMain=xpcall(function()
 local fxShutdown,onBlackflashPair
 
@@ -84,7 +73,8 @@ local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
 local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
 -- ===== PART 1: Halloween palette =====
-do
+;xpcall(function() -- v2.4 isolated module 1
+
  T.bg=Color3.fromRGB(20,16,14)          -- midnight black-purple window
  T.panel=Color3.fromRGB(34,26,22)      -- top bar and sidebar
  T.p2=Color3.fromRGB(52,40,32)         -- buttons, inputs, selected tab
@@ -98,7 +88,8 @@ do
  T.warn=Color3.fromRGB(255,84,64)      -- blood red
  T.purple=Color3.fromRGB(255,190,90)   -- witch purple
  T.ghost=Color3.fromRGB(190,255,210)   -- ghost glow
-end
+
+end,function(err) warn("JJS v2.4 module 1 failed: "..tostring(err));return err end)
 
 local gui=make("ScreenGui",PG,{Name="JJS HUB",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
 -- Key gate: join Discord to get the key, then unlock the hub
@@ -122,7 +113,7 @@ local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.3 Recovery",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.4",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local DISCORD_URL="https://discord.gg/RrQQh6B4nP"
 local discordBtn=make("TextButton",top,{Size=UDim2.fromOffset(86,28),Position=UDim2.new(1,-130,.5,-14),BackgroundColor3=Color3.fromRGB(88,101,242),Text="Discord",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=12}); corner(discordBtn,6)
@@ -581,7 +572,8 @@ local function runTripleJump()
  end
 end
 
-do
+;xpcall(function() -- v2.4 isolated module 2
+
  local active=false
  local token=0
  local heldKey=nil
@@ -708,9 +700,11 @@ do
  connect(LP.CharacterRemoving,cancel)
  connect(gui.Destroying,cancel)
  connect(unload.Activated,cancel)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 2 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 3
+
  local active=false
  local token=0
  local heldKey=nil
@@ -847,9 +841,11 @@ do
  connect(LP.CharacterRemoving,cancel)
  connect(gui.Destroying,cancel)
  connect(unload.Activated,cancel)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 3 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 4
+
  local PFS=game:GetService("PathfindingService")
  local on,dashes,autoJump=false,true,true;local selectedId,target=nil,nil;local direction=Vector3.zero
  local owned,oldRotate,face=nil,nil,nil;local route,blocked=nil,nil;local points,index={},2;local planned=nil
@@ -964,9 +960,11 @@ do
  end)
  local function shutdown() on=false;reset();RS:UnbindFromRenderStep(renderName);for _,e in ipairs(rows) do e.c:Disconnect() end end
  connect(LP.CharacterRemoving,reset);connect(gui.Destroying,shutdown);connect(unload.Activated,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 4 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 5
+
  local spinEnabled=false;local spinSpeed=30;local spinHumanoid,spinRoot,previousAutoRotate=nil,nil,nil;local spinAngle=0;local spinBind="JJSIntegratedSlowSpin"
  local panel=card(pages.Movement,"Slow Spin","")
  local function restoreSpin() if spinHumanoid and spinHumanoid.Parent then spinHumanoid.AutoRotate=previousAutoRotate end;spinHumanoid=nil;spinRoot=nil end
@@ -977,9 +975,11 @@ do
   hum.AutoRotate=false;spinAngle=(spinAngle+math.rad(spinSpeed)*dt)%(math.pi*2);root.CFrame=CFrame.new(root.Position)*CFrame.Angles(0,spinAngle,0)
  end)
  local function stopSpin() spinEnabled=false;RS:UnbindFromRenderStep(spinBind);restoreSpin() end;connect(LP.CharacterRemoving,restoreSpin);connect(unload.Activated,stopSpin);connect(gui.Destroying,stopSpin)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 5 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 6
+
  local invisible=false;local saved={};local characterConnection=nil;local bind="JJSLocalInvisibility"
  local panel=card(pages.Player,"Invisible (Local Only)","")
  local function propertyFor(o)
@@ -992,9 +992,11 @@ do
  toggle(panel,"Invisible (Local Only)",function() return invisible end,function(v) invisible=v;if v then attach(LP.Character) else restore() end end);connect(LP.CharacterAdded,function(char) if invisible then attach(char) end end);connect(LP.CharacterRemoving,restore)
  RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+4,function() if not running or not invisible then return end;for o,e in pairs(saved) do if o.Parent then pcall(function() o[e.property]=e.hidden end) end end end)
  local function shutdown() invisible=false;RS:UnbindFromRenderStep(bind);restore() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 6 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 7
+
  local speedEnabled=false;local selectedSpeed=24;local ownedHumanoid,originalSpeed=nil,nil;local bind="JJSIntegratedSpeed"
  local panel=card(pages.Movement,"Speed","")
  local function restoreSpeed() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.WalkSpeed=originalSpeed end;ownedHumanoid=nil;originalSpeed=nil end
@@ -1002,9 +1004,11 @@ do
  toggle(panel,"Speed",function() return speedEnabled end,function(v) speedEnabled=v;if v then applySpeed() else restoreSpeed() end end);moduleSlider(panel,"Walk speed",1,10000,selectedSpeed," studs/s",function() return selectedSpeed end,function(v) selectedSpeed=math.clamp(v,1,10000);if speedEnabled then applySpeed() end end)
  connect(LP.CharacterRemoving,restoreSpeed);RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+3,function() if speedEnabled and not gui:GetAttribute("FlingSequenceActive") then applySpeed() end end)
  local function shutdown() speedEnabled=false;RS:UnbindFromRenderStep(bind);restoreSpeed() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 7 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 8
+
  local on=false;local startSpeed,acceleration,maxSpeed=16,10,10000;local currentSpeed=startSpeed;local resetOnStop=false;local owned,previousSpeed=nil,nil;local bind="JJSBuildSpeed";gui:SetAttribute("BuildSpeedActive",false)
  local panel=card(pages.Movement,"Build Speed","")
  local readout=make("TextLabel",panel,{Size=UDim2.new(1,0,0,26),BackgroundTransparency=1,Text="Off",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
@@ -1019,9 +1023,11 @@ do
   if moving then currentSpeed=math.min(maxSpeed,currentSpeed+acceleration*dt) elseif resetOnStop then currentSpeed=math.min(startSpeed,maxSpeed) end;currentSpeed=math.clamp(currentSpeed,1,maxSpeed);h.WalkSpeed=currentSpeed;readout.Text=string.format("Built speed: %.1f / %d studs/s%s",currentSpeed,maxSpeed,moving and " - building" or " - held")
  end)
  connect(LP.CharacterRemoving,function() restore();currentSpeed=math.min(startSpeed,maxSpeed) end);local function shutdown() on=false;restore();RS:UnbindFromRenderStep(bind);pcall(function() gui:SetAttribute("BuildSpeedActive",false) end) end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 8 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 9
+
  local on=false;local selectedPower=50;local assist=true;local owned,original=nil,nil;local lastLaunch=-math.huge;local graceUntil=0;local bind="JJSJumpPower";gui:SetAttribute("JumpPowerAirborne",false)
  local panel=card(pages.Movement,"Jump Power","")
  local feedback=make("TextLabel",panel,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Off",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3});ord[panel]=3
@@ -1043,9 +1049,11 @@ do
  connect(RS.Heartbeat,function() if not on or not running or gui:GetAttribute("FlingSequenceActive") then return end;local h=apply();if not h then return end;if h.FloorMaterial==Enum.Material.Air then gui:SetAttribute("JumpPowerAirborne",true) elseif os.clock()>=graceUntil then clearAir() end end)
  RS:BindToRenderStep(bind,Enum.RenderPriority.Character.Value+6,function() if on and not gui:GetAttribute("FlingSequenceActive") then apply() end end);connect(LP.CharacterRemoving,function() restore();clearAir();lastLaunch=-math.huge end)
  local function shutdown() on=false;RS:UnbindFromRenderStep(bind);restore();clearAir() end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 9 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 10
+
  local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
  local timings={punchGap=.60,downslamLead=.12,afterDownslam=.30,afterStrikes=2.0,afterSecondM1s=.30,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
  local box=card(pages.Combat,"Style Combo","")
@@ -1077,9 +1085,11 @@ do
   end)
  end
  connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.B then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 10 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 11
+
  local active=false;local generation=0;local held=nil
  local box=card(pages.Combat,"Cursed Partners Blackflash","")
  local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,30),BackgroundTransparency=1,Text="Ready",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
@@ -1096,9 +1106,11 @@ do
   end)
  end
  connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.N then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 11 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 12
+
  local on=false;local selectedId=nil;local intervalMs=150;local behindDistance=4;local lastTeleport=-math.huge;gui:SetAttribute("BehindTeleportActive",false)
  local box=card(pages.Movement,"Loop Teleport Behind","")
  local selected=make("TextLabel",box,{Size=UDim2.new(1,0,0,24),BackgroundTransparency=1,Text="Target: none selected",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
@@ -1128,9 +1140,11 @@ do
   lastTeleport=now;local position=tr.Position+offset;r.CFrame=CFrame.lookAt(position,Vector3.new(tr.Position.X,position.Y,tr.Position.Z));r.AssemblyLinearVelocity=Vector3.zero;r.AssemblyAngularVelocity=Vector3.zero;info.Text="Looping behind "..p.DisplayName.." every "..intervalMs.." ms"
  end)
  local function shutdown() on=false;pcall(function() gui:SetAttribute("BehindTeleportActive",false) end);for _,entry in ipairs(rows) do entry.connection:Disconnect() end end;connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end
 
-;(function() -- v2.3: isolate V2/V3 registers from the outer hub
+end,function(err) warn("JJS v2.4 module 12 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 13
+
  local CAS=game:GetService("ContextActionService")
  local enabledV2,enabledV3,active=false,false,false;local runVersion=2
  local V3_FIXED={Turn=75,CameraHold=200,RepeatGap=340,JumpLead=35,CycleWait=300}
@@ -1620,9 +1634,11 @@ end
  connect(UIS.WindowFocusReleased,function() if active then stop("Window lost focus. Press 3 again.");bindCapture() end end)
  local function shutdown() enabledV2=false;enabledV3=false;CAS:UnbindAction(action);stop("Off");blackflashV2Trigger=nil;RS:UnbindFromRenderStep(cameraBind);RS:UnbindFromRenderStep(faceBind) end
  connect(unload.Activated,shutdown);connect(gui.Destroying,shutdown)
-end)()
 
-do
+end,function(err) warn("JJS v2.4 module 13 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 14
+
  local on,names,health,distance,highlights,teamCheck,throughWalls=false,true,true,true,true,false,false
  local maxDistance=1000
  local closed=false
@@ -1700,10 +1716,12 @@ do
   local stale={};for p in pairs(entries) do if not seen[p] then table.insert(stale,p) end end
   for _,p in ipairs(stale) do drop(p) end
  end)
-end
+
+end,function(err) warn("JJS v2.4 module 14 failed: "..tostring(err));return err end)
 
 
-do
+;xpcall(function() -- v2.4 isolated module 15
+
  local active=false
  local closed=false
  local generation=0
@@ -1899,13 +1917,16 @@ do
  end
  connect(unload.Activated,shutdown)
  connect(gui.Destroying,shutdown)
-end
 
-do
+end,function(err) warn("JJS v2.4 module 15 failed: "..tostring(err));return err end)
+
+;xpcall(function() -- v2.4 isolated module 16
+
  gui:SetAttribute("BackdropEnabled",true)
  local box=card(pages.Visuals,"Decorative Background","")
  toggle(box,"Show decorative background",function() return gui:GetAttribute("BackdropEnabled")~=false end,function(v) gui:SetAttribute("BackdropEnabled",v) end)
-end
+
+end,function(err) warn("JJS v2.4 module 16 failed: "..tostring(err));return err end)
 local function destroyBackdrop()
  local bg=PG:FindFirstChild("JJSHalloweenBackdrop")
  if bg then bg:Destroy() end
@@ -1982,7 +2003,8 @@ connect(RS.Heartbeat,function()
  if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
 end)
 -- ===== PART 2: gradients, glow, pumpkins and labels =====
-do
+;xpcall(function() -- v2.4 isolated module 17
+
  -- window: layered gradient from purple haze down to black
  make("UIGradient",main,{Color=ColorSequence.new(Color3.fromRGB(40,28,22),Color3.fromRGB(12,8,6)),Rotation=90})
  -- extra orange glow outline on the window (layer above the base stroke)
@@ -2011,10 +2033,12 @@ do
 
  -- footer on the window, layered above the content
  make("TextLabel",main,{Size=UDim2.new(1,-160,0,14),Position=UDim2.new(0,160,1,-16),BackgroundTransparency=1,Text="~ boo ~ happy halloween ~",TextColor3=T.mut,Font=Enum.Font.GothamMedium,TextSize=10,ZIndex=5})
-end
+
+end,function(err) warn("JJS v2.4 module 17 failed: "..tostring(err));return err end)
 
 -- ===== PART 3: layered Halloween scenery (drawn with frames, no uploads needed) =====
-do
+;xpcall(function() -- v2.4 isolated module 18
+
  local function shape(parent,props) return make("Frame",parent,props) end
  local function rounded(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 999)}) end
  local ink=Color3.fromRGB(12,6,18)
@@ -2087,10 +2111,12 @@ do
 
  -- LAYER 3: thin orange border glow over the whole window
  make("UIStroke",main,{Color=orange,Thickness=1,Transparency=.6})
-end
+
+end,function(err) warn("JJS v2.4 module 18 failed: "..tostring(err));return err end)
 
 -- ===== PART 4: depth (parallax, vignette, shadows, lightning) =====
-do
+;xpcall(function() -- v2.4 isolated module 19
+
  local ink=Color3.fromRGB(8,4,12)
  local TweenS=game:GetService("TweenService")
 
@@ -2144,7 +2170,8 @@ do
   end
  end
 
- end
+ 
+end,function(err) warn("JJS v2.4 module 19 failed: "..tostring(err));return err end)
 
 -- ===== PART 5: depth stack (back to front) =====
 --  Z0  back wall      main gradient (Part 2)
@@ -2160,7 +2187,8 @@ do
 --  Z10 corners+glow   HUD corner brackets, top glow (new)
 --  Z11 vignette       dark edges                    (Part 4)
 --  Z12 flash          lightning overlay             (Part 4)
-do
+;xpcall(function() -- v2.4 isolated module 20
+
  local TweenS=game:GetService("TweenService")
  -- Z1 starfield
  local stars={}
@@ -2193,10 +2221,12 @@ do
   for _,s in ipairs(stars) do s.f.BackgroundTransparency=math.clamp(s.base+.3*math.sin(t*s.sp+s.ph),0,1) end
   halo.BackgroundTransparency=.8+.07*math.sin(t*1.1)
  end)
-end
+
+end,function(err) warn("JJS v2.4 module 20 failed: "..tostring(err));return err end)
 
 -- ===== PART 6 (clarity pass): gallery frame, gold title, warm glow =====
-do
+;xpcall(function() -- v2.4 isolated module 21
+
  local gold1=Color3.fromRGB(255,220,140)
  local gold2=Color3.fromRGB(170,110,40)
  -- gallery frame: outer gold stroke with a gradient, plus a thin inner line
@@ -2215,14 +2245,16 @@ do
  -- warm glow behind the title, fading to the right (above the top bar, transparent)
  local glowBar=make("Frame",top,{Size=UDim2.fromOffset(300,44),BackgroundColor3=gold1,BackgroundTransparency=.9,BorderSizePixel=0,ZIndex=2})
  make("UIGradient",glowBar,{Color=ColorSequence.new(gold1,gold1),Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.85),NumberSequenceKeypoint.new(1,1)}),Rotation=0})
-end
+
+end,function(err) warn("JJS v2.4 module 21 failed: "..tostring(err));return err end)
 
 -- ===== PART 7: the world outside the menu (full-screen Halloween backdrop) =====
 --  shown only while the menu is open (follows the menu's Visible state)
 --  B1 sky  B2 horizon glow  B3 stars  B4 moon halo rings  B5 moon  B6 clouds
 --  B7 far hill + trees  B8 bats  B9 fog bands  B10 mid hill + tombstones
 --  B11 pumpkin patch  B12 torches  B13 falling ash  B14 front hill  B15 vignette
-do
+;xpcall(function() -- v2.4 isolated module 22
+
  local TweenS=game:GetService("TweenService")
  local old=PG:FindFirstChild("JJSHalloweenBackdrop");if old then old:Destroy() end
  local bg=Instance.new("ScreenGui");bg.Name="JJSHalloweenBackdrop";bg.ResetOnSpawn=false;bg.IgnoreGuiInset=true;bg.DisplayOrder=998;bg.Parent=PG
@@ -2362,10 +2394,12 @@ do
  end
  connect(gui.Destroying,killBackdrop)
  connect(unload.Activated,killBackdrop)
-end
+
+end,function(err) warn("JJS v2.4 module 22 failed: "..tostring(err));return err end)
 
 -- ===== PART 8: menu ornaments (straight corners, category pumpkins, moon mark) =====
-do
+;xpcall(function() -- v2.4 isolated module 23
+
  local gold1=Color3.fromRGB(255,220,140)
  -- straight L-shaped gold corners at each corner of the gallery frame (no rotation)
  for _,c in ipairs({{0,0},{1,0},{0,1},{1,1}}) do
@@ -2390,11 +2424,13 @@ do
  make("UICorner",moonMark,{CornerRadius=UDim.new(0,999)})
  local moonHalo=make("Frame",top,{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,104,.5,0),Size=UDim2.fromOffset(28,28),BackgroundColor3=gold1,BackgroundTransparency=.85,BorderSizePixel=0,ZIndex=2})
  make("UICorner",moonHalo,{CornerRadius=UDim.new(0,999)})
-end
+
+end,function(err) warn("JJS v2.4 module 23 failed: "..tostring(err));return err end)
 
 status.Text="Default: 325 ms | Combos on Combos tab"
 
-do
+;xpcall(function() -- v2.4 isolated module 24
+
  local holder=make("Frame",gui,{Name="SideNotifications",AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),Size=UDim2.new(0,300,.8,0),BackgroundTransparency=1});make("UIListLayout",holder,{Padding=UDim.new(0,8),VerticalAlignment=Enum.VerticalAlignment.Center,SortOrder=Enum.SortOrder.LayoutOrder})
  local alive=true;local serial=0;local cards,links,recent={},{},{};local watched=setmetatable({},{__mode="k"});local function listen(s,f) local c=s:Connect(f);table.insert(links,c) end
  local function notify(title,text,color)
@@ -2415,7 +2451,8 @@ do
  end
  for _,o in ipairs(gui:GetDescendants()) do hook(o) end;listen(gui.DescendantAdded,function(o) task.defer(function() if alive and o.Parent then hook(o) end end) end);listen(gui.Destroying,function() alive=false;for _,c in ipairs(links) do c:Disconnect() end end)
  notify("Ready","V2/V3: front-only turnaround, hold S first, then Q, then Black Flash.",T.acc)
-end
+
+end,function(err) warn("JJS v2.4 module 24 failed: "..tostring(err));return err end)
 local okFX,errFX=pcall(function()
 
 do
@@ -2855,33 +2892,5 @@ end)
 if not okFX then warn("Popup section failed (rest of script still loaded): "..tostring(errFX)) end
 end,function(e) return debug.traceback(tostring(e),2) end)
 if not __okMain then
- warn("JJS HUB failed: "..tostring(__errMain))
- pcall(function()
-  local pg=game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui",5)
-  if not pg then return end
-  local sg=Instance.new("ScreenGui");sg.Name="AutoBlackflashError";sg.ResetOnSpawn=false;sg.DisplayOrder=2000;sg.Parent=pg
-  local box=Instance.new("TextBox")
-  box.Size=UDim2.fromScale(.8,.5);box.Position=UDim2.fromScale(.1,.25)
-  box.BackgroundColor3=Color3.fromRGB(25,18,30);box.TextColor3=Color3.fromRGB(255,210,220)
-  box.TextWrapped=true;box.MultiLine=true;box.ClearTextOnFocus=false;box.TextEditable=false
-  box.TextXAlignment=Enum.TextXAlignment.Left;box.TextYAlignment=Enum.TextYAlignment.Top
-  box.Font=Enum.Font.Code;box.TextSize=14
-  box.Text="JJS HUB failed. Send this text:\n"..tostring(__errMain)
-  box.Parent=sg
- end)
+ warn("JJS HUB v2.4 startup failed: "..tostring(__errMain))
 end
-]====]
- local ok,chunk,compileError=pcall(loadstring,source,"JJS_HUB_v2_3")
- if not ok or type(chunk)~="function" then status("JJS v2.3 COMPILE FAILED:\n"..tostring(compileError or chunk));return end
- status("JJS v2.3 compiled. Starting...")
- local ran,err=pcall(chunk)
- if not ran then status("JJS v2.3 RUNTIME FAILED:\n"..tostring(err));return end
- if pg:FindFirstChild("AutoBlackflashError") then status("JJS v2.3: hub runtime failure; read the error window.");return end
- local hub=pg:FindFirstChild("JJS HUB")
- if not hub then status("JJS v2.3: JJS HUB GUI missing.");return end
- local key=hub:FindFirstChild("KeyPage")
- if key and key.Visible then status("JJS v2.3: hub initialized; close this status panel to view the existing key page.")
- else status("JJS v2.3: hub initialized. RightShift toggles menu. Individual features still require testing.");task.delay(5,function() if screen.Parent then screen:Destroy() end end) end
-end
-local ok,err=pcall(boot)
-if not ok then warn("JJS v2.3 bootstrap failed: "..tostring(err)) end
