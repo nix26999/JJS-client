@@ -1,3 +1,30 @@
+-- JJS HUB v2.1 | Partial inspected-source test build
+-- Timing defaults are not verified acceptance windows.
+-- Spotty-inspired additions: https://github.com/SubLimits/Spotty
+-- Original source license retained below; integrations have been rewritten.
+--[[
+MIT License
+
+Copyright (c) 2026 milkwrap-maker
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+]]
 local __okMain,__errMain=xpcall(function()
 local fxShutdown,onBlackflashPair
 
@@ -19,6 +46,7 @@ local hubUnlocked=false -- set true after key gate (or saved key)
 local function scriptsActive() return running and not scriptsPaused and hubUnlocked end
 local todoEnabled,todoBusy=false,false
 local perfectClapEnabled=false
+local clapGeneration,clapPending=0,false
 local perfectClapDelay=350
 local tripleJumpEnabled=false
 local tripleJumpBusy=false
@@ -36,26 +64,32 @@ local manualSequenceBusy=false
 local blackflashV2Trigger=nil
 local bfAssistActive=false
 local followSetEnabled=nil
+local followGetEnabled,assistPrevious=nil,nil
 local lockOnPaint=nil
 local followPaint=nil
 local conns={}
 local function bfAssistOn()
- bfAssistActive=true
- lockOn=true
+ if bfAssistActive then return end
+ assistPrevious={lock=lockOn,follow=followGetEnabled and followGetEnabled() or false}
+ bfAssistActive=true;lockOn=true
  if lockOnPaint then lockOnPaint() end
  if followSetEnabled then followSetEnabled(true) end
  if followPaint then followPaint() end
 end
 local function bfAssistOff()
+ if not bfAssistActive then return end
  bfAssistActive=false
- lockOn=false
+ local previous=assistPrevious;assistPrevious=nil
+ if previous then lockOn=previous.lock;if followSetEnabled then followSetEnabled(previous.follow) end end
  if lockOnPaint then lockOnPaint() end
- if followSetEnabled then followSetEnabled(false) end
  if followPaint then followPaint() end
 end
 local T={bg=Color3.fromRGB(12,12,16),panel=Color3.fromRGB(18,18,24),p2=Color3.fromRGB(24,24,32),card=Color3.fromRGB(22,22,30),stroke=Color3.fromRGB(40,40,55),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(235,235,245),dim=Color3.fromRGB(140,140,160),mut=Color3.fromRGB(90,90,110),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
 local function make(class,parent,props)
- local o=Instance.new(class); for k,v in pairs(props or {}) do o[k]=v end; o.Parent=parent; return o
+ local o=Instance.new(class)
+ local ok,err=pcall(function() for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent end)
+ if not ok then o:Destroy();error("Cannot create "..class..": "..tostring(err),2) end
+ return o
 end
 local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns,c); return c end
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
@@ -99,7 +133,7 @@ local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.1",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local DISCORD_URL="https://discord.gg/RrQQh6B4nP"
 local discordBtn=make("TextButton",top,{Size=UDim2.fromOffset(86,28),Position=UDim2.new(1,-130,.5,-14),BackgroundColor3=Color3.fromRGB(88,101,242),Text="Discord",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=12}); corner(discordBtn,6)
@@ -226,7 +260,7 @@ local content=make("Frame",main,{Size=UDim2.new(1,-150,1,-44),Position=UDim2.fro
 local title=make("TextLabel",content,{Size=UDim2.new(1,-24,0,22),Position=UDim2.fromOffset(16,10),BackgroundTransparency=1,Text="Macros",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,TextXAlignment=Enum.TextXAlignment.Left})
 local desc=make("TextLabel",content,{Size=UDim2.new(1,-24,0,0),Position=UDim2.fromOffset(16,32),Visible=false,BackgroundTransparency=1,Text="",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left})
 local pages,buttons={},{}
-local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Settings",""}}
+local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Animations",""},{"Settings",""}}
 for i,cat in ipairs(cats) do
  local name,description=cat[1],cat[2]
  local groupStart={Macros="MAIN",Combat="COMBAT",Movement="MOVEMENT",Visuals="VISUALS"}
@@ -340,7 +374,7 @@ lockSlider("Pull Strength",1,100,pullStrength,"",function() return pullStrength 
 local tc=card(pages.Macros,"Todo macro","")
 toggle(tc,"Todo Macro",function() return todoEnabled end,function(v) todoEnabled=v end)
 local todoStatus=make("TextLabel",tc,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="Ready",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(tc)+2})
-toggle(tc,"Perfect Clap",function() return perfectClapEnabled end,function(v) perfectClapEnabled=v end)
+toggle(tc,"Perfect Clap",function() return perfectClapEnabled end,function(v) perfectClapEnabled=v;clapGeneration+=1;clapPending=false end)
 moduleSlider(tc,"Clap delay",50,1000,perfectClapDelay," ms",function() return perfectClapDelay end,function(v) perfectClapDelay=v end)
 local sc=card(pages.Settings,"Session","")
 local status=make("TextLabel",sc,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
@@ -358,7 +392,7 @@ local function todoKey(key)
  VIM:SendKeyEvent(false,key,false,game)
 end
 local function runTodo()
- if todoBusy or busy or not scriptsActive() or not todoEnabled then return end
+ if todoBusy or busy or manualSequenceBusy or UIS:GetFocusedTextBox() or not scriptsActive() or not todoEnabled then return end
  todoBusy=true; busy=true
  local ok,err=pcall(function()
   if not todoWait(.8) then return end
@@ -501,25 +535,33 @@ RS:BindToRenderStep(bind,Enum.RenderPriority.Camera.Value+1,function(dt)
  end
 end)
 local function clapClick()
- if not okVIM or not VIM then return end
- VIM:SendMouseButtonEvent(0,0,0,true,game,0)
- task.wait(.035)
- VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+ if not okVIM or not VIM or not scriptsActive() or UIS:GetFocusedTextBox() then return end
+ local cursor=UIS:GetMouseLocation()
+ local ok,err=pcall(function() VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0);task.wait(.035) end)
+ pcall(function() VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0) end)
+ if not ok then warn("Clap input: "..tostring(err)) end
 end
 local function runPerfectClap()
- if not perfectClapEnabled or not running then return end
+ if not perfectClapEnabled or not scriptsActive() or clapPending or busy or manualSequenceBusy then return end
+ clapPending=true
+ local ticket=clapGeneration;local character=LP.Character
  task.delay(perfectClapDelay/1000,function()
-  if running and perfectClapEnabled then clapClick() end
+  if ticket~=clapGeneration then return end
+  clapPending=false
+  local h=character and character:FindFirstChildOfClass("Humanoid")
+  if scriptsActive() and perfectClapEnabled and LP.Character==character and h and h.Health>0 and not busy and not manualSequenceBusy then clapClick() end
  end)
 end
+connect(LP.CharacterRemoving,function() clapGeneration+=1;clapPending=false end)
+connect(UIS.WindowFocusReleased,function() clapGeneration+=1;clapPending=false end)
 
 local function runTripleJump()
- if tripleJumpBusy or busy or not scriptsActive() or not tripleJumpEnabled then return end
+ if tripleJumpBusy or busy or todoBusy or manualSequenceBusy or UIS:GetFocusedTextBox() or not scriptsActive() or not tripleJumpEnabled then return end
  if not okVIM or not VIM then return end
  tripleJumpBusy=true; busy=true
  local ok,err=pcall(function()
   for i=1,3 do
-   if not running or not tripleJumpEnabled then break end
+   if not scriptsActive() or not tripleJumpEnabled then break end
 
    VIM:SendMouseButtonEvent(0,0,0,true,game,0)
    task.wait(.035)
@@ -542,6 +584,8 @@ local function runTripleJump()
    if i<3 then task.wait(.05) end
   end
  end)
+ pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end)
+ pcall(function() local c=UIS:GetMouseLocation();VIM:SendMouseButtonEvent(c.X,c.Y,0,false,game,0) end)
  tripleJumpBusy=false; busy=false
  if running and status and status.Parent then
   status.Text=ok and "Triple jump sequence sent" or tostring(err)
@@ -863,6 +907,7 @@ do
   on=v;reset();info.Text=v and "Finding target..." or "Off"
  end
  followSetEnabled=setFollow
+ followGetEnabled=function() return on end
  followPaint=toggle(box,"Follow Behind + Sprint",function() return on end,function(v) setFollow(v) end)
  toggle(box,"Automatic Pathfinding Jumps",function() return autoJump end,function(v) autoJump=v;invalidate() end)
  toggle(box,"Use Front / Side / Back Dashes",function() return dashes end,function(v) dashes=v;if not v then releaseDash() end end)
@@ -1165,7 +1210,7 @@ do
   elseif held[code] then sendKey(code,false);held[code]=nil end
  end
  local function releaseInputs() for code in pairs(held) do pcall(function() sendKey(code,false) end) end;held={};if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end;mouseDown=false end
- local function restoreLockOn() if borrowedLock then lockOn=previousLockOn end;borrowedLock=false;lockSuppressed=false;mixFacing=Vector3.zero end
+ local function restoreLockOn() if borrowedLock then lockOn=previousLockOn;if lockOnPaint then lockOnPaint() end end;borrowedLock=false;lockSuppressed=false;mixFacing=Vector3.zero end
  local function restoreFacing() if ownedHumanoid and ownedHumanoid.Parent then ownedHumanoid.AutoRotate=previousAutoRotate end;ownedHumanoid=nil end
  local function move(mode,vector)
   if typing() then error(PAUSED_FOR_TYPING,0) end;phase=mode;steering=vector or Vector3.zero
@@ -1867,12 +1912,222 @@ do
  connect(gui.Destroying,shutdown)
 end
 
+
+-- ===== v2.1 inspected-source integrations (all optional features start OFF) =====
+do
+ local alive=true
+ local stops={}
+ local function registerStop(fn) table.insert(stops,fn) end
+ local function stopAll()
+  if not alive then return end
+  alive=false
+  for _,fn in ipairs(stops) do local ok,e=pcall(fn);if not ok then warn("JJS v2.1 cleanup: "..tostring(e)) end end
+ end
+ connect(gui.Destroying,stopAll);connect(unload.Activated,stopAll)
+ local function mount(name,fn)
+  local ok,e=xpcall(fn,function(err) return debug.traceback(tostring(err),2) end)
+  if not ok then warn("JJS v2.1 "..name..": "..tostring(e)) end
+ end
+ local function note(parent,text)
+  local label=make("TextLabel",parent,{Size=UDim2.new(1,0,0,48),BackgroundTransparency=1,Text=text,TextWrapped=true,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(parent)+2})
+  return label
+ end
+ mount("Background",function()
+  gui:SetAttribute("BackdropEnabled",true)
+  local box=card(pages.Visuals,"Decorative Background","")
+  note(box,"Show or hide the Halloween backdrop. The hub window and theme stay unchanged. Background appears only while the menu is open.")
+  toggle(box,"Show decorative background",function() return gui:GetAttribute("BackdropEnabled")~=false end,function(v) gui:SetAttribute("BackdropEnabled",v) end)
+ end)
+ mount("Low Gravity",function()
+  local on=false;local previous=nil;local value=20
+  local box=card(pages.Movement,"Low Gravity (Local)","")
+  note(box,"Changes this client's workspace gravity. May affect locally simulated objects; server behavior is not guaranteed. Restores the captured value when disabled.")
+  local function restore() if previous~=nil then workspace.Gravity=previous;previous=nil end end
+  toggle(box,"Low gravity",function() return on end,function(v)
+   if v and not on then previous=workspace.Gravity end
+   on=v;if on then workspace.Gravity=value else restore() end
+  end)
+  moduleSlider(box,"Gravity",0,196,20,"",function() return value end,function(v) value=v;if on then workspace.Gravity=value end end)
+  registerStop(function() on=false;restore() end)
+ end)
+ mount("World ESP",function()
+  local itemOn,dummyOn=false,false
+  local entries={};local elapsed=0
+  local folder=make("Folder",gui,{Name="JJS21WorldESP"})
+  local box=card(pages.ESP,"Items and Training Dummies","")
+  local feedback=note(box,"Local labels/highlights. Items require workspace.Items; dummies are non-player humanoid models in workspace.Characters. No remote library downloads.")
+  local function clear()
+   for key,e in pairs(entries) do e.tag:Destroy();e.highlight:Destroy();entries[key]=nil end
+  end
+  toggle(box,"Item ESP",function() return itemOn end,function(v) itemOn=v;clear() end)
+  toggle(box,"Dummy ESP",function() return dummyOn end,function(v) dummyOn=v;clear() end)
+  local function add(object,part,caption)
+   if entries[object] then entries[object].label.Text=caption;return end
+   local h=make("Highlight",folder,{Adornee=object,FillColor=T.acc,OutlineColor=T.txt,FillTransparency=.8,DepthMode=Enum.HighlightDepthMode.Occluded})
+   local tag=make("BillboardGui",folder,{Adornee=part,Size=UDim2.fromOffset(180,28),StudsOffset=Vector3.new(0,2.5,0),AlwaysOnTop=false})
+   local label=make("TextLabel",tag,{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text=caption,TextColor3=T.txt,TextStrokeTransparency=.3,Font=Enum.Font.Gotham,TextSize=12})
+   entries[object]={tag=tag,highlight=h,label=label}
+  end
+  connect(RS.Heartbeat,function(dt)
+   if not alive then return end
+   elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+   if not itemOn and not dummyOn then return end
+   local seen={};local count=0
+   local items=workspace:FindFirstChild("Items")
+   if itemOn and items then
+    for _,o in ipairs(items:GetChildren()) do
+     local part=o:IsA("BasePart") and o or o:FindFirstChildWhichIsA("BasePart",true)
+     if part and (o:IsA("BasePart") or o:IsA("Model")) then seen[o]=true;add(o,part,o.Name);count+=1 end
+    end
+   end
+   local chars=workspace:FindFirstChild("Characters")
+   if dummyOn and chars then
+    for _,m in ipairs(chars:GetChildren()) do
+     if m:IsA("Model") and not Players:GetPlayerFromCharacter(m) then
+      local h=m:FindFirstChildOfClass("Humanoid");local r=m:FindFirstChild("HumanoidRootPart") or m:FindFirstChildWhichIsA("BasePart")
+      if h and r and h.Health>0 then seen[m]=true;add(m,r,string.format("%s | %.0f/%.0f HP",m.Name,h.Health,h.MaxHealth));count+=1 end
+     end
+    end
+   end
+   for o,e in pairs(entries) do if not seen[o] then e.tag:Destroy();e.highlight:Destroy();entries[o]=nil end end
+   feedback.Text="Tracked: "..count.." | Items folder: "..(items and "available" or "not found").." | Dummy detection includes all non-player humanoids in Characters."
+  end)
+  registerStop(function() itemOn=false;dummyOn=false;clear();folder:Destroy() end)
+ end)
+ mount("Skeleton ESP",function()
+  local on=false;local elapsed=0;local records={}
+  local folder=make("Folder",gui,{Name="JJS21Skeletons"})
+  local box=card(pages.ESP,"Skeleton Overlay","")
+  note(box,"Local skeleton lines for other player rigs, derived from Motor6D joints. Uses Roblox GUI projection instead of loading an external skeleton library. Limited to 500 studs.")
+  local function clear() for model,e in pairs(records) do e.folder:Destroy();records[model]=nil end end
+  toggle(box,"Player skeletons",function() return on end,function(v) on=v;if not v then clear() end end)
+  connect(RS.Heartbeat,function(dt)
+   if not alive or not on then return end
+   elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+   local seen={}
+   for _,p in ipairs(Players:GetPlayers()) do
+    local c=p.Character
+    if p~=LP and c then
+     seen[c]=true
+     if not records[c] then
+      local entry={folder=make("Folder",folder,{Name=tostring(p.UserId)}),joints={}};records[c]=entry
+      for _,j in ipairs(c:GetDescendants()) do
+       if j:IsA("Motor6D") and j.Part0 and j.Part1 then
+        local line=make("Frame",entry.folder,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=T.acc,Visible=false,ZIndex=30})
+        table.insert(entry.joints,{joint=j,line=line})
+       end
+      end
+     end
+    end
+   end
+   for c,e in pairs(records) do if not seen[c] then e.folder:Destroy();records[c]=nil end end
+  end)
+  connect(RS.RenderStepped,function()
+   if not alive or not on then return end
+   local camera=workspace.CurrentCamera;if not camera then return end
+   for _,e in pairs(records) do for _,v in ipairs(e.joints) do
+    local j=v.joint;local line=v.line;line.Visible=false
+    if j.Parent and j.Part0 and j.Part1 and (j.Part0.Position-camera.CFrame.Position).Magnitude<500 then
+     local a,visibleA=camera:WorldToScreenPoint(j.Part0.Position);local b,visibleB=camera:WorldToScreenPoint(j.Part1.Position)
+     if visibleA and visibleB and a.Z>0 and b.Z>0 then
+      local delta=Vector2.new(b.X-a.X,b.Y-a.Y)
+      if delta.Magnitude>.5 then line.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);line.Size=UDim2.fromOffset(delta.Magnitude,2);line.Rotation=math.deg(math.atan2(delta.Y,delta.X));line.Visible=true end
+     end
+    end
+   end end
+  end)
+  registerStop(function() on=false;clear();folder:Destroy() end)
+ end)
+ mount("Logic Visibility",function()
+  local on=false;local saved={};local elapsed=0
+  local box=card(pages.ESP,"Build Logic Visibility","")
+  local feedback=note(box,"Reveals existing Core/Icon BillboardGuis and Outline SelectionBoxes under workspace.Logic. Despite Spotty's movesetesp filename, this is NOT player moveset detection.")
+  local function restore() for o,e in pairs(saved) do if o.Parent then pcall(function() o[e.property]=e.value end) end end;saved={} end
+  local function apply(o,property) if not saved[o] then saved[o]={property=property,value=o[property]} end;o[property]=true end
+  toggle(box,"Show build logic markers",function() return on end,function(v) on=v;if not v then restore() end end)
+  connect(RS.Heartbeat,function(dt)
+   if not alive or not on then return end
+   elapsed+=dt;if elapsed<.5 then return end;elapsed=0
+   local logic=workspace:FindFirstChild("Logic")
+   if not logic then feedback.Text="workspace.Logic not found in this server.";return end
+   local count=0
+   for _,o in ipairs(logic:GetChildren()) do
+    local core=o:FindFirstChild("Core");local icon=core and core:FindFirstChild("Icon");local outline=o:FindFirstChild("Outline")
+    if icon and icon:IsA("BillboardGui") then apply(icon,"Enabled");count+=1 end
+    if outline and outline:IsA("SelectionBox") then apply(outline,"Visible");count+=1 end
+   end
+   local expired={};for o in pairs(saved) do if not o:IsDescendantOf(logic) then table.insert(expired,o) end end
+   for _,o in ipairs(expired) do local e=saved[o];if o.Parent then pcall(function() o[e.property]=e.value end) end;saved[o]=nil end
+   feedback.Text="Build logic markers visible: "..count..". Disable to restore captured values."
+  end)
+  registerStop(function() on=false;restore() end)
+ end)
+ mount("Player Scanner",function()
+  local on=false;local elapsed=0;local selected=nil
+  local box=card(pages.Player,"Player Scanner","")
+  note(box,"Select another player below. Displays replicated health and Moveset/Ultimate attributes only; unavailable data stays Unknown rather than being invented.")
+  local text=note(box,"Scanner off.");text.Size=UDim2.new(1,0,0,90)
+  local pick=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Next player",TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,LayoutOrder=nextOrder(box)+2});corner(pick,6)
+  local function nextPlayer()
+   local options={};for _,p in ipairs(Players:GetPlayers()) do if p~=LP then table.insert(options,p) end end
+   table.sort(options,function(a,b) return a.UserId<b.UserId end)
+   local index=0;for i,p in ipairs(options) do if p==selected then index=i;break end end
+   selected=#options>0 and options[index%#options+1] or nil
+  end
+  connect(pick.Activated,nextPlayer)
+  toggle(box,"Enable scanner",function() return on end,function(v) on=v;if v and not selected then nextPlayer() end;if not v then text.Text="Scanner off." end end)
+  connect(RS.Heartbeat,function(dt)
+   if not alive or not on then return end
+   elapsed+=dt;if elapsed<.25 then return end;elapsed=0
+   if not selected or selected.Parent~=Players then selected=nil;text.Text="No selected player. Use Next player.";return end
+   local c=selected.Character;local h=c and c:FindFirstChildOfClass("Humanoid")
+   local move=selected:GetAttribute("Moveset");local ult=selected:GetAttribute("Ultimate")
+   text.Text=selected.DisplayName.." (@"..selected.Name..")\nHealth: "..(h and string.format("%.0f / %.0f",h.Health,h.MaxHealth) or "Unknown").."\nMoveset: "..(move~=nil and tostring(move) or "Unknown").."\nUltimate attribute: "..(ult~=nil and tostring(ult) or "Unknown")
+  end)
+  registerStop(function() on=false;selected=nil end)
+ end)
+ mount("Animation Previews",function()
+  local track=nil;local object=nil;local current=nil;local paints={}
+  local box=card(pages.Animations,"Optional Animation Previews","")
+  local feedback=note(box,"Cosmetic previews only, not extra damaging abilities. One track at a time; stops on death, respawn, focus loss or unload. Asset permission may prevent playback.")
+  local function stop()
+   if track then pcall(function() track:Stop(.1);track:Destroy() end);track=nil end
+   if object then object:Destroy();object=nil end
+   current=nil;for _,paint in ipairs(paints) do paint() end
+  end
+  for _,spec in ipairs({{"Gangnam","140557689031802"},{"Head Twitch","121158593063065"},{"Pose 1","91496614952968"},{"Pose 2","102765720260431"},{"Pose 3","91428863336534"}}) do
+   local name,id=spec[1],spec[2]
+   local paint=toggle(box,name,function() return current==id end,function(v)
+    stop();if not v then return end
+    local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local animator=h and h:FindFirstChildOfClass("Animator")
+    if not hubUnlocked or not h or h.Health<=0 or not animator then feedback.Text="Unlock hub and wait for a live character/Animator.";return end
+    local ok,e=pcall(function()
+     object=Instance.new("Animation");object.AnimationId="rbxassetid://"..id
+     track=animator:LoadAnimation(object);track.Looped=true;track:Play(.1);current=id
+    end)
+    if not ok then stop();feedback.Text="Playback failed: "..tostring(e) else feedback.Text="Playing "..name..". Cosmetic only; poses preview the clip without hover physics." end
+   end)
+   table.insert(paints,paint)
+  end
+  connect(LP.CharacterRemoving,stop);connect(UIS.WindowFocusReleased,stop)
+  connect(RS.Heartbeat,function() if current then local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then stop() end end end)
+  registerStop(stop)
+ end)
+ mount("Integration Notes",function()
+  local box=card(pages.Settings,"v2.1 Test Build","")
+  local label=note(box,"Partial inspected-source integration, not the whole Spotty repository. No new HTTP loaders. New modules start OFF except decorative backdrop. Existing key gate is retained. Combat imports and other repository files remain pending review. See supplied release notes.")
+  label.Size=UDim2.new(1,0,0,90)
+ end)
+end
+-- ===== end v2.1 integrations =====
+
 local function destroyBackdrop()
  local bg=PG:FindFirstChild("JJSHalloweenBackdrop")
  if bg then bg:Destroy() end
 end
 local function setScriptsPaused(paused)
  scriptsPaused=paused
+ if paused then clapGeneration+=1;clapPending=false end
  if paused then
   -- signal V2/V3 and other loops to halt while the hub is open
   pcall(function() gui:SetAttribute("ScriptsPaused",true) end)
@@ -1882,12 +2137,11 @@ local function setScriptsPaused(paused)
   pcall(function() gui:SetAttribute("ScriptsPaused",false) end)
  end
 end
+local cleanupDone=false
 local function cleanup()
+ if cleanupDone then return end
+ cleanupDone=true;clapGeneration+=1;clapPending=false
  if fxShutdown then pcall(fxShutdown) end
- if not running then
-  destroyBackdrop()
-  return
- end
  running=false; scriptsPaused=false
  enabled=false; todoEnabled=false; perfectClapEnabled=false; tripleJumpEnabled=false; pullEnabled=false; lockOn=false; chainEnabled=false; release()
  pcall(function() RS:UnbindFromRenderStep(bind) end)
@@ -2305,10 +2559,12 @@ do
  edge(UDim2.new(.12,0,1,0),UDim2.new(.88,0,0,0),180)
 
  -- backdrop only while menu is open; fully destroyed on hub unload
- bg.Enabled=main.Visible
- connect(main:GetPropertyChangedSignal("Visible"),function()
-  if bg.Parent then bg.Enabled=main.Visible end
- end)
+ local function paintBackdrop()
+  if bg.Parent then bg.Enabled=main.Visible and gui:GetAttribute("BackdropEnabled")~=false end
+ end
+ paintBackdrop()
+ connect(main:GetPropertyChangedSignal("Visible"),paintBackdrop)
+ connect(gui:GetAttributeChangedSignal("BackdropEnabled"),paintBackdrop)
  local t0=os.clock()
  local bgAlive=true
  connect(RS.Heartbeat,function(dt)
