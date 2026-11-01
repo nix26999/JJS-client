@@ -163,7 +163,7 @@ local function saveKeyUnlock()
  if typeof(writefile)=="function" then pcall(writefile,KEY_FILE,SCRIPT_KEY) end
 end
 if keyAlreadySaved() then hubUnlocked=true end
-local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),Position=UDim2.new(.5,-380,.5,-270),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true,Visible=hubUnlocked})
+local main=make("Frame",gui,{Size=UDim2.fromOffset(760,540),AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),BackgroundColor3=T.bg,BorderSizePixel=0,Active=true,Visible=hubUnlocked})
 corner(main,12); stroke(main)
 local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
@@ -216,6 +216,10 @@ local function openDiscordInvite()
  showLinkCopiedToast()
 end
 connect(discordBtn.Activated,openDiscordInvite)
+local reopen=make("TextButton",gui,{Name="JJSReopenButton",AnchorPoint=Vector2.new(1,1),Position=UDim2.new(1,-18,1,-110),Size=UDim2.fromOffset(58,58),BackgroundColor3=T.acc,Text="JJS",TextColor3=Color3.fromRGB(25,12,6),Font=Enum.Font.GothamBold,TextSize=16,Visible=false,Active=true,ZIndex=100})
+corner(reopen,29)
+make("UIStroke",reopen,{Color=Color3.fromRGB(255,220,150),Thickness=2})
+connect(reopen.Activated,function() if hubUnlocked and main.Parent then main.Visible=true;reopen.Visible=false end end)
 -- ===== KEY PAGE (shown until valid key from Discord) =====
 local keyPage=nil
 if not hubUnlocked then
@@ -311,6 +315,59 @@ for i,cat in ipairs(cats) do
   for key,btn in pairs(buttons) do btn.BackgroundTransparency=key==name and 0 or 1; btn.BackgroundColor3=T.p2; btn.TextColor3=key==name and T.acc or T.dim; btn.Font=key==name and Enum.Font.GothamBold or Enum.Font.GothamMedium end
  end)
 end
+
+-- Responsive navigation: phones use a horizontal, swipeable category strip.
+local sideLayout=side:FindFirstChildOfClass("UIListLayout")
+local function applyResponsiveLayout()
+ local camera=workspace.CurrentCamera
+ local viewport=camera and camera.ViewportSize or Vector2.new(760,540)
+ local compact=UIS.TouchEnabled or viewport.X<700
+ if compact then
+  main.Size=UDim2.fromOffset(math.max(280,math.min(760,viewport.X-16)),math.max(300,math.min(700,viewport.Y-32)))
+  main.Position=UDim2.fromScale(.5,.5)
+  scale.Scale=1
+  side.Position=UDim2.fromOffset(0,44)
+  side.Size=UDim2.new(1,0,0,46)
+  side.ScrollingDirection=Enum.ScrollingDirection.X
+  side.AutomaticCanvasSize=Enum.AutomaticSize.X
+  side.CanvasSize=UDim2.new()
+  side.ScrollBarThickness=0
+  if sideLayout then sideLayout.FillDirection=Enum.FillDirection.Horizontal;sideLayout.Padding=UDim.new(0,6) end
+  for _,nav in pairs(buttons) do nav.Size=UDim2.fromOffset(92,36);nav.TextSize=12 end
+  for _,child in ipairs(side:GetChildren()) do if child:IsA("TextLabel") then child.Visible=false end end
+  content.Position=UDim2.fromOffset(0,90)
+  content.Size=UDim2.new(1,0,1,-90)
+  title.TextSize=16;title.Position=UDim2.fromOffset(12,8)
+  discordBtn.Visible=false
+  badge.Position=UDim2.new(0,150,.5,-9)
+  close.Size=UDim2.fromOffset(34,32);close.Position=UDim2.new(1,-42,.5,-16)
+ else
+  main.Size=UDim2.fromOffset(760,540)
+  main.Position=UDim2.fromScale(.5,.5)
+  scale.Scale=math.min(1,(viewport.X-24)/760,(viewport.Y-40)/540)
+  side.Position=UDim2.fromOffset(0,44)
+  side.Size=UDim2.new(0,150,1,-44)
+  side.ScrollingDirection=Enum.ScrollingDirection.Y
+  side.AutomaticCanvasSize=Enum.AutomaticSize.Y
+  side.ScrollBarThickness=2
+  if sideLayout then sideLayout.FillDirection=Enum.FillDirection.Vertical;sideLayout.Padding=UDim.new(0,4) end
+  for _,nav in pairs(buttons) do nav.Size=UDim2.new(1,0,0,32);nav.TextSize=13 end
+  for _,child in ipairs(side:GetChildren()) do if child:IsA("TextLabel") then child.Visible=true end end
+  content.Position=UDim2.fromOffset(150,44)
+  content.Size=UDim2.new(1,-150,1,-44)
+  title.TextSize=18;title.Position=UDim2.fromOffset(16,10)
+  discordBtn.Visible=true
+  badge.Position=UDim2.new(0,220,.5,-9)
+  close.Size=UDim2.fromOffset(28,28);close.Position=UDim2.new(1,-36,.5,-14)
+ end
+ if keyPage and keyPage.Parent then
+  keyPage.AnchorPoint=Vector2.new(.5,.5);keyPage.Position=UDim2.fromScale(.5,.5)
+  local keyScale=keyPage:FindFirstChildOfClass("UIScale")
+  if not keyScale then keyScale=Instance.new("UIScale");keyScale.Parent=keyPage end
+  keyScale.Scale=math.min(1,(viewport.X-24)/420,(viewport.Y-24)/320)
+ end
+end
+applyResponsiveLayout()
 local ord={}
 local function nextOrder(p) ord[p]=(ord[p] or 0)+1; return ord[p] end
 local function card(p,name,sub)
@@ -321,7 +378,7 @@ local function card(p,name,sub)
  make("Frame",c,{Size=UDim2.new(1,0,0,1),BackgroundColor3=T.stroke,BorderSizePixel=0,LayoutOrder=2}); return c
 end
 local function toggle(p,name,get,set)
- local r=make("TextButton",p,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
+ local r=make("TextButton",p,{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
  make("TextLabel",r,{Size=UDim2.new(1,-50,1,0),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
  local track=make("Frame",r,{Size=UDim2.fromOffset(36,18),Position=UDim2.new(1,-36,.5,-9),BackgroundColor3=T.p2,BorderSizePixel=0}); corner(track,9)
  local knob=make("Frame",track,{Size=UDim2.fromOffset(14,14),Position=UDim2.new(0,2,.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0}); corner(knob,7)
@@ -341,10 +398,10 @@ end
 local c=card(pages.Macros,"Follow-up","")
 toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
 local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
- local r=make("Frame",parent,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
+ local r=make("Frame",parent,{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
  make("TextLabel",r,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
  local value=make("TextLabel",r,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text=tostring(get())..suffix,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
- local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
+ local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,20),Position=UDim2.fromOffset(0,26),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
  local fill=make("Frame",bar,{Size=UDim2.new((get()-min)/(max-min),0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
  local sliding=false
  local function update(x)
@@ -2204,17 +2261,25 @@ local function cleanup()
 end
 connect(gui.Destroying,cleanup)
 connect(unload.Activated,cleanup)
-connect(close.Activated,function() main.Visible=false end)
+connect(close.Activated,function()
+ main.Visible=false
+ reopen.Visible=hubUnlocked
+end)
 -- pause macros while hub is open; resume when closed (RightShift / X)
 scriptsPaused=main.Visible
+reopen.Visible=hubUnlocked and not main.Visible
 connect(main:GetPropertyChangedSignal("Visible"),function()
  setScriptsPaused(main.Visible)
+ reopen.Visible=hubUnlocked and not main.Visible
 end)
 local tjClicks,tjLast=0,0
 connect(UIS.InputBegan,function(i)
  if gui:GetAttribute("FlingSequenceActive") then if hubUnlocked and i.KeyCode==Enum.KeyCode.RightShift then main.Visible=not main.Visible end;return end
  if UIS:GetFocusedTextBox() then return end
- if i.KeyCode==Enum.KeyCode.RightShift and hubUnlocked then main.Visible=not main.Visible end
+ if i.KeyCode==Enum.KeyCode.RightShift and hubUnlocked then
+  main.Visible=not main.Visible
+  reopen.Visible=not main.Visible
+ end
  if i.KeyCode==Enum.KeyCode.R and perfectClapEnabled and scriptsActive() then
   task.spawn(runPerfectClap)
  end
@@ -2245,9 +2310,13 @@ connect(UIS.InputEnded,function(i) if i==touch then dragging=false end end)
 connect(UIS.InputChanged,function(i)
  if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i==touch) then local d=i.Position-start; main.Position=UDim2.new(pos.X.Scale,pos.X.Offset+d.X,pos.Y.Scale,pos.Y.Offset+d.Y) end
 end)
+local lastViewport=Vector2.zero
 connect(RS.Heartbeat,function()
  local cam=workspace.CurrentCamera
- if cam then scale.Scale=math.min(1,math.max(.25,math.min((cam.ViewportSize.X-24)/760,(cam.ViewportSize.Y-64)/540))) end
+ if cam and cam.ViewportSize~=lastViewport then
+  lastViewport=cam.ViewportSize
+  applyResponsiveLayout()
+ end
 end)
 -- ===== PART 2: gradients, glow, pumpkins and labels =====
 ;__JJSBoot:run("UI component 25",function()
