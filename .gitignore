@@ -1,6 +1,6 @@
--- JJS HUB v2.6: sequential initialization + device badge + inspected additions.
+-- JJS HUB v2.20: sequential initialization + device badge + inspected additions.
 local __JJSBoot=(function()
- local b={done=0,failed=0,total=33,ready=false,screen=nil,label=nil,fill=nil}
+ local b={done=0,failed=0,total=36,ready=false,screen=nil,label=nil,fill=nil}
  local Players=game:GetService("Players")
  local Input=game:GetService("UserInputService")
  local mobile=Input.TouchEnabled and not Input.KeyboardEnabled
@@ -31,20 +31,20 @@ local __JJSBoot=(function()
   local scale=Instance.new("UIScale");local camera=workspace.CurrentCamera;local viewport=camera and camera.ViewportSize or Vector2.new(760,540);scale.Scale=math.min(1,(viewport.X-30)/500,(viewport.Y-30)/250);scale.Parent=panel
   local corner=Instance.new("UICorner");corner.CornerRadius=UDim.new(0,12);corner.Parent=panel
   local stroke=Instance.new("UIStroke");stroke.Color=Color3.fromRGB(255,122,26);stroke.Thickness=1;stroke.Parent=panel
-  local title=Instance.new("TextLabel");title.Size=UDim2.fromOffset(450,34);title.Position=UDim2.fromOffset(24,22);title.BackgroundTransparency=1;title.Font=Enum.Font.GothamBold;title.TextSize=22;title.TextColor3=Color3.fromRGB(255,242,224);title.TextXAlignment=Enum.TextXAlignment.Left;title.Text="JJS HUB  /  v2.6";title.Parent=panel
+  local title=Instance.new("TextLabel");title.Size=UDim2.fromOffset(450,34);title.Position=UDim2.fromOffset(24,22);title.BackgroundTransparency=1;title.Font=Enum.Font.GothamBold;title.TextSize=22;title.TextColor3=Color3.fromRGB(255,242,224);title.TextXAlignment=Enum.TextXAlignment.Left;title.Text="JJS HUB  /  v2.20";title.Parent=panel
   b:icon(panel,UDim2.fromOffset(26,72),34)
-  local device=Instance.new("TextLabel");device.Size=UDim2.fromOffset(390,32);device.Position=UDim2.fromOffset(74,74);device.BackgroundTransparency=1;device.Font=Enum.Font.GothamBold;device.TextSize=15;device.TextColor3=b.color;device.TextXAlignment=Enum.TextXAlignment.Left;device.Text="Detected "..b.device.."  -  preparing modules";device.Parent=panel
-  local label=Instance.new("TextLabel");label.Size=UDim2.fromOffset(450,48);label.Position=UDim2.fromOffset(24,120);label.BackgroundTransparency=1;label.Font=Enum.Font.Gotham;label.TextSize=12;label.TextColor3=Color3.fromRGB(200,160,180);label.TextXAlignment=Enum.TextXAlignment.Left;label.TextWrapped=true;label.Text="Device checked. Initializing interface...";label.Parent=panel;b.label=label
+  local device=Instance.new("TextLabel");device.Size=UDim2.fromOffset(390,32);device.Position=UDim2.fromOffset(74,74);device.BackgroundTransparency=1;device.Font=Enum.Font.GothamBold;device.TextSize=mobile and 18 or 15;device.TextColor3=b.color;device.TextXAlignment=Enum.TextXAlignment.Left;device.Text="Detected "..b.device.."  -  preparing modules";device.Parent=panel
+  local label=Instance.new("TextLabel");label.Size=UDim2.fromOffset(450,48);label.Position=UDim2.fromOffset(24,120);label.BackgroundTransparency=1;label.Font=Enum.Font.Gotham;label.TextSize=mobile and 18 or 12;label.TextColor3=Color3.fromRGB(200,160,180);label.TextXAlignment=Enum.TextXAlignment.Left;label.TextWrapped=true;label.Text="Device checked. Initializing interface...";label.Parent=panel;b.label=label
   local bar=Instance.new("Frame");bar.Size=UDim2.fromOffset(450,8);bar.Position=UDim2.fromOffset(24,185);bar.BackgroundColor3=Color3.fromRGB(52,40,32);bar.BorderSizePixel=0;bar.Parent=panel
   local fill=Instance.new("Frame");fill.Size=UDim2.fromScale(0,1);fill.BackgroundColor3=Color3.fromRGB(255,138,40);fill.BorderSizePixel=0;fill.Parent=bar;b.fill=fill
-  local foot=Instance.new("TextLabel");foot.Size=UDim2.fromOffset(450,24);foot.Position=UDim2.fromOffset(24,205);foot.BackgroundTransparency=1;foot.Font=Enum.Font.Gotham;foot.TextSize=10;foot.TextColor3=Color3.fromRGB(150,110,140);foot.Text="Sequential startup - optional features remain off";foot.Parent=panel
+  local foot=Instance.new("TextLabel");foot.Size=UDim2.fromOffset(450,24);foot.Position=UDim2.fromOffset(24,205);foot.BackgroundTransparency=1;foot.Font=Enum.Font.Gotham;foot.TextSize=10;foot.TextColor3=Color3.fromRGB(150,110,140);foot.Text="Sequential startup - optional features remain off";foot.Parent=panel;foot.Visible=not mobile
   screen.Parent=pg
  end
  function b:run(name,fn)
   if self.label and self.label.Parent then self.label.Text=string.format("Loading %d / %d: %s",self.done+1,self.total,name) end
   task.wait(.025)
   local ok,err=xpcall(fn,function(e) return tostring(e) end)
-  if not ok then self.failed+=1;warn("JJS v2.6 ["..name.."]: "..tostring(err)) end
+  if not ok then self.failed+=1;warn("JJS v2.20 ["..name.."]: "..tostring(err)) end
   self.done+=1
   if self.fill and self.fill.Parent then self.fill.Size=UDim2.fromScale(math.clamp(self.done/self.total,0,1),1) end
   task.wait(.025)
@@ -119,10 +119,12 @@ local function bfAssistOff()
  if followPaint then followPaint() end
 end
 local T={bg=Color3.fromRGB(12,12,16),panel=Color3.fromRGB(18,18,24),p2=Color3.fromRGB(24,24,32),card=Color3.fromRGB(22,22,30),stroke=Color3.fromRGB(40,40,55),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(235,235,245),dim=Color3.fromRGB(140,140,160),mut=Color3.fromRGB(90,90,110),ok=Color3.fromRGB(80,200,120),warn=Color3.fromRGB(255,190,90)}
+local attachTooltip
 local function make(class,parent,props)
  local o=Instance.new(class)
  local ok,err=pcall(function() for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent end)
  if not ok then o:Destroy();error("Cannot create "..class..": "..tostring(err),2) end
+ if attachTooltip then pcall(attachTooltip,o) end
  return o
 end
 local function connect(signal,fn) local c=signal:Connect(fn); table.insert(conns,c); return c end
@@ -148,6 +150,87 @@ local function stroke(o) make("UIStroke",o,{Color=T.stroke,Thickness=1}) end
 end)
 
 local gui=make("ScreenGui",PG,{Name="JJS HUB",ResetOnSpawn=false,DisplayOrder=999,ZIndexBehavior=Enum.ZIndexBehavior.Sibling})
+-- Universal tooltip system: hover on PC, long-press on touch.
+-- Controls can override the generated description with SetAttribute("Tooltip", ...).
+local tooltipLayer=Instance.new("ScreenGui");tooltipLayer.Name="JJSTooltips";tooltipLayer.ResetOnSpawn=false;tooltipLayer.DisplayOrder=1005;tooltipLayer.IgnoreGuiInset=true;tooltipLayer.Parent=PG
+local tooltipBox=Instance.new("Frame");tooltipBox.Name="TooltipBox";tooltipBox.Visible=false;tooltipBox.BackgroundColor3=Color3.fromRGB(22,15,12);tooltipBox.BackgroundTransparency=.04;tooltipBox.BorderSizePixel=0;tooltipBox.Size=UDim2.fromOffset(230,0);tooltipBox.AutomaticSize=Enum.AutomaticSize.Y;tooltipBox.ZIndex=1000;tooltipBox.Parent=tooltipLayer
+local tooltipCorner=Instance.new("UICorner");tooltipCorner.CornerRadius=UDim.new(0,7);tooltipCorner.Parent=tooltipBox
+local tooltipStroke=Instance.new("UIStroke");tooltipStroke.Color=Color3.fromRGB(255,138,40);tooltipStroke.Thickness=1;tooltipStroke.Parent=tooltipBox
+local tooltipPad=Instance.new("UIPadding");tooltipPad.PaddingLeft=UDim.new(0,9);tooltipPad.PaddingRight=UDim.new(0,9);tooltipPad.PaddingTop=UDim.new(0,7);tooltipPad.PaddingBottom=UDim.new(0,7);tooltipPad.Parent=tooltipBox
+local tooltipText=Instance.new("TextLabel");tooltipText.BackgroundTransparency=1;tooltipText.Size=UDim2.new(1,0,0,0);tooltipText.AutomaticSize=Enum.AutomaticSize.Y;tooltipText.TextWrapped=true;tooltipText.TextXAlignment=Enum.TextXAlignment.Left;tooltipText.TextYAlignment=Enum.TextYAlignment.Top;tooltipText.Font=Enum.Font.Gotham;tooltipText.TextSize=12;tooltipText.TextColor3=Color3.fromRGB(255,242,224);tooltipText.ZIndex=1001;tooltipText.Parent=tooltipBox
+local tooltipLimit=Instance.new("UISizeConstraint");tooltipLimit.Parent=tooltipBox;tooltipBox.ClipsDescendants=true
+local tooltipToken=0
+local function showTooltip(obj,message,pos)
+ tooltipToken+=1;local camera=workspace.CurrentCamera;local v=camera and camera.ViewportSize or Vector2.new(800,600)
+ local w=math.max(100,math.min(260,v.X-24));local h=math.max(60,math.min(160,v.Y*.4));tooltipLimit.MaxSize=Vector2.new(w,h);tooltipBox.Size=UDim2.fromOffset(w,0)
+ local max=UIS.TouchEnabled and 220 or 360;if #message>max then message=message:sub(1,max-3).."..." end
+ tooltipText.TextSize=UIS.TouchEnabled and 13 or 12;tooltipText.Text=message;tooltipBox.Visible=true
+ local x=pos and pos.X or obj.AbsolutePosition.X;local y=pos and pos.Y or obj.AbsolutePosition.Y+obj.AbsoluteSize.Y
+ tooltipBox.Position=UDim2.fromOffset(math.clamp(x+8,8,math.max(8,v.X-w-8)),math.clamp(y+8,8,math.max(8,v.Y-h-8)))
+ local token=tooltipToken;task.delay(3.5,function() if tooltipToken==token then tooltipBox.Visible=false end end)
+end
+
+local function hideTooltip() tooltipToken+=1;tooltipBox.Visible=false end
+local tooltipDescriptions={
+ ["Auto Blackflash"]="Automatically performs the Black Flash input sequence when the script detects the required timing.",
+ ["Triple Jump (3x LMB > 300ms > Jump > 50ms > LMB)"]="Runs the configured triple-jump input sequence. Timing depends on the game and current action.",
+ ["Auto Blackflash Chain"]="Repeats the Black Flash sequence as a chain while enabled.",
+ ["Auto Lock On"]="Automatically keeps the camera locked onto the selected target.",
+ ["Include NPCs"]="Allows NPCs to be selected as lock-on targets, not just players.",
+ ["Pull To Target"]="Applies the configured pull behavior toward the current target.",
+ ["Lock Distance"]="Maximum distance used when searching for or maintaining a target.",
+ ["Pull Strength"]="Adjusts the strength of the pull effect. Higher values are stronger.",
+ ["Todo Macro"]="Enables the Todo macro sequence. Use only when you are ready for its automated inputs.",
+ ["Perfect Clap"]="Enables the timing-assisted clap input. Adjust the delay below to match your timing.",
+ ["Clap delay"]="Delay, in milliseconds, used by the Perfect Clap timing.",
+ ["Follow Behind + Sprint"]="Follows the selected player from behind and attempts to sprint while following.",
+ ["Automatic Pathfinding Jumps"]="Allows the follow routine to trigger jumps while navigating obstacles.",
+ ["Use Front / Side / Back Dashes"]="Allows the follow routine to use dash actions to keep up with its target.",
+ ["Slow Spin"]="Rotates your character slowly while enabled. Adjust Spin speed below.",
+ ["Invisible (Local Only)"]="Applies a local-only invisibility effect; other players may still see your character.",
+ ["Speed"]="Enables the custom walk-speed setting. Change Walk speed below.",
+ ["Build Speed"]="Gradually increases movement speed while moving, up to the configured maximum.",
+ ["Starting speed"]="Movement speed at the beginning of Build Speed.",
+ ["Speed gained per second"]="How quickly Build Speed increases movement speed.",
+ ["Maximum built speed"]="Upper limit for Build Speed.",
+ ["Reset speed when stopped"]="Resets the accumulated speed when movement stops.",
+ ["Jump Power"]="Enables the custom jump-power setting.",
+ ["Grounded velocity jump assist"]="Adds a jump assist when the character is grounded.",
+ ["Unload"]="Stops the hub and disconnects its active UI and script connections.",
+}
+local function tooltipMessage(obj)
+ local custom=obj:GetAttribute("Tooltip")
+ if typeof(custom)=="string" and custom~="" then return custom end
+ local label=obj:IsA("TextBox") and (obj.PlaceholderText~="" and obj.PlaceholderText or obj.Text) or obj.Text
+ if label and label~="" then
+  if tooltipDescriptions[label] then return tooltipDescriptions[label] end
+  if obj:IsA("TextButton") then return "Tap/click to activate: "..label end
+  if obj:IsA("TextBox") then return "Enter a value here. "..label end
+  if obj:IsA("TextLabel") then return label end
+ end
+ return nil
+end
+attachTooltip=function(obj)
+ if not obj:IsA("GuiObject") or obj:GetAttribute("TooltipDisabled") then return end
+ local msg=tooltipMessage(obj)
+ if not msg then return end
+ if UIS.MouseEnabled then
+  obj.MouseEnter:Connect(function() showTooltip(obj,tooltipMessage(obj) or msg) end)
+  obj.MouseLeave:Connect(hideTooltip)
+ end
+ if UIS.TouchEnabled then
+  local startInput,startPos=nil,nil
+  obj.InputBegan:Connect(function(input)
+   if input.UserInputType~=Enum.UserInputType.Touch then return end
+   startInput=input;startPos=input.Position
+   local token=tooltipToken+1;tooltipToken=token
+   task.delay(.55,function()
+    if startInput==input and tooltipToken==token then showTooltip(obj,tooltipMessage(obj) or msg,startPos) end
+   end)
+  end)
+  obj.InputEnded:Connect(function(input) if input==startInput then startInput=nil end end)
+ end
+end
 -- Key gate: join Discord to get the key, then unlock the hub
 local SCRIPT_KEY="J1nxhub01932456" -- post this key in your Discord
 local KEY_FILE="JJSHub_key.txt"
@@ -169,10 +252,11 @@ local scale=make("UIScale",main,{Scale=1})
 local top=make("Frame",main,{Size=UDim2.new(1,0,0,44),BackgroundColor3=T.panel,BorderSizePixel=0,Active=true})
 corner(top,12)
 make("Frame",top,{Size=UDim2.new(1,0,0,14),Position=UDim2.new(0,0,1,-14),BackgroundColor3=T.panel,BorderSizePixel=0})
-make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.6",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
+make("TextLabel",top,{Size=UDim2.fromOffset(225,44),Position=UDim2.fromOffset(16,0),BackgroundTransparency=1,Text="JJS HUB v2.20",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=15,TextXAlignment=Enum.TextXAlignment.Left})
 local badge=make("TextLabel",top,{Size=UDim2.fromOffset(48,18),Position=UDim2.new(0,220,.5,-9),BackgroundColor3=T.p2,Text="325",TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11}); corner(badge,4)
 local DISCORD_URL="https://discord.gg/RrQQh6B4nP"
-local discordBtn=make("TextButton",top,{Size=UDim2.fromOffset(86,28),Position=UDim2.new(1,-130,.5,-14),BackgroundColor3=Color3.fromRGB(88,101,242),Text="Discord",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=12}); corner(discordBtn,6)
+local discordBtn=make("TextButton",top,{Size=UDim2.fromOffset(86,28),Position=UDim2.new(1,-200,.5,-14),BackgroundColor3=Color3.fromRGB(88,101,242),Text="Discord",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=12}); corner(discordBtn,6)
+local unloadTop=make("TextButton",top,{Name="UnloadTop",Size=UDim2.fromOffset(64,28),Position=UDim2.new(1,-108,.5,-14),BackgroundColor3=Color3.fromRGB(130,45,65),Text="Unload",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11}); corner(unloadTop,6)
 local close=make("TextButton",top,{Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,.5,-14),BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16}); corner(close,6)
 local function showLinkCopiedToast()
  local toast=make("TextLabel",gui,{
@@ -219,7 +303,22 @@ connect(discordBtn.Activated,openDiscordInvite)
 local reopen=make("TextButton",gui,{Name="JJSReopenButton",AnchorPoint=Vector2.new(1,1),Position=UDim2.new(1,-18,1,-110),Size=UDim2.fromOffset(58,58),BackgroundColor3=T.acc,Text="JJS",TextColor3=Color3.fromRGB(25,12,6),Font=Enum.Font.GothamBold,TextSize=16,Visible=false,Active=true,ZIndex=100})
 corner(reopen,29)
 make("UIStroke",reopen,{Color=Color3.fromRGB(255,220,150),Thickness=2})
-connect(reopen.Activated,function() if hubUnlocked and main.Parent then main.Visible=true;reopen.Visible=false end end)
+-- Floating reopen button can be dragged anywhere on touch or desktop.
+local reopenDragging,reopenStart,reopenOrigin,reopenTouch,reopenMoved=false,nil,nil,nil,false
+connect(reopen.InputBegan,function(input)
+ if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then
+  reopenDragging=true;reopenMoved=false;reopenStart=input.Position;reopenOrigin=reopen.Position;reopenTouch=input
+ end
+end)
+connect(UIS.InputChanged,function(input)
+ if reopenDragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input==reopenTouch) then
+  local delta=input.Position-reopenStart
+  if math.abs(delta.X)+math.abs(delta.Y)>6 then reopenMoved=true end
+  if reopenMoved then reopen.Position=UDim2.new(reopenOrigin.X.Scale,reopenOrigin.X.Offset+delta.X,reopenOrigin.Y.Scale,reopenOrigin.Y.Offset+delta.Y) end
+ end
+end)
+connect(UIS.InputEnded,function(input) if input==reopenTouch then reopenDragging=false;reopenTouch=nil end end)
+connect(reopen.Activated,function() if not reopenMoved and hubUnlocked and main.Parent then main.Visible=true;reopen.Visible=false end;reopenMoved=false end)
 -- ===== KEY PAGE (shown until valid key from Discord) =====
 local keyPage=nil
 if not hubUnlocked then
@@ -233,46 +332,47 @@ if not hubUnlocked then
   ZIndex=50,
  })
  corner(keyPage,12); stroke(keyPage)
+ local keyContent=make("ScrollingFrame",keyPage,{Name="KeyContent",Size=UDim2.new(1,-8,1,-8),Position=UDim2.fromOffset(4,4),BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.fromOffset(0,330),ScrollBarThickness=4,ScrollingDirection=Enum.ScrollingDirection.Y})
  local keyClose=make("TextButton",keyPage,{
-  Size=UDim2.fromOffset(28,28),Position=UDim2.new(1,-36,0,12),
+  Size=UDim2.fromOffset(44,44),Position=UDim2.new(1,-48,0,6),
   BackgroundColor3=T.p2,Text="x",TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=16,ZIndex=52,
  }); corner(keyClose,6)
  connect(keyClose.Activated,function()
   if keyPage then keyPage:Destroy(); keyPage=nil end
   pcall(function() if gui.Parent then gui:Destroy() end end)
  end)
- make("TextLabel",keyPage,{
+ make("TextLabel",keyContent,{
   Size=UDim2.new(1,-56,0,28),Position=UDim2.fromOffset(16,18),
   BackgroundTransparency=1,Text="JJS HUB — Key Required",
   TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=18,
   TextXAlignment=Enum.TextXAlignment.Left,ZIndex=51,
  })
- make("TextLabel",keyPage,{
+ make("TextLabel",keyContent,{
   Size=UDim2.new(1,-32,0,48),Position=UDim2.fromOffset(16,52),
   BackgroundTransparency=1,
   Text="Join our Discord to get the free key, then paste it below to unlock the script.",
   TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=13,TextWrapped=true,
   TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,ZIndex=51,
  })
- local keyDiscord=make("TextButton",keyPage,{
-  Size=UDim2.new(1,-32,0,36),Position=UDim2.fromOffset(16,110),
+ local keyDiscord=make("TextButton",keyContent,{
+  Size=UDim2.new(1,-32,0,44),Position=UDim2.fromOffset(16,110),
   BackgroundColor3=Color3.fromRGB(88,101,242),Text="Join Discord",
   TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=14,ZIndex=51,
  }); corner(keyDiscord,8)
  connect(keyDiscord.Activated,openDiscordInvite)
- local keyBox=make("TextBox",keyPage,{
-  Size=UDim2.new(1,-32,0,36),Position=UDim2.fromOffset(16,158),
+ local keyBox=make("TextBox",keyContent,{
+  Size=UDim2.new(1,-32,0,44),Position=UDim2.fromOffset(16,158),
   BackgroundColor3=T.p2,Text="",PlaceholderText="Enter key from Discord...",
   TextColor3=T.txt,PlaceholderColor3=T.mut,Font=Enum.Font.Gotham,TextSize=14,
   ClearTextOnFocus=false,ZIndex=51,
  }); corner(keyBox,8)
- local keyStatus=make("TextLabel",keyPage,{
-  Size=UDim2.new(1,-32,0,20),Position=UDim2.fromOffset(16,200),
-  BackgroundTransparency=1,Text="",TextColor3=T.warn,Font=Enum.Font.Gotham,TextSize=12,
+ local keyStatus=make("TextLabel",keyContent,{
+  Size=UDim2.new(1,-32,0,34),Position=UDim2.fromOffset(16,208),
+  BackgroundTransparency=1,Text="",TextWrapped=true,TextColor3=T.warn,Font=Enum.Font.Gotham,TextSize=12,
   TextXAlignment=Enum.TextXAlignment.Left,ZIndex=51,
  })
- local keySubmit=make("TextButton",keyPage,{
-  Size=UDim2.new(1,-32,0,40),Position=UDim2.fromOffset(16,232),
+ local keySubmit=make("TextButton",keyContent,{
+  Size=UDim2.new(1,-32,0,48),Position=UDim2.fromOffset(16,250),
   BackgroundColor3=T.acc,Text="Unlock Script",
   TextColor3=Color3.fromRGB(20,12,8),Font=Enum.Font.GothamBold,TextSize=15,ZIndex=51,
  }); corner(keySubmit,8)
@@ -303,8 +403,8 @@ local pages,buttons={},{}
 local cats={{"Macros",""},{"Combat",""},{"Targeting",""},{"Movement",""},{"Player",""},{"ESP",""},{"Visuals",""},{"Animations",""},{"Settings",""}}
 for i,cat in ipairs(cats) do
  local name,description=cat[1],cat[2]
- local groupStart={Macros="MAIN",Combat="COMBAT",Movement="MOVEMENT",Visuals="VISUALS"}
- if groupStart[name] then make("TextLabel",side,{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text="~ "..groupStart[name].." ~",TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=10,LayoutOrder=i*10-5}) end
+ local groupStart={Macros="MACROS",Combat="COMBAT",Targeting="TARGET",Movement="MOVE",Player="PLAYER",ESP="ESP",Visuals="FX",Animations="ANIMS",Settings="SYS"}
+ if groupStart[name] then make("TextLabel",side,{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,Text="~ "..groupStart[name].." ~",TextColor3=T.mut,Font=Enum.Font.GothamBold,TextSize=9,LayoutOrder=i*10-5}) end
  local b=make("TextButton",side,{Size=UDim2.new(1,0,0,32),BackgroundColor3=T.p2,BackgroundTransparency=i==1 and 0 or 1,Text=name,TextColor3=i==1 and T.acc or T.dim,Font=Enum.Font.GothamMedium,TextSize=13,LayoutOrder=i*10}); corner(b,8); buttons[name]=b
  local p=make("ScrollingFrame",content,{Size=UDim2.new(1,0,1,-40),Position=UDim2.fromOffset(0,40),BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=3,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),Visible=i==1})
  make("UIPadding",p,{PaddingLeft=UDim.new(0,14),PaddingRight=UDim.new(0,14),PaddingTop=UDim.new(0,4),PaddingBottom=UDim.new(0,16)})
@@ -312,98 +412,149 @@ for i,cat in ipairs(cats) do
  connect(b.Activated,function()
   title.Text=name; desc.Text=""
   for key,page in pairs(pages) do page.Visible=key==name end
-  for key,btn in pairs(buttons) do btn.BackgroundTransparency=key==name and 0 or 1; btn.BackgroundColor3=T.p2; btn.TextColor3=key==name and T.acc or T.dim; btn.Font=key==name and Enum.Font.GothamBold or Enum.Font.GothamMedium end
+  for key,btn in pairs(buttons) do
+   btn.BackgroundTransparency=mobileMode and 0 or (key==name and 0 or 1)
+   btn.BackgroundColor3=mobileMode and (key==name and T.acc or T.p2) or T.p2
+   btn.TextColor3=mobileMode and (key==name and Color3.fromRGB(28,14,6) or T.dim) or (key==name and T.acc or T.dim)
+   btn.Font=key==name and Enum.Font.GothamBold or Enum.Font.GothamMedium
+  end
  end)
 end
+for name,nav in pairs(buttons) do nav:SetAttribute("Tooltip","Open the "..name.." module category.") end
 
--- Responsive navigation: phones use a horizontal, swipeable category strip.
+-- Responsive navigation: polished phone layout with large touch targets.
 local sideLayout=side:FindFirstChildOfClass("UIListLayout")
+local mobileMode=false
 local function applyResponsiveLayout()
- local camera=workspace.CurrentCamera
- local viewport=camera and camera.ViewportSize or Vector2.new(760,540)
- local compact=UIS.TouchEnabled or viewport.X<700
- if compact then
-  main.Size=UDim2.fromOffset(math.max(280,math.min(760,viewport.X-16)),math.max(300,math.min(700,viewport.Y-32)))
-  main.Position=UDim2.fromScale(.5,.5)
-  scale.Scale=1
-  side.Position=UDim2.fromOffset(0,44)
-  side.Size=UDim2.new(1,0,0,46)
-  side.ScrollingDirection=Enum.ScrollingDirection.X
-  side.AutomaticCanvasSize=Enum.AutomaticSize.X
-  side.CanvasSize=UDim2.new()
-  side.ScrollBarThickness=0
-  if sideLayout then sideLayout.FillDirection=Enum.FillDirection.Horizontal;sideLayout.Padding=UDim.new(0,6) end
-  for _,nav in pairs(buttons) do nav.Size=UDim2.fromOffset(92,36);nav.TextSize=12 end
-  for _,child in ipairs(side:GetChildren()) do if child:IsA("TextLabel") then child.Visible=false end end
-  content.Position=UDim2.fromOffset(0,90)
-  content.Size=UDim2.new(1,0,1,-90)
-  title.TextSize=16;title.Position=UDim2.fromOffset(12,8)
-  discordBtn.Visible=false
-  badge.Position=UDim2.new(0,150,.5,-9)
-  close.Size=UDim2.fromOffset(34,32);close.Position=UDim2.new(1,-42,.5,-16)
- else
-  main.Size=UDim2.fromOffset(760,540)
-  main.Position=UDim2.fromScale(.5,.5)
-  scale.Scale=math.min(1,(viewport.X-24)/760,(viewport.Y-40)/540)
-  side.Position=UDim2.fromOffset(0,44)
-  side.Size=UDim2.new(0,150,1,-44)
-  side.ScrollingDirection=Enum.ScrollingDirection.Y
-  side.AutomaticCanvasSize=Enum.AutomaticSize.Y
-  side.ScrollBarThickness=2
-  if sideLayout then sideLayout.FillDirection=Enum.FillDirection.Vertical;sideLayout.Padding=UDim.new(0,4) end
-  for _,nav in pairs(buttons) do nav.Size=UDim2.new(1,0,0,32);nav.TextSize=13 end
-  for _,child in ipairs(side:GetChildren()) do if child:IsA("TextLabel") then child.Visible=true end end
-  content.Position=UDim2.fromOffset(150,44)
-  content.Size=UDim2.new(1,-150,1,-44)
-  title.TextSize=18;title.Position=UDim2.fromOffset(16,10)
-  discordBtn.Visible=true
-  badge.Position=UDim2.new(0,220,.5,-9)
-  close.Size=UDim2.fromOffset(28,28);close.Position=UDim2.new(1,-36,.5,-14)
+ local camera=workspace.CurrentCamera;local v=camera and camera.ViewportSize or Vector2.new(760,540);local touch=UIS.TouchEnabled or v.X<700;mobileMode=touch
+ main.Size=touch and UDim2.fromOffset(math.min(760,math.max(240,v.X-24)),math.min(620,math.max(180,v.Y-96))) or UDim2.fromOffset(760,540)
+ main.Position=UDim2.fromScale(.5,.5);main.ClipsDescendants=touch;scale.Scale=touch and 1 or math.min(1,(v.X-24)/760,(v.Y-48)/540)
+ local topH=touch and 48 or 44;local navW=touch and 96 or 150;top.Size=UDim2.new(1,0,0,topH);side.Position=UDim2.fromOffset(0,topH);side.Size=UDim2.new(0,navW,1,-topH)
+ side.ScrollingDirection=Enum.ScrollingDirection.Y;side.AutomaticCanvasSize=Enum.AutomaticSize.Y;side.CanvasSize=UDim2.new();side.ScrollBarThickness=touch and 4 or 2
+ if sideLayout then sideLayout.FillDirection=Enum.FillDirection.Vertical;sideLayout.Padding=UDim.new(0,4) end
+ local pad=side:FindFirstChildOfClass("UIPadding");if pad then pad.PaddingTop=UDim.new(0,6);pad.PaddingLeft=UDim.new(0,4);pad.PaddingRight=UDim.new(0,4) end
+ for name,b in pairs(buttons) do b.Size=UDim2.new(1,0,0,touch and 44 or 32);b.TextSize=touch and 12 or 13;b.TextWrapped=touch;b.BackgroundColor3=T.p2;b.BackgroundTransparency=pages[name] and pages[name].Visible and 0 or 1;b.TextColor3=pages[name] and pages[name].Visible and T.acc or T.dim end
+ for _,o in ipairs(side:GetChildren()) do if o:IsA("TextLabel") then o.Visible=not touch end end
+ content.Position=UDim2.fromOffset(navW,topH);content.Size=UDim2.new(1,-navW,1,-topH);title.TextSize=touch and 14 or 18;title.Position=UDim2.fromOffset(touch and 8 or 16,7)
+ discordBtn.Visible=not touch;badge.Visible=not touch
+ if unloadTop then
+  unloadTop.Visible=true
+  unloadTop.Size=UDim2.fromOffset(touch and 64 or 64,touch and 36 or 28)
+  unloadTop.Position=UDim2.new(1,touch and -120 or -108,.5,touch and -18 or -14)
+  unloadTop.TextSize=touch and 12 or 11
  end
- if keyPage and keyPage.Parent then
-  keyPage.AnchorPoint=Vector2.new(.5,.5);keyPage.Position=UDim2.fromScale(.5,.5)
-  local keyScale=keyPage:FindFirstChildOfClass("UIScale")
-  if not keyScale then keyScale=Instance.new("UIScale");keyScale.Parent=keyPage end
-  keyScale.Scale=math.min(1,(viewport.X-24)/420,(viewport.Y-24)/320)
- end
+ close.Size=UDim2.fromOffset(touch and 44 or 28,touch and 44 or 28);close.Position=UDim2.new(1,touch and -48 or -36,.5,touch and -22 or -14);close.TextSize=touch and 18 or 16
+ for _,o in ipairs(top:GetChildren()) do if o:IsA("TextLabel") and o.Text:find("JJS HUB",1,true) then o.Size=UDim2.new(1,touch and -104 or -280,1,0);o.TextSize=touch and 14 or 15 end;if o:IsA("TextLabel") and (o.Text=="PC" or o.Text=="MOBILE") then o.Visible=not touch end;if o.Name=="DeviceIcon" then o.Position=touch and UDim2.new(1,-94,.5,-12) or UDim2.fromOffset(290,9) end end
+ if keyPage and keyPage.Parent then keyPage.AnchorPoint=Vector2.new(.5,.5);keyPage.Position=UDim2.fromScale(.5,.5);keyPage.Size=UDim2.fromOffset(math.min(420,v.X-24),math.min(340,v.Y-32));local ks=keyPage:FindFirstChildOfClass("UIScale");if ks then ks.Scale=1 end end
+ if __JJSBoot.features then for _,r in ipairs(__JJSBoot.features) do __JJSBoot.refresh(r) end end
 end
+
 applyResponsiveLayout()
 local ord={}
 local function nextOrder(p) ord[p]=(ord[p] or 0)+1; return ord[p] end
+-- Uniform rows and bounded touch settings.
+do
+ __JJSBoot.groups={};__JJSBoot.features={};__JJSBoot.cancels={};__JJSBoot.rawMake=make
+ __JJSBoot.options={["Include NPCs"]=true,["Automatic Pathfinding Jumps"]=true,["Use Front / Side / Back Dashes"]=true,["Reset speed when stopped"]=true,["Include NPCs (shared V2/V3)"]=true,["Front-only turnaround S + Q (shared)"]=true,["Auto camera angle (override slider/fixed turn)"]=true,["Highlights"]=true,["Names"]=true,["Health"]=true,["Distance"]=true,["Hide teammates"]=true,["Through walls"]=true,["Skip teammates"]=true,["Reduced flashes"]=true,["Allow ESTIMATED lethal triggers"]=true}
+ __JJSBoot.alias={["Triple Jump (3x LMB > 300ms > Jump > 50ms > LMB)"]="Triple Jump",["Auto Lock On"]="Lock On",["Enable ESP"]="Player ESP",["Follow Behind + Sprint"]="Follow Behind",["Low gravity"]="Low Gravity",["Show decorative background"]="Background",["Player skeletons"]="Skeleton ESP",["Show build markers"]="Build Logic Visibility",["Enable scanner"]="Player Scanner",["Kill finisher (16 frames / 0.8 s)"]="Kill Finisher"}
+ function __JJSBoot.refresh(r)
+  if not r.outer.Parent then return end
+  local ok,v=pcall(r.get);r.button.Text=ok and v and "ON" or "OFF";r.button.TextColor3=ok and v and T.acc or T.dim;r.arrow.Text=r.open and "v" or ">"
+  local camera=workspace.CurrentCamera;local v=camera and camera.ViewportSize or Vector2.new(760,540);local factor=math.max(.01,scale.Scale);local content=r.layout.AbsoluteContentSize.Y/factor+14
+  local cap=UIS.TouchEnabled and math.clamp(v.Y*.28,96,180) or math.clamp(v.Y*.35,120,240);local page=r.outer.Parent and r.outer.Parent.Parent
+  if page and page:IsA("ScrollingFrame") then cap=math.min(cap,math.max(44,page.AbsoluteSize.Y/factor-r.h-16)) end
+  local h=math.min(cap,math.max(20,content));r.body.CanvasSize=UDim2.fromOffset(0,content);r.body.Size=UDim2.new(1,0,0,r.open and h or 0);r.outer.Size=UDim2.new(1,0,0,r.h+(r.open and h+4 or 0))
+ end
+
+ __JJSBoot.keyRecords={};local keyCapture=nil
+ function __JJSBoot.addModuleKey(r,label)
+  if not UIS.KeyboardEnabled or UIS.TouchEnabled then return end
+  label.Size=UDim2.new(1,-186,0,r.h)
+  local b=__JJSBoot.rawMake("TextButton",r.outer,{Name="ModuleKeybind",Size=UDim2.fromOffset(54,24),Position=UDim2.new(1,-170,0,(r.h-24)/2),Text="[ - ]",BackgroundColor3=T.p2,TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=10,TextTruncate=Enum.TextTruncate.AtEnd});corner(b,5)
+  local entry={row=r,box=b};table.insert(__JJSBoot.keyRecords,entry)
+  function entry.paint() b.Text=entry.key and ("["..entry.key.Name.."]") or "[ - ]" end
+  connect(b.Activated,function() if keyCapture then keyCapture.paint() end;keyCapture=entry;b.Text="[...]" end)
+ end
+ connect(UIS.InputBegan,function(i,g)
+  if not UIS.KeyboardEnabled or UIS.TouchEnabled or i.UserInputType~=Enum.UserInputType.Keyboard or UIS:GetFocusedTextBox() then return end
+  if keyCapture then local e=keyCapture;keyCapture=nil;local k=i.KeyCode
+   if k==Enum.KeyCode.Escape then e.paint();return end
+   if k==Enum.KeyCode.Backspace then e.key=nil;e.paint();return end
+   if k==Enum.KeyCode.Unknown then e.paint();return end
+   for _,o in ipairs(__JJSBoot.keyRecords) do if o.key==k then o.key=nil;o.paint() end end;e.key=k;e.paint();return
+  end
+  if g or not scriptsActive() or gui:GetAttribute("ComboStudioBusy") then return end
+  for _,e in ipairs(__JJSBoot.keyRecords) do if e.key==i.KeyCode and e.row.outer.Parent then local ok,v=pcall(e.row.get);if ok then pcall(e.row.set,not v) end;__JJSBoot.refresh(e.row);return end end
+ end)
+ connect(UIS.WindowFocusReleased,function() if keyCapture then keyCapture.paint();keyCapture=nil end end)
+
+ function __JJSBoot.bind(group,name,get,set)
+  local g=__JJSBoot.groups[group];if not g then return end
+  if g.rows[name] then local r=g.rows[name];r.get=get;r.set=set;return r end
+  local raw=__JJSBoot.rawMake;local title=__JJSBoot.alias[name] or name;local h=UIS.TouchEnabled and 48 or 36;g.count+=1
+  local outer=raw("Frame",group,{Name="Feature_"..title,Size=UDim2.new(1,0,0,h),BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=g.count});corner(outer,7);stroke(outer)
+  local label=raw("TextLabel",outer,{Size=UDim2.new(1,-124,0,h),Position=UDim2.fromOffset(8,0),Text=title.." =",TextTruncate=Enum.TextTruncate.AtEnd,BackgroundTransparency=1,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=UIS.TouchEnabled and 13 or 12,TextXAlignment=Enum.TextXAlignment.Left});label:SetAttribute("Tooltip",title)
+  local button=raw("TextButton",outer,{Size=UDim2.fromOffset(56,h-4),Position=UDim2.new(1,-108,0,2),Text="OFF",BackgroundColor3=T.p2,TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=12});corner(button,6)
+  local arrow=raw("TextButton",outer,{Size=UDim2.fromOffset(44,h-4),Position=UDim2.new(1,-48,0,2),Text=">",BackgroundColor3=T.p2,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=18});corner(arrow,6)
+  local body,layout
+  if not g.primary then body=g.pending;body.Parent=outer;layout=g.layout else body=raw("ScrollingFrame",outer,{Size=UDim2.new(1,0,0,0),BackgroundColor3=T.card,BorderSizePixel=0,Visible=false,CanvasSize=UDim2.new(),ScrollBarThickness=5,ScrollingDirection=Enum.ScrollingDirection.Y,ClipsDescendants=true});layout=raw("UIListLayout",body,{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder});raw("UIPadding",body,{PaddingTop=UDim.new(0,6),PaddingBottom=UDim.new(0,8),PaddingLeft=UDim.new(0,9),PaddingRight=UDim.new(0,12)}) end
+  body.Position=UDim2.fromOffset(0,h+4);body.Visible=false
+  local r={outer=outer,body=body,layout=layout,button=button,arrow=arrow,h=h,open=false,get=get,set=set};g.rows[name]=r;g.rows[title]=r;g.current=r;if not g.primary then g.primary=r end;table.insert(__JJSBoot.features,r)
+  __JJSBoot.addModuleKey(r,label)
+  connect(button.Activated,function() local ok,v=pcall(r.get);if ok then local good,e=pcall(r.set,not v);if not good then warn("Module "..title..": "..tostring(e)) end end;__JJSBoot.refresh(r) end)
+  connect(arrow.Activated,function() r.open=not r.open;r.body.Visible=r.open;if r.open then local any=false;for _,o in ipairs(body:GetChildren()) do if o:IsA("GuiObject") then any=true;break end end;if not any then raw("TextLabel",body,{Size=UDim2.new(1,0,0,30),Text="No additional settings.",BackgroundTransparency=1,TextColor3=T.mut,TextSize=12,Font=Enum.Font.Gotham}) end end;__JJSBoot.refresh(r);task.defer(function() __JJSBoot.refresh(r) end) end)
+  connect(layout:GetPropertyChangedSignal("AbsoluteContentSize"),function() __JJSBoot.refresh(r) end);__JJSBoot.refresh(r);return r
+ end
+ function __JJSBoot.settings(group,name) local g=__JJSBoot.groups[group];if not g then return group end;local r=name and g.rows[name] or g.current or g.primary;return r and r.body or g.pending end
+ function __JJSBoot.route(class,parent,props)
+  if __JJSBoot.groups[parent] and (class=="Frame" or class=="TextLabel" or class=="TextButton" or class=="TextBox" or class=="ImageLabel" or class=="ImageButton" or class=="ScrollingFrame") then
+   local text=props and props.Text;if typeof(text)=="string" and text:find("Key action:",1,true) then return __JJSBoot.settings(parent,"Auto Blackflash") elseif typeof(text)=="string" and text:find("Target mode:",1,true) then return __JJSBoot.settings(parent,"Auto Lock On") elseif typeof(text)=="string" and text:find("PREVIEW POPUP",1,true) then return __JJSBoot.settings(parent,"Blackflash popups") end;return __JJSBoot.settings(parent)
+  end;return parent
+ end
+ make=function(class,parent,props)
+  parent=__JJSBoot.route(class,parent,props)
+  if UIS.TouchEnabled and props then
+   if class=="TextButton" or class=="TextBox" then local z=props.Size;if z and z.Y.Scale==0 and z.Y.Offset>0 and z.Y.Offset<44 then props.Size=UDim2.new(z.X.Scale,z.X.Offset,0,44) end end
+   if (class=="TextLabel" or class=="TextButton" or class=="TextBox") and props.TextSize then props.TextSize=math.max(12,props.TextSize) end
+   if (class=="TextButton" or class=="TextBox") and parent and parent:IsA("Frame") and parent.AutomaticSize==Enum.AutomaticSize.None and parent.Size.Y.Scale==0 and parent.Size.Y.Offset>0 then local z=props.Size;local p=props.Position or UDim2.new();if z and z.Y.Scale==0 and p.Y.Scale==0 and p.Y.Offset+z.Y.Offset>parent.Size.Y.Offset then parent.Size=UDim2.new(parent.Size.X.Scale,parent.Size.X.Offset,0,p.Y.Offset+z.Y.Offset) end end
+  end
+  return __JJSBoot.rawMake(class,parent,props)
+ end
+ local elapsed=0;connect(RS.Heartbeat,function(dt) elapsed+=dt;if elapsed<.2 then return end;elapsed=0;for _,r in ipairs(__JJSBoot.features) do __JJSBoot.refresh(r) end end)
+end
 local function card(p,name,sub)
- local c=make("Frame",p,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=T.card,BorderSizePixel=0,LayoutOrder=nextOrder(p)}); corner(c,10); stroke(c)
- make("UIPadding",c,{PaddingTop=UDim.new(0,10),PaddingBottom=UDim.new(0,10),PaddingLeft=UDim.new(0,12),PaddingRight=UDim.new(0,12)})
- make("UIListLayout",c,{Padding=UDim.new(0,6),SortOrder=Enum.SortOrder.LayoutOrder})
- make("TextLabel",c,{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=13,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0})
- make("Frame",c,{Size=UDim2.new(1,0,0,1),BackgroundColor3=T.stroke,BorderSizePixel=0,LayoutOrder=2}); return c
+ if name:find("Device and Loading",1,true) and __JJSBoot.interfaceGroup then return __JJSBoot.interfaceGroup end
+ local raw=__JJSBoot.rawMake;local group=raw("Frame",p,{Name="Group_"..name,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=nextOrder(p)});raw("UIListLayout",group,{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder})
+ local pending=raw("ScrollingFrame",group,{Size=UDim2.new(1,0,0,0),BackgroundColor3=T.card,BorderSizePixel=0,Visible=false,CanvasSize=UDim2.new(),ScrollBarThickness=5,ScrollingDirection=Enum.ScrollingDirection.Y,ClipsDescendants=true});local layout=raw("UIListLayout",pending,{Padding=UDim.new(0,5),SortOrder=Enum.SortOrder.LayoutOrder});raw("UIPadding",pending,{PaddingTop=UDim.new(0,6),PaddingBottom=UDim.new(0,8),PaddingLeft=UDim.new(0,9),PaddingRight=UDim.new(0,12)})
+ __JJSBoot.groups[group]={title=name,pending=pending,layout=layout,rows={},primary=nil,current=nil,count=0};if name=="Session" then __JJSBoot.interfaceGroup=group end;return group
 end
 local function toggle(p,name,get,set)
- local r=make("TextButton",p,{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
- make("TextLabel",r,{Size=UDim2.new(1,-50,1,0),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
- local track=make("Frame",r,{Size=UDim2.fromOffset(36,18),Position=UDim2.new(1,-36,.5,-9),BackgroundColor3=T.p2,BorderSizePixel=0}); corner(track,9)
- local knob=make("Frame",track,{Size=UDim2.fromOffset(14,14),Position=UDim2.new(0,2,.5,-7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0}); corner(knob,7)
- local function paint() track.BackgroundColor3=get() and T.acc or Color3.fromRGB(45,45,55); knob.Position=get() and UDim2.new(1,-16,.5,-7) or UDim2.new(0,2,.5,-7) end
+ if __JJSBoot.groups[p] and not __JJSBoot.options[name] then local r=__JJSBoot.bind(p,name,get,set);return function() __JJSBoot.refresh(r) end end
+ local r=make("TextButton",p,{Size=UDim2.new(1,0,0,UIS.TouchEnabled and 48 or 40),BackgroundTransparency=1,Text="",LayoutOrder=nextOrder(p)+2})
+ r:SetAttribute("Tooltip",tooltipDescriptions[name] or ("Toggle "..name.." on or off."))
+ attachTooltip(r)
+ make("TextLabel",r,{Size=UDim2.new(1,-50,1,0),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=UIS.TouchEnabled and 14 or 12,TextXAlignment=Enum.TextXAlignment.Left})
+ local track=make("Frame",r,{Size=UIS.TouchEnabled and UDim2.fromOffset(44,24) or UDim2.fromOffset(36,18),Position=UIS.TouchEnabled and UDim2.new(1,-44,.5,-12) or UDim2.new(1,-36,.5,-9),BackgroundColor3=T.p2,BorderSizePixel=0}); corner(track,9)
+ local knob=make("Frame",track,{Size=UIS.TouchEnabled and UDim2.fromOffset(18,18) or UDim2.fromOffset(14,14),Position=UDim2.new(0,2,.5,UIS.TouchEnabled and -9 or -7),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0}); corner(knob,7)
+ local function paint() track.BackgroundColor3=get() and T.acc or Color3.fromRGB(45,45,55); knob.Position=get() and UDim2.new(1,UIS.TouchEnabled and -20 or -16,.5,UIS.TouchEnabled and -9 or -7) or UDim2.new(0,2,.5,UIS.TouchEnabled and -9 or -7) end
  connect(r.Activated,function() set(not get()); paint() end); paint()
  return paint
 end
 -- ===== card depth: every module card gets an outer shadow and a lit top edge =====
-local __baseCard=card
-card=function(p,name,sub)
- local c=__baseCard(p,name,sub)
- make("UIStroke",c,{Color=Color3.fromRGB(8,4,12),Thickness=4,Transparency=.55,ApplyStrokeMode=Enum.ApplyStrokeMode.Border})
- make("UIGradient",c,{Color=ColorSequence.new(Color3.fromRGB(44,32,26),Color3.fromRGB(24,18,16)),Rotation=90})
- return c
-end
+local __baseCard=card -- compact rows provide styling
 
 local c=card(pages.Macros,"Follow-up","")
 toggle(c,"Auto Blackflash",function() return enabled end,function(v) enabled=v end)
 local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
- local r=make("Frame",parent,{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
+ if __JJSBoot.groups[parent] then parent=__JJSBoot.settings(parent,name=="Clap delay" and "Perfect Clap" or nil) end
+ local r=make("Frame",parent,{Size=UDim2.new(1,0,0,UIS.TouchEnabled and 76 or 52),BackgroundTransparency=1,LayoutOrder=nextOrder(parent)+2})
+ r:SetAttribute("Tooltip",tooltipDescriptions[name] or ("Adjust "..name.." using the slider."))
+ attachTooltip(r)
  make("TextLabel",r,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
  local value=make("TextLabel",r,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text=tostring(get())..suffix,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
- local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,20),Position=UDim2.fromOffset(0,26),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
+ local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,UIS.TouchEnabled and 44 or 20),Position=UDim2.fromOffset(0,26),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
  local fill=make("Frame",bar,{Size=UDim2.new((get()-min)/(max-min),0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
- local sliding=false
+ local sliding=false;local activePointer=nil
  local function update(x)
   local a=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
   local v=math.floor(min+(max-min)*a+.5)
@@ -412,16 +563,18 @@ local function moduleSlider(parent,name,min,max,initial,suffix,get,set)
   value.Text=tostring(v)..suffix
  end
  connect(bar.InputBegan,function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true; update(i.Position.X) end
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true;activePointer=i;if r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=false end;update(i.Position.X) end
  end)
  connect(UIS.InputChanged,function(i)
-  if sliding and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then update(i.Position.X) end
+  if sliding and (i==activePointer or activePointer and activePointer.UserInputType==Enum.UserInputType.MouseButton1 and i.UserInputType==Enum.UserInputType.MouseMovement) then update(i.Position.X) end
  end)
+ connect(UIS.WindowFocusReleased,function() sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end)
+ connect(main:GetPropertyChangedSignal("Visible"),function() sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end)
  connect(UIS.InputEnded,function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=false end
+  if i==activePointer then sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end
  end)
 end
-toggle(c,"Triple Jump (3x LMB > 100ms > Jump > 50ms > LMB)",function() return tripleJumpEnabled end,function(v) tripleJumpEnabled=v end)
+toggle(c,"Triple Jump (3x LMB > 300ms > Jump > 50ms > LMB)",function() return tripleJumpEnabled end,function(v) tripleJumpEnabled=v end)
 local modes={"Single","Double","Triple","Hold"}
 local modeBtn=make("TextButton",c,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Key action: Single",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=nextOrder(c)+2}); corner(modeBtn,6)
 connect(modeBtn.Activated,function() mode=modes[(table.find(modes,mode)%#modes)+1]; modeBtn.Text="Key action: "..mode end)
@@ -439,12 +592,14 @@ connect(lockModeBtn.Activated,function()
  lockModeBtn.Text="Target mode: "..lockTargetMode
 end)
 local function lockSlider(name,min,max,initial,suffix,get,set)
- local r=make("Frame",lc,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=nextOrder(lc)+2})
+ local r=make("Frame",__JJSBoot.settings(lc,name=="Pull Strength" and "Pull To Target" or "Auto Lock On"),{Size=UDim2.new(1,0,0,UIS.TouchEnabled and 76 or 44),BackgroundTransparency=1,LayoutOrder=nextOrder(lc)+2})
+ r:SetAttribute("Tooltip",tooltipDescriptions[name] or ("Adjust "..name.." using the slider."))
+ attachTooltip(r)
  make("TextLabel",r,{Size=UDim2.new(.7,0,0,14),BackgroundTransparency=1,Text=name,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
  local value=make("TextLabel",r,{Size=UDim2.new(.3,0,0,14),Position=UDim2.fromScale(.7,0),BackgroundTransparency=1,Text=tostring(get())..suffix,TextColor3=T.acc,Font=Enum.Font.GothamBold,TextSize=11,TextXAlignment=Enum.TextXAlignment.Right})
- local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
+ local bar=make("TextButton",r,{Size=UDim2.new(1,0,0,UIS.TouchEnabled and 44 or 14),Position=UDim2.fromOffset(0,22),BackgroundColor3=Color3.fromRGB(40,40,52),BorderSizePixel=0,Text=""}); corner(bar,4)
  local fill=make("Frame",bar,{Size=UDim2.new((get()-min)/(max-min),0,1,0),BackgroundColor3=T.acc,BorderSizePixel=0}); corner(fill,4)
- local sliding=false
+ local sliding=false;local activePointer=nil
  local function update(x)
   local a=math.clamp((x-bar.AbsolutePosition.X)/math.max(bar.AbsoluteSize.X,1),0,1)
   local v=math.floor(min+(max-min)*a+.5)
@@ -453,13 +608,15 @@ local function lockSlider(name,min,max,initial,suffix,get,set)
   value.Text=tostring(v)..suffix
  end
  connect(bar.InputBegan,function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true; update(i.Position.X) end
+  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=true;activePointer=i;if r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=false end;update(i.Position.X) end
  end)
  connect(UIS.InputChanged,function(i)
-  if sliding and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then update(i.Position.X) end
+  if sliding and (i==activePointer or activePointer and activePointer.UserInputType==Enum.UserInputType.MouseButton1 and i.UserInputType==Enum.UserInputType.MouseMovement) then update(i.Position.X) end
  end)
+ connect(UIS.WindowFocusReleased,function() sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end)
+ connect(main:GetPropertyChangedSignal("Visible"),function() sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end)
  connect(UIS.InputEnded,function(i)
-  if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then sliding=false end
+  if i==activePointer then sliding=false;activePointer=nil;if r.Parent and r.Parent:IsA("ScrollingFrame") then r.Parent.ScrollingEnabled=true end end
  end)
 end
 lockSlider("Lock Distance",10,500,lockDistance," studs",function() return lockDistance end,function(v) lockDistance=v end)
@@ -470,8 +627,11 @@ local todoStatus=make("TextLabel",tc,{Size=UDim2.new(1,0,0,28),BackgroundTranspa
 toggle(tc,"Perfect Clap",function() return perfectClapEnabled end,function(v) perfectClapEnabled=v;clapState.generation+=1;clapState.pending=false end)
 moduleSlider(tc,"Clap delay",50,1000,perfectClapDelay," ms",function() return perfectClapDelay end,function(v) perfectClapDelay=v end)
 local sc=card(pages.Settings,"Session","")
-local status=make("TextLabel",sc,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
-local unload=make("TextButton",sc,{Size=UDim2.new(1,0,0,30),BackgroundColor3=Color3.fromRGB(130,45,65),Text="Unload",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4}); corner(unload,8)
+__JJSBoot.bind(sc,"Tooltips",function() return tooltipLayer.Enabled end,function(v) tooltipLayer.Enabled=v;if not v then hideTooltip() end end)
+local status=make("TextLabel",sc,{Size=UDim2.new(1,0,0,36),BackgroundTransparency=1,Text="Hub running. Unload stops all macros, ESP, HUD overlays, and destroys this UI.",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
+local unload=make("TextButton",sc,{Size=UDim2.new(1,0,0,44),BackgroundColor3=Color3.fromRGB(130,45,65),Text="Unload Hub",TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=14,LayoutOrder=4}); corner(unload,8)
+unload:SetAttribute("Tooltip","Fully stops JJS HUB: macros, ESP, dash HUD, connections, and GUI.")
+make("TextLabel",sc,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="Also available as Unload on the top bar.",TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=10,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=5})
 local okVIM,VIM=pcall(function() return game:GetService("VirtualInputManager") end)
 local function todoWait(seconds)
  local finish=os.clock()+seconds
@@ -649,313 +809,14 @@ connect(LP.CharacterRemoving,function() clapState.generation+=1;clapState.pendin
 connect(UIS.WindowFocusReleased,function() clapState.generation+=1;clapState.pending=false end)
 
 local function runTripleJump()
- if tripleJumpBusy or busy or todoBusy or manualSequenceBusy or UIS:GetFocusedTextBox() or not scriptsActive() or not tripleJumpEnabled then return end
- if not okVIM or not VIM then return end
- tripleJumpBusy=true; busy=true
- local ok,err=pcall(function()
-  for i=1,3 do
-   if not scriptsActive() or not tripleJumpEnabled then break end
-
-   VIM:SendMouseButtonEvent(0,0,0,true,game,0)
-   task.wait(.035)
-   VIM:SendMouseButtonEvent(0,0,0,false,game,0)
-
-   task.wait(.100)
-   local char=LP.Character
-   local hum=char and char:FindFirstChildOfClass("Humanoid")
-   if hum and hum.Health>0 then
-    hum.Jump=true
-    pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game) end)
-    task.wait(.035)
-    pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end)
-   end
-
-   task.wait(.050)
-   VIM:SendMouseButtonEvent(0,0,0,true,game,0)
-   task.wait(.035)
-   VIM:SendMouseButtonEvent(0,0,0,false,game,0)
-   if i<3 then task.wait(.05) end
-  end
- end)
- pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end)
- pcall(function() local c=UIS:GetMouseLocation();VIM:SendMouseButtonEvent(c.X,c.Y,0,false,game,0) end)
- tripleJumpBusy=false; busy=false
- if running and status and status.Parent then
-  status.Text=ok and "Triple jump sequence sent" or tostring(err)
- end
+ if tripleJumpBusy or busy or todoBusy or manualSequenceBusy or UIS:GetFocusedTextBox() or not scriptsActive() or not tripleJumpEnabled or not okVIM then return end
+ tripleJumpBusy=true;busy=true;local character=LP.Character
+ local function waitFor(t) local deadline=os.clock()+t;repeat if not scriptsActive() or not tripleJumpEnabled or LP.Character~=character or UIS:GetFocusedTextBox() then error("Cancelled") end;RS.Heartbeat:Wait() until os.clock()>=deadline end
+ local function mouse(v) local p=UIS:GetMouseLocation();local inset=game:GetService("GuiService"):GetGuiInset();VIM:SendMouseButtonEvent(p.X-inset.X,p.Y-inset.Y,0,v,game,0) end
+ local ok,err=pcall(function() waitFor(.300);local h=character and character:FindFirstChildOfClass("Humanoid");assert(h and h.Health>0,"No living character");h.Jump=true;VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game);waitFor(.050);VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game);mouse(true);waitFor(.035);mouse(false) end)
+ pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game) end);pcall(function() mouse(false) end)
+ tripleJumpBusy=false;busy=false;if status and status.Parent then status.Text=ok and "3 LMB -> 300ms -> jump -> LMB" or tostring(err) end
 end
-
-;__JJSBoot:run("Standard True Stun Lock",function()
-
- local active=false
- local token=0
- local heldKey=nil
- local mouseHeld=false
- local panel=card(pages.Combat,"Standard True Stun Lock","")
- local label=make("TextLabel",panel,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
- local button=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel True Stun Lock (K)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=4}); corner(button,6)
-
- local timing={
-  punchGap=.60,
-  clickHold=.035,
-  startup=.08,
-  qHold=.18,
-  afterQ=.25,
-  afterThreeM1=.07,
-  afterCursed=2.0,
-  afterSecondM1=.30,
-  blackFlashGap=.325,
-  afterBlackFlash=.40,
-  jumpLead=.12,
-  afterJumpBeforeTwo=.05,
- }
- local function releaseCombo()
-  if okVIM and VIM then
-   if heldKey then pcall(function() VIM:SendKeyEvent(false,heldKey,false,game) end) end
-   if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
-  end
-  heldKey=nil; mouseHeld=false
- end
- local function cancel()
-  token+=1; active=false; manualSequenceBusy=false; releaseCombo()
-  if label.Parent then label.Text="Ready" end
- end
- local function toggleCombo()
-  if active then cancel(); return end
-  if busy or manualSequenceBusy then label.Text="Wait for the other macro to finish"; return end
-  if not okVIM or not VIM then label.Text="Input simulation unavailable"; return end
-  active=true; manualSequenceBusy=true; token+=1
-  local id=token
-  task.spawn(function()
-   local function check()
-    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if not running or token~=id or not h or h.Health<=0 then error("Combo cancelled",0) end
-   end
-   local function waitFor(seconds)
-    local finish=os.clock()+seconds
-    repeat check(); task.wait() until os.clock()>=finish
-    check()
-   end
-   local function click()
-    check(); mouseHeld=true
-    local cursor=UIS:GetMouseLocation()
-    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0)
-    waitFor(timing.clickHold or .05)
-    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0); mouseHeld=false
-   end
-   local function key(code,hold)
-    check()
-    hold=hold or .08
-    heldKey=code
-    VIM:SendKeyEvent(true,code,false,game)
-    waitFor(hold)
-    VIM:SendKeyEvent(false,code,false,game)
-    heldKey=nil
-   end
-   local function threeM1(afterWait)
-    for i=1,3 do
-     click()
-     if i<3 then waitFor(timing.punchGap) end
-    end
-    if afterWait and afterWait>0 then waitFor(afterWait) end
-   end
-   local ok,err=pcall(function()
-    label.Text="True Stun Lock: Approach / Dash Q"
-    heldKey=Enum.KeyCode.Q
-    VIM:SendKeyEvent(true,Enum.KeyCode.Q,false,game)
-    waitFor(timing.qHold)
-    VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game)
-    heldKey=nil
-    waitFor(timing.afterQ)
-    label.Text="True Stun Lock: 3 M1 (no 4th)"
-    waitFor(timing.startup)
-    threeM1(nil)
-
-    if mouseHeld then
-     local c=UIS:GetMouseLocation()
-     VIM:SendMouseButtonEvent(c.X,c.Y,0,false,game,0)
-     mouseHeld=false
-    end
-    waitFor(timing.afterThreeM1)
-    label.Text="True Stun Lock: Ability 1 Cursed Strikes"
-    key(Enum.KeyCode.One,.12)
-    waitFor(timing.afterCursed)
-    label.Text="True Stun Lock: 3 M1 follow-up"
-    threeM1(timing.afterSecondM1)
-    label.Text="True Stun Lock: Ability 3 Divergent Fist / Black Flash"
-    local first=os.clock()
-    key(Enum.KeyCode.Three)
-    local remain=timing.blackFlashGap-(os.clock()-first)
-    if remain>0 then waitFor(remain) end
-    key(Enum.KeyCode.Three)
-    waitFor(timing.afterBlackFlash)
-    label.Text="True Stun Lock: Jump + Ability 2 Crushing Blow"
-    heldKey=Enum.KeyCode.Space
-    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
-    local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Jump=true end
-    waitFor(timing.jumpLead)
-    key(Enum.KeyCode.Two)
-    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
-    heldKey=nil
-   end)
-   if token==id then
-    releaseCombo(); active=false; manualSequenceBusy=false
-    if label.Parent then label.Text=ok and "True Stun Lock inputs sent" or tostring(err) end
-   end
-  end)
- end
- connect(button.Activated,toggleCombo)
- connect(UIS.InputBegan,function(input,processed)
-  if processed or UIS:GetFocusedTextBox() then return end
-  if input.KeyCode==Enum.KeyCode.K then toggleCombo() end
- end)
- connect(LP.CharacterRemoving,cancel)
- connect(gui.Destroying,cancel)
- connect(unload.Activated,cancel)
-
-end)
-
-;__JJSBoot:run("Hyper King 90% DMG",function()
-
- local active=false
- local token=0
- local heldKey=nil
- local mouseHeld=false
- local side=Enum.KeyCode.D
- local panel=card(pages.Combat,"Hyper King 90% DMG","")
- local label=make("TextLabel",panel,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
- local sideBtn=make("TextButton",panel,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Side dash: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4}); corner(sideBtn,6)
- connect(sideBtn.Activated,function()
-  side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D
-  sideBtn.Text=side==Enum.KeyCode.D and "Side dash: D (right)" or "Side dash: A (left)"
- end)
- local button=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Hyper King (H)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5}); corner(button,6)
-
- local timing={
-  punchGap=.60,
-  clickHold=.035,
-  startup=.08,
-  afterThree=.30,
-  downslamLead=.12,
-  afterDownslam=.40,
-  afterTwo=.40,
-  afterOne=1.80,
-  afterSecondDownslam=.40,
-  dashHold=.10,
-  afterDash=.25,
-  blackFlashGap=.325,
- }
- local function releaseCombo()
-  if okVIM and VIM then
-   if heldKey then pcall(function() VIM:SendKeyEvent(false,heldKey,false,game) end) end
-   if mouseHeld then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
-  end
-  heldKey=nil; mouseHeld=false
- end
- local function cancel()
-  token+=1; active=false; manualSequenceBusy=false; releaseCombo()
-  if label.Parent then label.Text="Ready" end
- end
- local function toggleCombo()
-  if active then cancel(); return end
-  if busy or manualSequenceBusy then label.Text="Wait for the other macro to finish"; return end
-  if not okVIM or not VIM then label.Text="Input simulation unavailable"; return end
-  active=true; manualSequenceBusy=true; token+=1
-  local id=token
-  local chosenSide=side
-  task.spawn(function()
-   local function check()
-    local h=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if not running or token~=id or not h or h.Health<=0 then error("Hyper King cancelled",0) end
-   end
-   local function waitFor(seconds)
-    local finish=os.clock()+seconds
-    repeat check(); task.wait() until os.clock()>=finish
-    check()
-   end
-   local function click()
-    check(); mouseHeld=true
-    local cursor=UIS:GetMouseLocation()
-    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0)
-    waitFor(timing.clickHold or .05)
-    VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0); mouseHeld=false
-   end
-   local function key(code)
-    check(); heldKey=code; VIM:SendKeyEvent(true,code,false,game)
-    waitFor(.05)
-    VIM:SendKeyEvent(false,code,false,game); heldKey=nil
-   end
-   local function threeM1()
-    for i=1,3 do
-     click()
-     if i<3 then waitFor(timing.punchGap) end
-    end
-    waitFor(timing.afterThree)
-   end
-   local ok,err=pcall(function()
-    label.Text="Hyper King: 3 M1"
-    waitFor(timing.startup)
-    threeM1()
-    label.Text="Hyper King: Downslam"
-    heldKey=Enum.KeyCode.Space
-    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
-    local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Jump=true end
-    waitFor(timing.downslamLead)
-    click()
-    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
-    heldKey=nil
-    waitFor(timing.afterDownslam)
-    label.Text="Hyper King: Ability 2 Crushing Blow"
-    key(Enum.KeyCode.Two)
-    waitFor(timing.afterTwo)
-    label.Text="Hyper King: Ability 1 Cursed Strikes (M1 reset)"
-    key(Enum.KeyCode.One)
-    waitFor(timing.afterOne)
-    label.Text="Hyper King: Downslam"
-    heldKey=Enum.KeyCode.Space
-    VIM:SendKeyEvent(true,Enum.KeyCode.Space,false,game)
-    local hum2=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum2 then hum2.Jump=true end
-    waitFor(timing.downslamLead)
-    click()
-    VIM:SendKeyEvent(false,Enum.KeyCode.Space,false,game)
-    heldKey=nil
-    waitFor(timing.afterSecondDownslam)
-    label.Text="Hyper King: Side dash behind"
-    heldKey=chosenSide
-    VIM:SendKeyEvent(true,chosenSide,false,game)
-    VIM:SendKeyEvent(true,Enum.KeyCode.Q,false,game)
-    waitFor(.035)
-    VIM:SendKeyEvent(false,Enum.KeyCode.Q,false,game)
-    if timing.dashHold>.035 then waitFor(timing.dashHold-.035) end
-    VIM:SendKeyEvent(false,chosenSide,false,game)
-    heldKey=nil
-    waitFor(timing.afterDash)
-    label.Text="Hyper King: Behind Black Flash (3+3)"
-    local first=os.clock()
-    key(Enum.KeyCode.Three)
-    local remain=timing.blackFlashGap-(os.clock()-first)
-    if remain>0 then waitFor(remain) end
-    key(Enum.KeyCode.Three)
-   end)
-   if token==id then
-    releaseCombo(); active=false; manualSequenceBusy=false
-    if label.Parent then label.Text=ok and "Hyper King inputs sent" or tostring(err) end
-   end
-  end)
- end
- connect(button.Activated,toggleCombo)
- connect(UIS.InputBegan,function(input,processed)
-  if processed or UIS:GetFocusedTextBox() then return end
-  if input.KeyCode==Enum.KeyCode.H then toggleCombo() end
- end)
- connect(LP.CharacterRemoving,cancel)
- connect(gui.Destroying,cancel)
- connect(unload.Activated,cancel)
-
-end)
 
 ;__JJSBoot:run("Follow Behind - Automatic Path Jumps",function()
 
@@ -1165,41 +1026,7 @@ end)
 
 end)
 
-;__JJSBoot:run("Style Combo",function()
 
- local active=false;local generation=0;local held={};local mouseDown=false;local side=Enum.KeyCode.D
- local timings={punchGap=.60,downslamLead=.12,afterDownslam=.30,afterStrikes=2.0,afterSecondM1s=.30,dashHold=.10,afterDash=.10,blackFlashDelay=.325,afterBlackFlash=.45,aerialLead=.12}
- local box=card(pages.Combat,"Style Combo","")
- local feedback=make("TextLabel",box,{Size=UDim2.new(1,0,0,42),BackgroundTransparency=1,Text="Ready",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
- local sideButton=make("TextButton",box,{Size=UDim2.new(1,0,0,28),BackgroundColor3=T.p2,Text="Style dash side: D (right)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=11,LayoutOrder=4});corner(sideButton,6);connect(sideButton.Activated,function() side=side==Enum.KeyCode.D and Enum.KeyCode.A or Enum.KeyCode.D;sideButton.Text=side==Enum.KeyCode.D and "Style dash side: D (right)" or "Style dash side: A (left)" end)
- local play=make("TextButton",box,{Size=UDim2.new(1,0,0,30),BackgroundColor3=T.p2,Text="Play / Cancel Style Combo (B)",TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=5});corner(play,6)
- for _,spec in ipairs({{"M1 spacing",50,800,"punchGap"},{"Downslam lead",50,400,"downslamLead"},{"After downslam",0,800,"afterDownslam"},{"After Cursed Strikes",500,3500,"afterStrikes"},{"After second 3 M1s",0,2000,"afterSecondM1s"},{"Side dash hold",35,300,"dashHold"},{"After side dash",0,500,"afterDash"},{"Black Flash second tap",150,700,"blackFlashDelay"},{"After Black Flash",100,1200,"afterBlackFlash"},{"Aerial jump lead",35,400,"aerialLead"}}) do local key=spec[4];moduleSlider(box,spec[1],spec[2],spec[3],math.floor(timings[key]*1000+.5)," ms",function() return timings[key]*1000 end,function(v) timings[key]=v/1000 end) end
- local function releaseInputs() if okVIM and VIM then for key in pairs(held) do pcall(function() VIM:SendKeyEvent(false,key,false,game) end) end;if mouseDown then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end end;held={};mouseDown=false end
- local function finish() releaseInputs();if active then busy=false;manualSequenceBusy=false end;active=false end;local function cancel() generation+=1;finish();if feedback.Parent then feedback.Text="Style Combo cancelled / ready" end end
- local function start()
-  if active then cancel();return end;if not running then return end;if busy or todoBusy or manualSequenceBusy then feedback.Text="Wait for the other macro to finish";return end;if not okVIM or not VIM then feedback.Text="Input simulation unavailable";return end
-  local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");if not h or h.Health<=0 then feedback.Text="Character unavailable";return end
-  active=true;busy=true;manualSequenceBusy=true;generation+=1;local id=generation;local chosenSide=side;local t=table.clone(timings)
-  task.spawn(function()
-   local function check() local char=LP.Character;local hum=char and char:FindFirstChildOfClass("Humanoid");if not running or generation~=id or not active or not hum or hum.Health<=0 then error("Style Combo cancelled",0) end end
-   local function waitFor(seconds) local untilTime=os.clock()+seconds;repeat check();task.wait() until os.clock()>=untilTime;check() end;local function key(code,down) check();if down then held[code]=true end;VIM:SendKeyEvent(down,code,false,game);if not down then held[code]=nil end end
-   local function tap(code) key(code,true);waitFor(.035);key(code,false) end;local function punch() check();mouseDown=true;local cursor=UIS:GetMouseLocation();VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,true,game,0);waitFor(.035);VIM:SendMouseButtonEvent(cursor.X,cursor.Y,0,false,game,0);mouseDown=false end
-   local function threeM1s() for i=1,3 do punch();if i<3 then waitFor(t.punchGap) end end end
-   local ok,err=pcall(function()
-    feedback.Text="Running Style Combo: first 3 M1s";waitFor(.15);threeM1s();waitFor(t.punchGap)
-    feedback.Text="Style Combo: Downslam";key(Enum.KeyCode.Space,true);local hum=LP.Character and LP.Character:FindFirstChildOfClass("Humanoid");if hum then hum.Jump=true end;waitFor(t.downslamLead);punch();key(Enum.KeyCode.Space,false);waitFor(t.afterDownslam)
-    feedback.Text="Style Combo: Cursed Strikes";tap(Enum.KeyCode.One);waitFor(t.afterStrikes)
-    feedback.Text="Style Combo: second 3 M1s";threeM1s();waitFor(t.afterSecondM1s)
-    feedback.Text="Style Combo: Side Dash";key(chosenSide,true);key(Enum.KeyCode.Q,true);waitFor(.035);key(Enum.KeyCode.Q,false);if t.dashHold>.035 then waitFor(t.dashHold-.035) end;key(chosenSide,false);waitFor(t.afterDash)
-    feedback.Text="Style Combo: Black Flash attempt";local firstTap=os.clock();tap(Enum.KeyCode.Three);local remaining=t.blackFlashDelay-(os.clock()-firstTap);if remaining>0 then waitFor(remaining) end;tap(Enum.KeyCode.Three);waitFor(t.afterBlackFlash)
-    feedback.Text="Style Combo: Aerial Crushing Blow";key(Enum.KeyCode.Space,true);waitFor(t.aerialLead);tap(Enum.KeyCode.Two);key(Enum.KeyCode.Space,false)
-   end)
-   if generation==id then finish();if feedback.Parent then feedback.Text=ok and "Style Combo inputs sent" or tostring(err) end end
-  end)
- end
- connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.B then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
-
-end)
 
 ;__JJSBoot:run("Cursed Partners Blackflash",function()
 
@@ -1218,6 +1045,7 @@ end)
    if generation==id then finish();if feedback.Parent then feedback.Text=ok and "Cursed Partners inputs sent" or tostring(err) end end
   end)
  end
+ __JJSBoot.bind(box,"Cursed Partners Blackflash",function() return active end,function(v) if v then main.Visible=false;if not active then start() end else cancel() end end);table.insert(__JJSBoot.cancels,cancel)
  connect(play.Activated,start);connect(UIS.InputBegan,function(input,processed) if processed or UIS:GetFocusedTextBox() then return end;if input.KeyCode==Enum.KeyCode.N then start() end end);connect(LP.CharacterRemoving,cancel);connect(gui.Destroying,cancel);connect(unload.Activated,cancel)
 
 end)
@@ -1694,6 +1522,7 @@ end)
    if generation==id then stop(ok and "Chain stopped" or tostring(err));bindCapture() end
   end)
  end
+ table.insert(__JJSBoot.cancels,function() stop("Stopped by touch control");bindCapture() end)
  blackflashV2Trigger=function() if not(enabledV2 or enabledV3) or not scriptsActive() then return false end;if not active and not typing() and os.clock()>=suppressStartUntil then start() end;return true end
  toggle(box,"Blackflash Chain V2",function() return enabledV2 end,function(v) enabledV2=v;if not v and active and runVersion==2 then stop("V2 off") end;feedback.Text=v and "V2 ready - press 3 (V3 has priority if also enabled)" or "V2 off";bindCapture() end)
  toggle(boxV3,"Blackflash Chain V3",function() return enabledV3 end,function(v) enabledV3=v;if not v and active and runVersion==3 then stop("V3 off") end;feedbackV3.Text=v and "V3 ready - press 3; loops until current target dies" or "V3 off";bindCapture() end)
@@ -1833,204 +1662,45 @@ end)
 end)
 
 
-;__JJSBoot:run("Fling Kill All",function()
 
- local active=false
- local closed=false
- local generation=0
- local snapshot=nil
- local mouseDown=false
- local skipTeam=true
- local range=300
- local hitDelayMs=300
- local contactMs=450
- local ownedBusy=false
- local panel=card(pages.Combat,"Fling Kill All","")
- local feedback=make("TextLabel",panel,{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,Text="Ready - experimental; hits and kills unverified",TextColor3=T.dim,TextWrapped=true,TextSize=11,Font=Enum.Font.Gotham,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=3})
- ord[panel]=3
- toggle(panel,"Skip teammates",function() return skipTeam end,function(v) if not active then skipTeam=v end end)
- moduleSlider(panel,"Maximum range",25,1000,range," studs",function() return range end,function(v) if not active then range=v end end)
- moduleSlider(panel,"After M1 delay",100,1000,hitDelayMs," ms",function() return hitDelayMs end,function(v) if not active then hitDelayMs=v end end)
- moduleSlider(panel,"Fling duration",100,700,contactMs," ms",function() return contactMs end,function(v) if not active then contactMs=v end end)
- local function makeButton(text,color)
-  local b=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),BackgroundColor3=color or T.p2,Text=text,TextColor3=T.txt,Font=Enum.Font.GothamBold,TextSize=12,LayoutOrder=nextOrder(panel)+2})
-  corner(b,6)
-  return b
- end
- local testButton=makeButton("Test nearest: teleport > M1 > fling")
- local allButton=makeButton("Fling Kill All - one pass")
- local stopButton=makeButton("Stop (End)",T.warn)
- local function report(text)
-  if feedback.Parent and not closed then feedback.Text=text end
- end
- local function living(player)
-  local c=player.Character
+
+;__JJSBoot:run("Fling Spin",function()
+ -- Local only: spin your own character. No teleport, no target loop.
+ local alive=true
+ local spinning=false
+ local power=300
+ local panel=card(pages.Combat,"Fling (Spin Self)","")
+ toggle(panel,"Spin Fling",function() return spinning end,function(v)
+  spinning=v
+  if not v then
+   local c=LP.Character
+   local r=c and c:FindFirstChild("HumanoidRootPart")
+   if r then pcall(function() r.AssemblyAngularVelocity=Vector3.zero end) end
+  end
+ end)
+ moduleSlider(panel,"Spin power",50,800,power,"",function() return power end,function(v) power=v end)
+ make("TextLabel",panel,{
+  Size=UDim2.new(1,0,0,48),BackgroundTransparency=1,TextWrapped=true,
+  Text="Spins YOUR character only (high angular velocity). No teleport, no auto-target. Local physics; other players may not move.",
+  TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(panel)+2
+ })
+ connect(RS.Heartbeat,function()
+  if not alive or not spinning or not scriptsActive() then return end
+  if gui:GetAttribute("FlingSequenceActive") then return end
+  local c=LP.Character
   local h=c and c:FindFirstChildOfClass("Humanoid")
   local r=c and c:FindFirstChild("HumanoidRootPart")
-  if h and r and h.Health>0 then return c,h,r end
- end
- local function teammate(p)
-  return not LP.Neutral and not p.Neutral and LP.Team~=nil and LP.Team==p.Team
- end
- local function releaseMouse()
-  if mouseDown and okVIM and VIM then pcall(function() VIM:SendMouseButtonEvent(0,0,0,false,game,0) end) end
-  mouseDown=false
- end
- local function restoreCharacter()
-  releaseMouse()
-  local state=snapshot
-  snapshot=nil
-  if not state then return end
-  for part,value in pairs(state.collisions) do if part.Parent then pcall(function() part.CanCollide=value end) end end
-  if state.humanoid.Parent then pcall(function() state.humanoid.AutoRotate=state.autoRotate end) end
-  if state.root.Parent and LP.Character==state.character then
-   pcall(function()
-    state.root.AssemblyLinearVelocity=Vector3.zero
-    state.root.AssemblyAngularVelocity=Vector3.zero
-    state.root.CFrame=state.origin
-   end)
-  end
- end
- local function releaseOwnership()
-  if ownedBusy then
-   ownedBusy=false
-   busy=false
-   manualSequenceBusy=false
-   if gui.Parent then gui:SetAttribute("FlingSequenceActive",false) end
-  end
- end
- local function stop(message)
-  generation+=1
-  restoreCharacter()
-  active=false
-  releaseOwnership()
-  report(message or "Stopped")
- end
- local function alive(id,player,state,target,targetHumanoid,targetRoot)
-  return running and gui.Parent~=nil and not closed and active and generation==id and LP.Character==state.character and state.root.Parent~=nil and state.humanoid.Health>0 and player.Parent==Players and player.Character==target and targetRoot.Parent~=nil and targetHumanoid.Health>0
- end
- local function waitFor(seconds,id,player,state,target,targetHumanoid,targetRoot)
-  local finish=os.clock()+seconds
-  repeat
-   if not alive(id,player,state,target,targetHumanoid,targetRoot) then return false end
-   RS.Heartbeat:Wait()
-  until os.clock()>=finish
-  return alive(id,player,state,target,targetHumanoid,targetRoot)
- end
- local function attempt(player,id)
-  local character,humanoid,root=living(LP)
-  local target,targetHumanoid,targetRoot=living(player)
-  if not root or not targetRoot or player==LP or(skipTeam and teammate(player)) then return false,false,0,"Skipped" end
-  if(targetRoot.Position-root.Position).Magnitude>range then return false,false,0,"Out of range" end
-  local state={character=character,humanoid=humanoid,root=root,origin=root.CFrame,autoRotate=humanoid.AutoRotate,collisions={}}
-  snapshot=state
-  local sent,completed,displacement=false,false,0
-  local reason="Cancelled"
-  local ok,err=pcall(function()
-   humanoid.AutoRotate=false
-   report("Teleport behind: "..player.DisplayName)
-   local position=targetRoot.Position-targetRoot.CFrame.LookVector*2.6
-   root.CFrame=CFrame.lookAt(position,Vector3.new(targetRoot.Position.X,position.Y,targetRoot.Position.Z))
-   root.AssemblyLinearVelocity=Vector3.zero
-   root.AssemblyAngularVelocity=Vector3.zero
-   if not waitFor(.08,id,player,state,target,targetHumanoid,targetRoot) then return end
-   if(root.Position-targetRoot.Position).Magnitude>7 then reason="Target moved before M1";return end
-   if UIS:GetFocusedTextBox() then reason="Typing - cancelled";return end
-   report("M1 input: "..player.DisplayName)
-   mouseDown=true
-   local inputOK,inputError=pcall(function() VIM:SendMouseButtonEvent(0,0,0,true,game,0) end)
-   if not inputOK then releaseMouse();reason="M1 input unavailable";return end
-   local valid=waitFor(.035,id,player,state,target,targetHumanoid,targetRoot)
-   releaseMouse()
-   if not valid then return end
-   sent=true
-   if not waitFor(hitDelayMs/1000,id,player,state,target,targetHumanoid,targetRoot) then reason="Target unavailable after M1";return end
-   if(root.Position-targetRoot.Position).Magnitude>18 then reason="Target moved before fling";return end
-   for _,part in ipairs(character:GetDescendants()) do if part:IsA("BasePart") then state.collisions[part]=part.CanCollide;part.CanCollide=true end end
-   local targetOrigin=targetRoot.Position
-   local began=os.clock()
-   report("Fling attempt: "..player.DisplayName)
-   while os.clock()-began<contactMs/1000 do
-    if not alive(id,player,state,target,targetHumanoid,targetRoot) then break end
-    if UIS:GetFocusedTextBox() then reason="Typing - cancelled";break end
-    local delta=targetRoot.Position-root.Position
-    if delta.Magnitude>18 then break end
-    local direction=Vector3.new(delta.X,0,delta.Z)
-    if direction.Magnitude<.05 then direction=Vector3.new(targetRoot.CFrame.LookVector.X,0,targetRoot.CFrame.LookVector.Z) end
-    if direction.Magnitude<.05 then direction=Vector3.new(0,0,-1) end
-    root.AssemblyAngularVelocity=Vector3.new(0,55,0)
-    root.AssemblyLinearVelocity=direction.Unit*120+Vector3.new(0,8,0)
-    RS.Heartbeat:Wait()
-   end
-   displacement=targetRoot.Parent and(targetRoot.Position-targetOrigin).Magnitude or 0
-   completed=true
-   reason="Attempt completed"
-  end)
-  if snapshot==state then restoreCharacter() end
-  if not ok then return false,sent,0,tostring(err) end
-  return completed,sent,displacement,reason
- end
- local function start(nearestOnly)
-  if active or closed or not running or not gui.Parent then return end
-  if busy or todoBusy or manualSequenceBusy or tripleJumpBusy then report("Wait for the other macro to finish");return end
-  if UIS:GetFocusedTextBox() then report("Finish typing first");return end
-  if not okVIM or not VIM then report("Input simulation unavailable");return end
-  local _,_,root=living(LP)
-  if not root then report("Character unavailable");return end
-  local queue={}
-  for _,p in ipairs(Players:GetPlayers()) do
-   local _,_,other=living(p)
-   if p~=LP and other and(not skipTeam or not teammate(p)) then
-    local d=(other.Position-root.Position).Magnitude
-    if d<=range then table.insert(queue,{player=p,distance=d}) end
-   end
-  end
-  table.sort(queue,function(a,b) return a.distance<b.distance end)
-  if #queue==0 then report("No eligible targets in range");return end
-  if nearestOnly then queue={queue[1]} end
-  active=true;ownedBusy=true;busy=true;manualSequenceBusy=true
-  gui:SetAttribute("FlingSequenceActive",true)
-  generation+=1
-  local id=generation
-  task.spawn(function()
-   local completed,inputs,moved=0,0,0
-   local ok,err=xpcall(function()
-    RS.Heartbeat:Wait();RS.Heartbeat:Wait()
-    for _,item in ipairs(queue) do
-     if not running or closed or generation~=id or not active then break end
-     if not living(LP) then stop("Character unavailable - stopped");return end
-     if UIS:GetFocusedTextBox() then stop("Typing - stopped");return end
-     local done,sent,distance,reason=attempt(item.player,id)
-     if sent then inputs+=1 end
-     if done then completed+=1;if distance>=8 then moved+=1 end end
-     if generation~=id then break end
-     if not done then report(reason) end
-     local deadline=os.clock()+.2
-     while os.clock()<deadline and generation==id and active and running and not closed do RS.Heartbeat:Wait() end
-    end
-   end,function(e) return tostring(e) end)
-   if generation==id then
-    restoreCharacter();active=false;releaseOwnership()
-    report(ok and string.format("%d M1 inputs | %d fling attempts | %d moved >=8 studs\nHits, kills and credit unverified",inputs,completed,moved) or "Stopped: "..tostring(err))
-   end
-  end)
- end
- connect(testButton.Activated,function() start(true) end)
- connect(allButton.Activated,function() start(false) end)
- connect(stopButton.Activated,function() if active then stop("Stopped") end end)
- connect(UIS.InputBegan,function(input)
-  if input.KeyCode==Enum.KeyCode.End and active then stop("Stopped") end
+  if not h or not r or h.Health<=0 then return end
+  r.AssemblyAngularVelocity=Vector3.new(power,power,power)
  end)
- connect(LP.CharacterRemoving,function() if active then stop("Character removed - stopped") end end)
- connect(UIS.WindowFocusReleased,function() if active then stop("Focus lost - stopped") end end)
- local function shutdown()
-  if closed then return end
-  stop("Stopped")
-  closed=true
+ local function cleanup()
+  if not alive then return end
+  alive=false;spinning=false
+  local c=LP.Character
+  local r=c and c:FindFirstChild("HumanoidRootPart")
+  if r then pcall(function() r.AssemblyAngularVelocity=Vector3.zero end) end
  end
- connect(unload.Activated,shutdown)
- connect(gui.Destroying,shutdown)
-
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
 end)
 
 
@@ -2226,9 +1896,571 @@ end)
 
 ;__JJSBoot:run("Loading Settings and Device Details",function()
  -- JJS25: Loading Settings and Device Details
- local box=card(pages.Settings,"v2.6 Device and Loading","")
+ local box=card(pages.Settings,"v2.20 Device and Loading","")
  make("TextLabel",box,{Size=UDim2.new(1,0,0,125),BackgroundTransparency=1,Text="Detected: "..__JJSBoot.device.."\nBlue monitor: PC. Yellow phone: touch-first/mobile. Hybrid touch + keyboard is classed PC. This is input-capability detection, not exact hardware identification.\nModules initialize sequentially with short yields. New optional features start OFF. Original key gate remains. Optional additions are included; further modules remain pending review.",TextWrapped=true,TextColor3=T.mut,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=3})
 
+end)
+
+
+;__JJSBoot:run("Auto Parry - state-aware animation guard",function()
+ local S={alive=true,on=false,focused=true,range=12,hold=.35,maxAge=.28,gap=.08,last=-math.huge,backend=nil,owner=nil,gen=0,poll=0,scan=nil,links={},hooks={},models={},jobs={},ids={},manual={},meta={},metaCount=0,logs={},logKeys={},dirty=true,logClock=0}
+ -- Defaults tuned from community JJS notes: M1 startup ~0.16-0.23s, active ~16ms, frontal ~180deg block.
+ -- UI toggles for face / ambiguous / move-pause / own-anim-pause removed; fixed behavior below.
+ local autoFace,allowHit,pauseMoving,pauseAction=false,true,false,false
+ local lookAhead=40;local blockAttributes={};local filter,sort="Matches","Category"
+ local rank={M1=1,Punch=2,Verified=3,Attack=4,Hit=5,Swing=6,Unknown=7,Excluded=8}
+ local assets=game:GetService("ReplicatedStorage");local box=card(pages.Combat,"Auto Parry","")
+ local function listen(signal,fn) local c=connect(signal,fn);table.insert(S.links,c);return c end
+ local function label(text,h) return make("TextLabel",box,{Size=UDim2.new(1,0,0,h or 50),BackgroundTransparency=1,Text=text,TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,LayoutOrder=nextOrder(box)+2}) end
+ label("Auto Parry: holds F on early player/NPC attack animations (JJS). Face the attacker for the ~180deg guard. F is a block attempt — not a confirmed perfect parry. No auto-face, no guessed remotes/projectiles/counters.",72)
+ local status=label("OFF",44)
+ local function say(text) if S.alive and status.Parent then status.Text=text end end
+ local function norm(text) return tostring(text or ""):lower():gsub("[^%w]","") end
+ -- Reaction / locomotion / pure defensive anims only. M1 finishers (uppercut/downslam) are attacks and must NOT be excluded.
+ local excluded={"hitreaction","hitreact","hitstun","gethit","takinghit","receivedhit","hurt","flinch","stagger","stun","ragdoll","knockback","knockdown","block","parry","counter","emote","dance","idle","walking","running","walk","run","jump","fall","land","climb","swim","sit","seated","death","die"}
+ local function classify(animation,trackName,useMeta)
+  if not animation then return "Unknown",nil end
+  local id=animation.AnimationId:match("%d+");local names={animation.Name,trackName or ""};local parent=animation.Parent;local depth=0
+  while parent and depth<5 and not parent:IsA("Model") and not parent:IsA("Humanoid") and not parent:IsA("Animator") do table.insert(names,parent.Name);parent=parent.Parent;depth+=1 end
+  local normalized={}
+  for _,text in ipairs(names) do local n=norm(text);table.insert(normalized,n);for _,bad in ipairs(excluded) do if n:find(bad,1,true) then return "Excluded",id end end end
+  if id and S.manual[id] then return "Verified",id end
+  -- JJS shared M1 string + common finisher names (neutral / uppercut / downslam)
+  for _,n in ipairs(normalized) do
+   if n:find("m1",1,true) or n:find("downslam",1,true) or n:find("downsmash",1,true) or n:find("uppercut",1,true) or n:find("uptilt",1,true) or n:find("finisher",1,true) then return "M1",id end
+  end
+  for _,n in ipairs(normalized) do if n:find("punch",1,true) or n:find("jab",1,true) or n:find("melee",1,true) then return "Punch",id end end
+  for _,n in ipairs(normalized) do
+   if n:find("slash",1,true) or n:find("strike",1,true) or n:find("kick",1,true) or n:find("attack",1,true) or n:find("combo",1,true) then return "Attack",id end
+  end
+  for _,n in ipairs(normalized) do if n:find("hit",1,true) then return "Hit",id end end
+  for _,n in ipairs(normalized) do if n:find("swing",1,true) then return "Swing",id end end
+  if useMeta and id and S.meta[id] then return S.meta[id],id end
+  return "Unknown",id
+ end
+ local function accepted(category)
+  return category=="M1" or category=="Punch" or category=="Verified" or category=="Attack" or (allowHit and (category=="Hit" or category=="Swing"))
+ end
+ local function discover(animation)
+  if not animation:IsA("Animation") then return end
+  local category,id=classify(animation,nil,false);if not id or category=="Unknown" then return end
+  local previous=S.meta[id]
+  if previous then
+   if category=="Excluded" or previous~="Excluded" and rank[category]<rank[previous] then S.meta[id]=category end
+  elseif S.metaCount<2048 then S.meta[id]=category;S.metaCount+=1 end
+ end
+ local function log(character,track)
+  local category,id=classify(track.Animation,track.Name,true);if not id then return category end
+  local player=Players:GetPlayerFromCharacter(character);local source=player and ("Player: "..player.Name) or ("NPC: "..character.Name)
+  local key=(player and tostring(player.UserId) or character:GetFullName())..":"..id..":"..category
+  local entry=S.logKeys[key]
+  if not entry then
+   if #S.logs>=200 then local removed=table.remove(S.logs,1);S.logKeys[removed.key]=nil end
+   entry={key=key,id=id,name=track.Animation.Name,track=track.Name,source=source,category=category,count=0,last=0};S.logKeys[key]=entry;table.insert(S.logs,entry)
+  end
+  entry.count+=1;entry.last=os.clock();S.dirty=true;return category
+ end
+ local function rig() local c=LP.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local r=c and c:FindFirstChild("HumanoidRootPart");if h and r and h.Health>0 and not r.Anchored then return c,h,r end end
+ local function release()
+  local owner=S.owner;S.owner=nil
+  if S.backend=="vim" and okVIM and VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.F,false,game) end)
+  elseif S.backend=="key" and type(keyrelease)=="function" then pcall(keyrelease,0x46) end
+  S.backend=nil
+  if owner then if owner.humanoid.Parent then owner.humanoid.AutoRotate=owner.autoRotate end;busy=false end
+  if gui.Parent then gui:SetAttribute("AutoParryHolding",false) end
+ end
+ local function cancel(message) S.gen+=1;S.jobs={};release();if message then say(message) end end
+ local function press()
+  if okVIM and VIM then S.backend="vim";local ok=pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.F,false,game) end);if ok then return true end;release() end
+  if type(keypress)=="function" and type(keyrelease)=="function" then S.backend="key";local ok=pcall(keypress,0x46);if ok then return true end;release() end
+  return false
+ end
+ local function stateOK(holding)
+  if not S.alive or not S.on or not S.focused or not scriptsActive() or UIS:GetFocusedTextBox() then return false,"Paused / typing / unfocused" end
+  if not holding and busy or manualSequenceBusy or todoBusy or tripleJumpBusy then return false,"Another macro owns input" end
+  for _,name in ipairs({"FlingSequenceActive","BlackflashChainV2Active","BlackflashChainV3Active","ComboStudioBusy"}) do if gui:GetAttribute(name) then return false,"Conflicting module: "..name end end
+  local c,h,r=rig();if not c then return false,"No live unanchored character" end
+  local state=h:GetState()
+  if h.PlatformStand or state==Enum.HumanoidStateType.Dead or state==Enum.HumanoidStateType.Ragdoll or state==Enum.HumanoidStateType.FallingDown or state==Enum.HumanoidStateType.Physics or state==Enum.HumanoidStateType.Seated then return false,"Humanoid state prevents guard" end
+  if pauseMoving and h.MoveDirection.Magnitude>.1 then return false,"Manual movement" end
+  for _,name in ipairs(blockAttributes) do
+   for _,object in ipairs({c,h,LP}) do local v=object:GetAttribute(name);if v==true or type(v)=="number" and v>0 then return false,"Configured state: "..name end end
+  end
+  if pauseAction and not holding then
+   local animator=h:FindFirstChildOfClass("Animator")
+   if animator then for _,t in ipairs(animator:GetPlayingAnimationTracks()) do if t.IsPlaying and t.WeightCurrent>.05 and t.Priority.Value>=Enum.AnimationPriority.Action.Value then return false,"Own Action-priority animation" end end end
+  end
+  return true,nil,c,h,r
+ end
+ local function threat(character,requireFront)
+  local own,h,root=rig();local enemyH=character and character:FindFirstChildOfClass("Humanoid");local enemy=character and (character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso"))
+  if not root or character==own or not character:IsDescendantOf(workspace) or not enemyH or enemyH.Health<=0 or not enemy or not enemy:IsA("BasePart") then return false end
+  local player=Players:GetPlayerFromCharacter(character)
+  if player and not LP.Neutral and not player.Neutral and LP.Team~=nil and LP.Team==player.Team then return false end
+  local actual=enemy.Position-root.Position
+  if actual.Magnitude>S.range+2 or math.abs(actual.Y)>6 then return false end
+  -- Short optional constant-velocity melee lookahead, not projectile or hit-frame verification.
+  local delta=actual+(enemy.AssemblyLinearVelocity-root.AssemblyLinearVelocity)*(lookAhead/1000)
+  if delta.Magnitude>S.range then return false end
+  local flat=Vector3.new(actual.X,0,actual.Z);if flat.Magnitude<.05 then return false end
+  local enemyLook=Vector3.new(enemy.CFrame.LookVector.X,0,enemy.CFrame.LookVector.Z)
+  if enemyLook.Magnitude<.05 or enemyLook.Unit:Dot(-flat.Unit)<.1 then return false end
+  if requireFront then local forward=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z);if forward.Magnitude<.05 or forward.Unit:Dot(flat.Unit)<0 then return false end end
+  local params=RaycastParams.new();params.FilterType=Enum.RaycastFilterType.Exclude;params.FilterDescendantsInstances={own};params.RespectCanCollide=true
+  local hit=workspace:Raycast(root.Position+Vector3.new(0,1,0),actual,params)
+  if hit and not hit.Instance:IsDescendantOf(character) then return false end
+  return true,actual.Magnitude,root,enemy,h
+ end
+ local function face(root,enemy)
+  local target=Vector3.new(enemy.Position.X,root.Position.Y,enemy.Position.Z)
+  if (target-root.Position).Magnitude>.05 then root.CFrame=CFrame.lookAt(root.Position,target) end
+ end
+ local function isLocalCharacter(character)
+  if not character then return true end
+  if character==LP.Character then return true end
+  if Players:GetPlayerFromCharacter(character)==LP then return true end
+  -- clones / viewmodels / tools under local character
+  if LP.Character and character:IsDescendantOf(LP.Character) then return true end
+  return false
+ end
+ local function observe(character,track,existing)
+  if not S.on or not S.alive then return end
+  if isLocalCharacter(character) then return end -- never register or react to your own punches
+  if not track or not track.Animation then return end
+  local category=log(character,track)
+  if not accepted(category) or not track.IsPlaying or track.Speed<=0 or track.TimePosition>S.maxAge then return end
+  -- Existing tracks past early startup are usually already unsafe to react to (JJS M1 startup ~0.16-0.23s).
+  if existing and track.TimePosition>.12 then return end
+  local n=0;for _ in pairs(S.jobs) do n+=1 end;if n>=64 then return end
+  S.jobs[track]={character=character,track=track,generation=S.gen,expires=os.clock()+.55,seenAt=os.clock(),t0=track.TimePosition}
+ end
+ local function attach(character,humanoid)
+  if isLocalCharacter(character) then
+   local old=S.hooks[character]
+   if old then old.connection:Disconnect();S.hooks[character]=nil end
+   return
+  end
+  local animator=humanoid and (humanoid:FindFirstChildOfClass("Animator") or character:FindFirstChildOfClass("Animator"))
+  local old=S.hooks[character]
+  if old and old.animator==animator then return end
+  if old then old.connection:Disconnect();S.hooks[character]=nil end
+  if animator then
+   S.hooks[character]={animator=animator,connection=animator.AnimationPlayed:Connect(function(t) observe(character,t,false) end)}
+   if S.on then for _,t in ipairs(animator:GetPlayingAnimationTracks()) do observe(character,t,true) end end
+  end
+ end
+ local repaint
+ local function setAutoGuard(v)
+  cancel();S.on=v;S.dirty=true
+  if v then S.scan={{object=assets,index=0}};for c,h in pairs(S.models) do if c:IsDescendantOf(workspace) then attach(c,h);local a=h:FindFirstChildOfClass("Animator");if a then for _,t in ipairs(a:GetPlayingAnimationTracks()) do observe(c,t,true) end end end end;say("ON: close menu to auto-parry (hold F). JJS M1 startup window active; logging tracks.") else S.scan=nil;say("OFF: F released; logs retained.") end
+  if repaint then repaint() end
+ end
+ repaint=toggle(box,"Auto Parry",function() return S.on end,function(v) setAutoGuard(v) end)
+ moduleSlider(box,"Block distance",2,30,12," studs",function() return S.range end,function(v) S.range=v;cancel() end)
+ moduleSlider(box,"Block hold",100,600,350," ms",function() return math.floor(S.hold*1000+.5) end,function(v) S.hold=v/1000;cancel() end)
+ moduleSlider(box,"Max anim age (startup window)",80,500,280," ms",function() return math.floor(S.maxAge*1000+.5) end,function(v) S.maxAge=v/1000;cancel() end)
+ moduleSlider(box,"Melee motion lookahead",0,100,40," ms",function() return lookAhead end,function(v) lookAhead=v;cancel() end)
+ label("JJS-tuned defaults: hold 350ms, maxAge 280ms (M1 startup ~160-230ms). Hit/Swing labels accepted. No auto-face, no move pause, no own-anim pause. Lookahead is proximity-only — not verified hit frames. Face the attacker yourself for frontal block.",84)
+ local function input(placeholder,height)
+  return make("TextBox",box,{Size=UDim2.new(1,0,0,height or 38),Text="",PlaceholderText=placeholder,ClearTextOnFocus=false,BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Code,TextSize=11,LayoutOrder=nextOrder(box)+2})
+ end
+ local ids=input("Verified M1 animation IDs (comma separated)")
+ listen(ids.FocusLost,function() S.manual={};for id in ids.Text:gmatch("%d+") do S.manual[id]=true end;cancel("Verified IDs updated; reaction labels stay excluded.");S.dirty=true end)
+ local attributes=input("Optional VERIFIED blocking attributes, comma separated")
+ listen(attributes.FocusLost,function() blockAttributes={};for name in attributes.Text:gmatch("[%w_]+") do if #blockAttributes<16 then table.insert(blockAttributes,name) end end;cancel("Configured attributes: "..#blockAttributes..". No guessed JJS state names.") end)
+ label("Configured attributes block attempts only when true or a positive number on your character, Humanoid or Player. Leave blank unless their meaning is verified. Hidden game-specific locks/cooldowns are not inferred.",72)
+ local function button(text,fn) local b=make("TextButton",box,{Size=UDim2.new(1,0,0,32),Text=text,BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=nextOrder(box)+2});corner(b,5);listen(b.Activated,fn);return b end
+ local filterButton,sortButton
+ filterButton=button("Log filter: Matches",function() filter=filter=="Matches" and "All" or filter=="All" and "Excluded" or "Matches";filterButton.Text="Log filter: "..filter;S.dirty=true end)
+ sortButton=button("Log sort: Category",function() sort=sort=="Category" and "Recent" or sort=="Recent" and "Count" or "Category";sortButton.Text="Log sort: "..sort;S.dirty=true end)
+ local logView=label("Enable Auto Parry to record observed animation playback.",300);logView.Font=Enum.Font.Code;logView.TextSize=10
+ local exportBox=input("Exported log JSON",100);exportBox.MultiLine=true;exportBox.TextWrapped=true;exportBox.TextYAlignment=Enum.TextYAlignment.Top;exportBox.TextXAlignment=Enum.TextXAlignment.Left
+ button("Export full animation log JSON",function() local data={schema="JJSAnimationLog",version=1,entries={}};for _,e in ipairs(S.logs) do table.insert(data.entries,{id=e.id,name=e.name,track=e.track,source=e.source,category=e.category,count=e.count,lastObservedSeconds=e.last}) end;exportBox.Text=game:GetService("HttpService"):JSONEncode(data) end)
+ button("Clear animation log",function() S.logs={};S.logKeys={};exportBox.Text="";S.dirty=true end)
+ label("Remote-based block, projectile classification and confirmed auto-counter remain unavailable: no verified JJS handlers or confirmation signals. F delivery and successful defense are different outcomes.",72)
+ local function register(o)
+  if o:IsA("Humanoid") and o.Parent and o.Parent:IsA("Model") and not isLocalCharacter(o.Parent) then
+   S.models[o.Parent]=o
+  end
+ end
+ for _,o in ipairs(workspace:GetDescendants()) do register(o) end
+ listen(workspace.DescendantAdded,register)
+ listen(workspace.DescendantRemoving,function(o)
+  if o:IsA("Humanoid") then
+   local c=o.Parent;S.models[c]=nil
+   local hook=S.hooks[c];if hook then hook.connection:Disconnect();S.hooks[c]=nil end
+  end
+ end)
+ listen(LP.CharacterAdded,function(char)
+  S.models[char]=nil
+  local hook=S.hooks[char];if hook then hook.connection:Disconnect();S.hooks[char]=nil end
+ end)
+ listen(assets.DescendantAdded,function(o) if S.on and o:IsA("Animation") then discover(o) end end)
+ listen(UIS.WindowFocusReleased,function() S.focused=false;cancel("Focus lost") end);listen(UIS.WindowFocused,function() S.focused=true end)
+ listen(UIS.TextBoxFocused,function() cancel("Typing") end)
+ listen(LP.CharacterRemoving,function() cancel("Respawn") end)
+ listen(main:GetPropertyChangedSignal("Visible"),function() if main.Visible then cancel("Menu open; reactions paused, logging continues") end end)
+ listen(RS.Heartbeat,function(dt)
+  if not S.alive then return end
+  S.poll+=dt
+  if S.poll>=.25 then
+   S.poll=0
+   for c,h in pairs(S.models) do if c:IsDescendantOf(workspace) and h.Parent==c then attach(c,h) else S.models[c]=nil;local old=S.hooks[c];if old then old.connection:Disconnect();S.hooks[c]=nil end end end
+  end
+  if S.on and S.scan then
+   local began=os.clock();local n=0
+   while #S.scan>0 and n<100 and os.clock()-began<.002 do
+    n+=1;local node=S.scan[#S.scan]
+    if node.index==0 then discover(node.object);local ok,list=pcall(node.object.GetChildren,node.object);node.children=ok and list or {};node.index=1 end
+    local child=node.children[node.index]
+    if child then node.index+=1;if child.Parent then table.insert(S.scan,{object=child,index=0}) end else table.remove(S.scan) end
+   end
+   if #S.scan==0 then S.scan=nil end
+  end
+  if S.owner then
+   local o=S.owner;local good=stateOK(true);local valid,_,root,enemy=threat(o.character,not autoFace)
+   if not good or not valid or os.clock()>=o.finish or not o.track.IsPlaying and os.clock()>=o.minimum then release()
+   elseif autoFace then face(root,enemy) end
+  elseif S.on and os.clock()-S.last>=S.gap then
+   local good=stateOK(false)
+   local best,bestDistance,bestAge=nil,math.huge,math.huge
+   for track,job in pairs(S.jobs) do
+    local category=classify(track.Animation,track.Name,true)
+    if job.generation~=S.gen or not accepted(category) or not track.IsPlaying or track.TimePosition>S.maxAge or os.clock()>job.expires or not job.character:IsDescendantOf(workspace) then S.jobs[track]=nil
+    elseif good and not isLocalCharacter(job.character) then
+     local valid,d=threat(job.character,not autoFace)
+     -- Prefer earliest animation time (more of the ~0.2s startup left), then closest threat.
+     local age=track.TimePosition
+     if valid and (age<bestAge-1e-3 or (math.abs(age-bestAge)<=1e-3 and d<bestDistance)) then
+      best=job;bestDistance=d;bestAge=age
+     end
+    end
+   end
+   if best then
+    local _,h,root=rig();local valid,_,_,enemy=threat(best.character,not autoFace)
+    if valid and not UIS:IsKeyDown(Enum.KeyCode.F) then
+     local priorRotation=root.CFrame.Rotation
+     if autoFace then face(root,enemy) end
+     if press() then
+      S.owner={character=best.character,track=best.track,humanoid=h,autoRotate=h.AutoRotate,finish=os.clock()+S.hold,minimum=os.clock()+math.min(.12,S.hold)}
+      if autoFace then h.AutoRotate=false;face(root,enemy) end
+      busy=true;gui:SetAttribute("AutoParryHolding",true);S.last=os.clock();S.jobs[best.track]=nil;say("Incoming animation -> Auto Parry (F) attempted; success unconfirmed.")
+     else if autoFace and root.Parent then root.CFrame=CFrame.new(root.Position)*priorRotation end;S.on=false;cancel("No supported F input backend");if repaint then repaint() end end
+    end
+   end
+  end
+  S.logClock+=dt
+  if S.logClock>=.3 and S.dirty then
+   S.logClock=0;S.dirty=false;local rows={};local list={}
+   for _,e in ipairs(S.logs) do local match=e.category~="Unknown" and e.category~="Excluded";if filter=="All" or filter=="Matches" and match or filter=="Excluded" and e.category=="Excluded" then table.insert(list,e) end end
+   table.sort(list,function(a,b) if sort=="Category" and rank[a.category]~=rank[b.category] then return rank[a.category]<rank[b.category] end;if sort=="Count" and a.count~=b.count then return a.count>b.count end;if a.last~=b.last then return a.last>b.last end;return a.key<b.key end)
+   table.insert(rows,string.format("%s | %s | %d matching / %d stored (max 200)",filter,sort,#list,#S.logs))
+   for i=1,math.min(10,#list) do local e=list[i];table.insert(rows,string.format("[%s] %s x%d\n%s | %s",e.category,e.id,e.count,e.source,e.name:sub(1,45))) end
+   if #list==0 then table.insert(rows,"No matching played animations yet.") end
+   if #list>10 then table.insert(rows,"First 10 shown; export for full log.") end
+   logView.Text=table.concat(rows,"\n")
+  end
+ end)
+ local function stop() S.on=false;cancel("Stopped");if repaint then repaint() end end
+ local function shutdown()
+  if not S.alive then return end;stop();S.alive=false
+  for _,hook in pairs(S.hooks) do hook.connection:Disconnect() end
+  for _,connection in ipairs(S.links) do connection:Disconnect() end
+  S.hooks={};S.links={};S.models={};S.scan=nil
+  if __JJSBoot.autoParryShutdown==shutdown then __JJSBoot.autoParryShutdown=nil;__JJSBoot.stopParry=nil end
+ end
+ __JJSBoot.stopParry=stop;__JJSBoot.autoParryShutdown=shutdown
+ __JJSBoot.parryAPI={
+  getOn=function() return S.on end,
+  setOn=function(v) setAutoGuard(v) end,
+  isHolding=function() return busy end,
+  cancel=cancel,
+  state=S,
+ }
+ listen(gui.Destroying,shutdown);listen(unload.Activated,shutdown)
+end)
+
+;__JJSBoot:run("Ultra Instinct",function()
+ -- JJS: F block ~180deg; M1 startup ~0.16-0.23s. Evasive = Q dash out of ragdoll (~1s i-frames).
+ -- Vessel/Yuji kits often use R as a recovery/cancel when an ability is interrupted or stuck.
+ local alive=true
+ local on=false
+ local autoEvade=true
+ local yujiCancel=true
+ local range=14
+ local hold=.28
+ local maxAge=.32
+ local gap=.02
+ local lastBlock=-math.huge
+ local lastEvade=-math.huge
+ local lastCancel=-math.huge
+ local evadeGap=.75
+ local cancelGap=.55
+ local hooks={}
+ local models={}
+ local holding=false
+ local holdGen=0
+
+ local panel=card(pages.Combat,"Ultra Instinct","")
+ local chrome=make("Frame",panel,{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=Color3.fromRGB(20,24,40),BorderSizePixel=0,LayoutOrder=nextOrder(panel)+1})
+ corner(chrome,8)
+ local stroke=Instance.new("UIStroke");stroke.Color=Color3.fromRGB(120,170,255);stroke.Thickness=2;stroke.Parent=chrome
+ make("TextLabel",chrome,{Size=UDim2.new(1,-16,0,18),Position=UDim2.fromOffset(8,8),BackgroundTransparency=1,Text="ULTRA INSTINCT",TextColor3=Color3.fromRGB(150,200,255),Font=Enum.Font.GothamBold,TextSize=12,TextXAlignment=Enum.TextXAlignment.Left})
+ make("TextLabel",chrome,{Size=UDim2.new(1,-16,0,72),Position=UDim2.fromOffset(8,28),BackgroundTransparency=1,TextWrapped=true,Text="Overrides Auto Parry while on. Instant F on early enemy attack anims (JJS block). Auto-evade: Q on ragdoll/falling (evasive dash). Yuji/Vessel: R cancel if ability is interrupted or stuck. Local inputs only.",TextColor3=Color3.fromRGB(180,200,230),Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left})
+ make("Frame",chrome,{Size=UDim2.new(1,0,0,8),BackgroundTransparency=1})
+
+ local status=make("TextLabel",panel,{Size=UDim2.new(1,0,0,28),BackgroundTransparency=1,Text="Off",TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(panel)+2})
+ local function say(t) if status.Parent then status.Text=t;status.TextColor3=T.acc end end
+
+ local function cancelHold()
+  if holding then
+   holding=false;holdGen+=1
+   if okVIM and VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.F,false,game) end) end
+   pcall(function() gui:SetAttribute("UltraInstinctHolding",false) end)
+   pcall(function() gui:SetAttribute("AutoParryHolding",false) end)
+  end
+ end
+
+ local function setOn(v)
+  on=v
+  if v then
+   if __JJSBoot.parryAPI then pcall(function() __JJSBoot.parryAPI.setOn(false) end)
+   elseif __JJSBoot.stopParry then pcall(__JJSBoot.stopParry) end
+   say("ON — Auto Parry forced off")
+  else
+   cancelHold()
+   say("OFF")
+  end
+ end
+
+ toggle(panel,"Ultra Instinct",function() return on end,function(v) setOn(v) end)
+ toggle(panel,"Auto Evade (Q on ragdoll)",function() return autoEvade end,function(v) autoEvade=v end)
+ toggle(panel,"Yuji R-Cancel",function() return yujiCancel end,function(v) yujiCancel=v end)
+ moduleSlider(panel,"Block range",6,25,range," studs",function() return range end,function(v) range=v end)
+ moduleSlider(panel,"Hold F",100,600,math.floor(hold*1000+.5)," ms",function() return math.floor(hold*1000+.5) end,function(v) hold=v/1000 end)
+
+ local function okInput()
+  return okVIM and VIM and not UIS:GetFocusedTextBox() and scriptsActive() and not main.Visible
+   and not gui:GetAttribute("FlingSequenceActive")
+ end
+
+ local function pressKey(key,down)
+  if not okVIM or not VIM then return false end
+  return pcall(function() VIM:SendKeyEvent(down,key,false,game) end)
+ end
+
+ local function holdFInstant()
+  if not okInput() then return false end
+  if os.clock()-lastBlock<gap then return false end
+  lastBlock=os.clock()
+  holding=true;holdGen+=1
+  local gen=holdGen
+  pcall(function() gui:SetAttribute("UltraInstinctHolding",true) end)
+  pressKey(Enum.KeyCode.F,true)
+  say("Instant block (F)")
+  task.delay(hold,function()
+   if holdGen==gen then
+    pressKey(Enum.KeyCode.F,false)
+    holding=false
+    pcall(function() gui:SetAttribute("UltraInstinctHolding",false) end)
+   end
+  end)
+  return true
+ end
+
+ local function pressQ()
+  if not okInput() then return end
+  if os.clock()-lastEvade<evadeGap then return end
+  lastEvade=os.clock()
+  pressKey(Enum.KeyCode.Q,true)
+  task.delay(.05,function() pressKey(Enum.KeyCode.Q,false) end)
+  say("Auto evade (Q)")
+ end
+
+ local function pressR()
+  if not okInput() then return end
+  if os.clock()-lastCancel<cancelGap then return end
+  lastCancel=os.clock()
+  pressKey(Enum.KeyCode.R,true)
+  task.delay(.05,function() pressKey(Enum.KeyCode.R,false) end)
+  say("Yuji R-cancel")
+ end
+
+ local function isYuji()
+  local char=LP.Character
+  if not char then return false end
+  local bag={(char.Name or ""), tostring(char:GetAttribute("Character") or ""), tostring(char:GetAttribute("Kit") or ""), tostring(char:GetAttribute("Moveset") or "")}
+  for _,child in ipairs(char:GetChildren()) do table.insert(bag,child.Name) end
+  if LP:FindFirstChild("Backpack") then
+   for _,t in ipairs(LP.Backpack:GetChildren()) do table.insert(bag,t.Name) end
+  end
+  local blob=table.concat(bag," "):lower()
+  for _,k in ipairs({"yuji","itadori","vessel","divergent fist","divergentfist"}) do
+   if blob:find(k,1,true) then return true end
+  end
+  return false
+ end
+
+ local function norm(s) return tostring(s or ""):lower():gsub("[^%w]","") end
+ local attackKeys={"m1","punch","melee","attack","swing","combo","finisher","uppercut","downslam","kick","strike","skill","ability","special","move"}
+ local function isAttackTrack(track)
+  if not track or not track.IsPlaying or track.Speed<=0 then return false end
+  local names={track.Name}
+  if track.Animation then table.insert(names,track.Animation.Name);table.insert(names,tostring(track.Animation.AnimationId)) end
+  for _,n0 in ipairs(names) do
+   local n=norm(n0)
+   for _,k in ipairs(attackKeys) do if n:find(k,1,true) then return true end end
+  end
+  if __JJSBoot.parryAPI and __JJSBoot.parryAPI.state and __JJSBoot.parryAPI.state.meta then
+   local anim=track.Animation
+   local id=anim and tostring(anim.AnimationId):match("%d+")
+   local e=id and __JJSBoot.parryAPI.state.meta[id]
+   if e and (e.category=="M1" or e.category=="Special") then return true end
+  end
+  return false
+ end
+
+ local function localChar(c)
+  if not c then return true end
+  if c==LP.Character then return true end
+  if Players:GetPlayerFromCharacter(c)==LP then return true end
+  return false
+ end
+
+ local function facingThreat(character)
+  local root=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+  local tr=character and (character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"))
+  if not root or not tr then return false,999 end
+  local d=(tr.Position-root.Position).Magnitude
+  if d>range or d<1 then return false,d end
+  local to=(tr.Position-root.Position)*Vector3.new(1,0,1)
+  if to.Magnitude<.05 then return true,d end
+  local look=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z)
+  if look.Magnitude<.05 then return true,d end
+  local ang=math.deg(math.acos(math.clamp(look.Unit:Dot(to.Unit),-1,1)))
+  return ang<=95,d -- ~180deg frontal block cone
+ end
+
+ local function onEnemyAnim(character,track)
+  if not on or not alive or localChar(character) then return end
+  if not isAttackTrack(track) then return end
+  if track.TimePosition>maxAge then return end
+  local ok=facingThreat(character)
+  if not ok then return end
+  holdFInstant() -- instant, no queue
+ end
+
+ local function attach(character,humanoid)
+  if localChar(character) then return end
+  local animator=humanoid and (humanoid:FindFirstChildOfClass("Animator") or character:FindFirstChildOfClass("Animator"))
+  if not animator then return end
+  local old=hooks[character]
+  if old and old.animator==animator then return end
+  if old then old.conn:Disconnect() end
+  hooks[character]={animator=animator,conn=animator.AnimationPlayed:Connect(function(t) onEnemyAnim(character,t) end)}
+ end
+
+ local function register(o)
+  if o:IsA("Humanoid") and o.Parent and o.Parent:IsA("Model") and not localChar(o.Parent) then
+   models[o.Parent]=o
+   if on then attach(o.Parent,o) end
+  end
+ end
+ for _,o in ipairs(workspace:GetDescendants()) do register(o) end
+ connect(workspace.DescendantAdded,register)
+ connect(workspace.DescendantRemoving,function(o)
+  if o:IsA("Humanoid") then
+   local c=o.Parent;models[c]=nil
+   local h=hooks[c];if h then h.conn:Disconnect();hooks[c]=nil end
+  end
+ end)
+
+ connect(RS.Heartbeat,function()
+  if not alive or not on then return end
+  if not scriptsActive() or main.Visible then return end
+  for c,h in pairs(models) do
+   if c.Parent and not hooks[c] then attach(c,h) end
+  end
+  local char=LP.Character
+  local hum=char and char:FindFirstChildOfClass("Humanoid")
+  if not hum or hum.Health<=0 then return end
+
+  if autoEvade then
+   local st=hum:GetState()
+   if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or st==Enum.HumanoidStateType.Physics or hum.PlatformStand then
+    pressQ()
+   end
+  end
+
+  if yujiCancel and isYuji() then
+   local animator=hum:FindFirstChildOfClass("Animator") or char:FindFirstChildOfClass("Animator")
+   if animator then
+    local messed=false
+    for _,t in ipairs(animator:GetPlayingAnimationTracks()) do
+     if isAttackTrack(t) then
+      local st=hum:GetState()
+      if st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or hum.PlatformStand then
+       messed=true
+      end
+      if t.TimePosition>1.15 and t.IsPlaying then messed=true end
+     end
+    end
+    if messed then pressR() end
+   end
+  end
+ end)
+
+ local stConn
+ local function bindHum(h)
+  if stConn then stConn:Disconnect();stConn=nil end
+  if not h then return end
+  stConn=h.StateChanged:Connect(function(_,st)
+   if not on or not autoEvade then return end
+   if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown then
+    pressQ()
+   end
+  end)
+ end
+ if LP.Character then local h=LP.Character:FindFirstChildOfClass("Humanoid");if h then bindHum(h) end end
+ connect(LP.CharacterAdded,function(c) task.defer(function() bindHum(c:FindFirstChildOfClass("Humanoid") or c:WaitForChild("Humanoid",3)) end) end)
+
+ local function cleanup()
+  if not alive then return end
+  alive=false;on=false;cancelHold()
+  for _,h in pairs(hooks) do pcall(function() h.conn:Disconnect() end) end
+  table.clear(hooks);table.clear(models)
+  if stConn then stConn:Disconnect() end
+ end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+;__JJSBoot:run("Mobile action dock",function()
+ local alive=true;local drag=nil;local elapsed=0;local raw=__JJSBoot.rawMake
+ local dock=raw("Frame",gui,{Name="TouchActionDock",Size=UDim2.fromOffset(84,280),AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-12,.45,0),BackgroundColor3=T.panel,BorderSizePixel=0,Visible=false,ZIndex=120});corner(dock,8)
+ local handle=raw("TextLabel",dock,{Size=UDim2.new(1,0,0,32),Text="DRAG",BackgroundTransparency=1,TextColor3=T.dim,Font=Enum.Font.GothamBold,TextSize=12,Active=true,ZIndex=121})
+ local function available() return running and hubUnlocked and __JJSBoot.ready and not UIS:GetFocusedTextBox() end
+ local actions={
+  {"BFC / 3",function() if not available() then return end;main.Visible=false;if blackflashV2Trigger and blackflashV2Trigger() then return end;if busy or manualSequenceBusy then return end;lastThreeTime=os.clock();if todoEnabled then task.spawn(runTodo);return end;task.spawn(run);if chainEnabled and os.clock()>=chainCooldownUntil then task.spawn(runChain) end end},
+  {"CLAP",function() if available() and perfectClapEnabled then task.spawn(runPerfectClap) end end},
+  {"TRIPLE JUMP",function() if available() and tripleJumpEnabled then task.spawn(runTripleJump) end end},
+  {"STOP MACROS",function() enabled=false;chainEnabled=false;todoEnabled=false;perfectClapEnabled=false;tripleJumpEnabled=false;clapState.generation+=1;clapState.pending=false;release();if __JJSBoot.stopParry then pcall(__JJSBoot.stopParry) end;for _,cancel in ipairs(__JJSBoot.cancels) do pcall(cancel) end end},
+  {"UNLOAD HUB",function() if __JJSBoot.unloadHub then pcall(__JJSBoot.unloadHub) elseif unload then pcall(function() unload:Activate() end) end end}
+ }
+ local buttonsDock={}
+ for i,spec in ipairs(actions) do local name,fn=spec[1],spec[2];local b=raw("TextButton",dock,{Size=UDim2.new(1,-8,0,44),Position=UDim2.fromOffset(4,34+(i-1)*48),Text=name,TextWrapped=true,TextColor3=T.txt,BackgroundColor3=T.p2,Font=Enum.Font.GothamBold,TextSize=12,ZIndex=121});corner(b,6);buttonsDock[i]=b;connect(b.Activated,function() local ok,e=pcall(fn);if not ok then warn("Touch: "..tostring(e)) end end) end
+ connect(handle.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then drag={input=i,start=i.Position,pos=dock.Position} end end)
+ connect(UIS.InputChanged,function(i) if drag and (i==drag.input or drag.input.UserInputType==Enum.UserInputType.MouseButton1 and i.UserInputType==Enum.UserInputType.MouseMovement) then local d=i.Position-drag.start;local p=drag.pos;dock.Position=UDim2.new(p.X.Scale,p.X.Offset+d.X,p.Y.Scale,p.Y.Offset+d.Y) end end)
+ connect(UIS.InputEnded,function(i) if drag and drag.input==i then drag=nil end end);connect(UIS.WindowFocusReleased,function() drag=nil end)
+ connect(RS.Heartbeat,function(dt)
+  if not alive then return end;elapsed+=dt;if elapsed<.1 then return end;elapsed=0;dock.Visible=dock:GetAttribute("UserEnabled")~=false and UIS.TouchEnabled and hubUnlocked and __JJSBoot.ready and not main.Visible
+  local camera=workspace.CurrentCamera;if not camera then return end;local v=camera.ViewportSize;local short=v.Y<300;dock.Size=short and UDim2.fromOffset(168,160) or UDim2.fromOffset(84,280)
+  for i,b in ipairs(buttonsDock) do b.Size=short and UDim2.fromOffset(76,44) or UDim2.new(1,-8,0,44);b.Position=short and UDim2.fromOffset(4+((i-1)%2)*84,34+math.floor((i-1)/2)*48) or UDim2.fromOffset(4,34+(i-1)*48) end
+  for _,frame in ipairs({main,dock,reopen}) do if frame.Parent then local a=frame.AbsolutePosition;local z=frame.AbsoluteSize;local dx=math.clamp(a.X,8,math.max(8,v.X-z.X-8))-a.X;local dy=math.clamp(a.Y,8,math.max(8,v.Y-z.Y-16))-a.Y;if math.abs(dx)>.5 or math.abs(dy)>.5 then local p=frame.Position;frame.Position=UDim2.new(p.X.Scale,p.X.Offset+dx,p.Y.Scale,p.Y.Offset+dy) end end end
+ end)
+ connect(gui.Destroying,function() alive=false;drag=nil end)
+ local box=card(pages.Settings,"Mobile compatibility","")
+ make("TextLabel",box,{Size=UDim2.new(1,0,0,120),Text="Touch dock: BFC/3, Clap, Triple Jump and Stop. Cursed Partners is started by its row switch. Sliders track one finger. Some macros still require executor input emulation; Delta/Xeno support is not guaranteed.",TextWrapped=true,TextColor3=T.mut,BackgroundTransparency=1,Font=Enum.Font.Gotham,TextSize=12,LayoutOrder=3})
+ __JJSBoot.bind(box,"Touch action dock",function() return dock:GetAttribute("UserEnabled")~=false end,function(v) dock:SetAttribute("UserEnabled",v) end)
 end)
 
 local function destroyBackdrop()
@@ -2251,6 +2483,8 @@ local cleanupDone=false
 local function cleanup()
  if cleanupDone then return end
  cleanupDone=true;clapState.generation+=1;clapState.pending=false
+ if __JJSBoot.autoParryShutdown then pcall(__JJSBoot.autoParryShutdown) end
+ __JJSBoot.groups={};__JJSBoot.features={};__JJSBoot.cancels={}
  if fxShutdown then pcall(fxShutdown) end
  running=false; scriptsPaused=false
  enabled=false; todoEnabled=false; perfectClapEnabled=false; tripleJumpEnabled=false; pullEnabled=false; lockOn=false; chainEnabled=false; release()
@@ -2259,8 +2493,10 @@ local function cleanup()
  destroyBackdrop() -- always unload Halloween background with the hub
  if gui.Parent then gui:Destroy() end
 end
+__JJSBoot.unloadHub=cleanup
 connect(gui.Destroying,cleanup)
 connect(unload.Activated,cleanup)
+if unloadTop then connect(unloadTop.Activated,cleanup) end
 connect(close.Activated,function()
  main.Visible=false
  reopen.Visible=hubUnlocked
@@ -2285,7 +2521,7 @@ connect(UIS.InputBegan,function(i)
  end
  if i.UserInputType==Enum.UserInputType.MouseButton1 and tripleJumpEnabled and scriptsActive() and not busy and not todoBusy and not tripleJumpBusy then
   local now=os.clock()
-  if now-tjLast>0.6 then tjClicks=0 end
+  if now-tjLast>1.2 then tjClicks=0 end
   tjLast=now
   tjClicks+=1
   if tjClicks>=3 then
@@ -2570,7 +2806,8 @@ end)
 --  B7 far hill + trees  B8 bats  B9 fog bands  B10 mid hill + tombstones
 --  B11 pumpkin patch  B12 torches  B13 falling ash  B14 front hill  B15 vignette
 ;__JJSBoot:run("Halloween background",function()
-
+ -- Skip the full-screen decorative backdrop on touch devices.
+ if UIS.TouchEnabled then return end
  local TweenS=game:GetService("TweenService")
  local old=PG:FindFirstChild("JJSHalloweenBackdrop");if old then old:Destroy() end
  local bg=Instance.new("ScreenGui");bg.Name="JJSHalloweenBackdrop";bg.ResetOnSpawn=false;bg.IgnoreGuiInset=true;bg.DisplayOrder=998;bg.Parent=PG
@@ -2818,7 +3055,11 @@ local SEQUENCE={
 }
 local popupRecords={}
 local function connect(s,f) local c=s:Connect(f);table.insert(connections,c);return c end
-local function make(class,parent,props) local o=Instance.new(class);for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent;return o end
+local function make(class,parent,props)
+ parent=__JJSBoot.route(class,parent,props)
+ if UIS.TouchEnabled and props then if class=="TextButton" or class=="TextBox" then local z=props.Size;if z and z.Y.Scale==0 and z.Y.Offset>0 and z.Y.Offset<44 then props.Size=UDim2.new(z.X.Scale,z.X.Offset,0,44) end end;if (class=="TextLabel" or class=="TextButton" or class=="TextBox") and props.TextSize then props.TextSize=math.max(12,props.TextSize) end end
+ local o=Instance.new(class);for k,v in pairs(props or {}) do o[k]=v end;o.Parent=parent;return o
+end
 local T={bg=Color3.fromRGB(13,16,24),panel=Color3.fromRGB(18,22,33),p2=Color3.fromRGB(27,32,47),card=Color3.fromRGB(21,26,39),stroke=Color3.fromRGB(48,55,75),acc=Color3.fromRGB(168,85,255),txt=Color3.fromRGB(237,240,250),mut=Color3.fromRGB(131,143,166)}
 local function corner(o,r) make("UICorner",o,{CornerRadius=UDim.new(0,r or 8)}) end
 local function text(p,caption,pos,size,fontSize)
@@ -3206,6 +3447,1063 @@ end
 end
 end)
 if not okFX then warn("Popup section failed (rest of script still loaded): "..tostring(errFX)) end
+
+-- v2.20: explicit local-only additions; no guessed remotes or server bypasses.
+;__JJSBoot:run("v2.20 movement and recovery",function()
+ local alive=true
+ local fly,expand,antiStun,antiRagdoll=false,false,false,false
+ local punchExpand=false
+ local speed,boxSize,punchSize=50,8,6
+ local recoveryAggressive=true
+ local recoveryBreakConstraints=true
+ local recoveryClearVel=true
+ local lastRecoveryAt=0
+ local lastRecoveryReason="—"
+ local recoveryStatusLabel=nil
+ local recoveryStateConn=nil
+ local punchVisuals={} -- client visual only; never resize real character parts (that freezes physics)
+
+ local flightHum,flightRoot,oldRotate,oldPlatform,attachment,velocity,orientation
+ local focused=true
+ local savedBoxes={};local hitboxHumanoids={}
+ for _,o in ipairs(workspace:GetDescendants()) do if o:IsA("Humanoid") then hitboxHumanoids[o]=true end end
+ connect(workspace.DescendantAdded,function(o) if o:IsA("Humanoid") then hitboxHumanoids[o]=true end end)
+ connect(workspace.DescendantRemoving,function(o) if o:IsA("Humanoid") then hitboxHumanoids[o]=nil end end)
+ local function note(panel,message)
+  return make("TextLabel",panel,{Size=UDim2.new(1,0,0,48),BackgroundTransparency=1,Text=message,TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(panel)+2})
+ end
+ local function stopFlight()
+  if velocity then velocity:Destroy();velocity=nil end
+  if orientation then orientation:Destroy();orientation=nil end
+  if attachment then attachment:Destroy();attachment=nil end
+  if flightHum and flightHum.Parent then flightHum.AutoRotate=oldRotate;flightHum.PlatformStand=oldPlatform end
+  if flightRoot and flightRoot.Parent then flightRoot.AssemblyLinearVelocity=Vector3.zero;flightRoot.AssemblyAngularVelocity=Vector3.zero end
+  flightHum=nil;flightRoot=nil
+ end
+ local function restoreBox(part)
+  local original=savedBoxes[part];if not original then return end
+  if part.Parent then pcall(function()
+   part.Size=original.size
+   part.Transparency=original.transparency
+   part.CanCollide=original.collide
+   if original.massless~=nil then part.Massless=original.massless end
+   if original.canQuery~=nil then part.CanQuery=original.canQuery end
+  end) end
+  savedBoxes[part]=nil
+ end
+ local function restoreBoxes()
+  local list={};for part in pairs(savedBoxes) do table.insert(list,part) end
+  for _,part in ipairs(list) do restoreBox(part) end
+ end
+ local hitboxParts={"HumanoidRootPart","Torso","UpperTorso","LowerTorso","Head","Left Arm","Right Arm","LeftArm","RightArm","LeftUpperArm","RightUpperArm","LeftLowerArm","RightLowerArm","Left Hand","Right Hand","LeftHand","RightHand"}
+ local function collectHitParts(char)
+  local list={}
+  for _,name in ipairs(hitboxParts) do
+   local p=char:FindFirstChild(name)
+   if p and p:IsA("BasePart") then table.insert(list,p) end
+  end
+  if #list==0 then
+   local root=char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+   if root and root:IsA("BasePart") then table.insert(list,root) end
+  end
+  return list
+ end
+ local panel=card(pages.Movement,"Fly","")
+ toggle(panel,"Fly",function() return fly end,function(v) fly=v;if not v then stopFlight() end end)
+ moduleSlider(panel,"Flight speed",10,150,speed,"",function() return speed end,function(v) speed=v end)
+ note(panel,"Camera-relative movement. WASD / thumbstick; Space rises; Left Ctrl descends. Local physics; server acceptance is not guaranteed.")
+ local up,down=false,false
+ for _,entry in ipairs({{"Hold to rise",true},{"Hold to descend",false}}) do
+  local isUp=entry[2]
+  local b=make("TextButton",panel,{Size=UDim2.new(1,0,0,30),Text=entry[1],BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,LayoutOrder=nextOrder(panel)+2});corner(b,6)
+  connect(b.InputBegan,function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then if isUp then up=true else down=true end end end)
+  connect(b.InputEnded,function(i) if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then if isUp then up=false else down=false end end end)
+ end
+ connect(UIS.WindowFocusReleased,function() focused=false;up=false;down=false;stopFlight() end)
+ connect(UIS.WindowFocused,function() focused=true end)
+ local hitPanel=card(pages.Combat,"Hitbox Expander (Local Only)","")
+ toggle(hitPanel,"Hitbox Expander",function() return expand end,function(v) expand=v;if not v then restoreBoxes() end end)
+ moduleSlider(hitPanel,"Enemy part size",2,25,boxSize," studs",function() return boxSize end,function(v) boxSize=v end)
+ note(hitPanel,"Local-only on ENEMIES (never your character). Enlarges HRP/torso/arms/head on your client. Does not change server hit detection. Original sizes restore on disable.")
+ local function clearPunchVisuals()
+  for _,o in pairs(punchVisuals) do pcall(function() o:Destroy() end) end
+  table.clear(punchVisuals)
+ end
+ local punchPanel=card(pages.Combat,"Expand Punch Range (Enemy Reach Assist)","")
+ toggle(punchPanel,"Expand Punch Range",function() return punchExpand end,function(v) punchExpand=v;if not v then clearPunchVisuals() end end)
+ moduleSlider(punchPanel,"Visual reach size",2,20,punchSize," studs",function() return punchSize end,function(v) punchSize=v;clearPunchVisuals() end)
+ note(punchPanel,"Does NOT resize your character (that freezes you). Instead: visual hand spheres + enlarges NEARBY ENEMY parts so close-range punches are easier to connect on this client. Server hit detection is not guaranteed.")
+ local recovery=card(pages.Player,"Local Recovery","")
+ toggle(recovery,"Anti Stun",function() return antiStun end,function(v) antiStun=v end)
+ toggle(recovery,"Anti Ragdoll",function() return antiRagdoll end,function(v) antiRagdoll=v end)
+ toggle(recovery,"Aggressive recovery",function() return recoveryAggressive end,function(v) recoveryAggressive=v end)
+ toggle(recovery,"Break local ragdoll constraints",function() return recoveryBreakConstraints end,function(v) recoveryBreakConstraints=v end)
+ toggle(recovery,"Clear residual velocity",function() return recoveryClearVel end,function(v) recoveryClearVel=v end)
+ recoveryStatusLabel=make("TextLabel",recovery,{
+  Size=UDim2.new(1,0,0,36),BackgroundTransparency=1,Text="Last recovery: —",
+  TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextWrapped=true,
+  TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(recovery)+2
+ })
+ note(recovery,"JJS: upright stun ≠ ragdoll. Local recovery: clear PlatformStand/Sit/Physics/Ragdoll, break local constraints, damp velocity, and nudge your HRP hitbox/position upward to unstick. Server true-ragdoll/stun can still re-apply.")
+ local unavailable={
+  {pages.Combat,"Remote Train Activation","Unavailable: verified train handler and arguments were not present in the provided implementation."},
+  {pages.Movement,"Domain Invade","Unavailable: no verified domain entry implementation was provided."},
+  {pages.Player,"Serversided Box Morph","Unavailable: no verified server-authorized morph handler was provided. No local morph is presented as server-sided."},
+  {pages.Combat,"Auto Counter","Unavailable: character counter inputs, attack signals, and cooldown rules have not been verified."}
+ }
+ for _,entry in ipairs(unavailable) do
+  local p=card(entry[1],entry[2],"");note(p,entry[3]);p:SetAttribute("FeatureStatus","Unavailable")
+ end
+ local function bindRecoveryState(hum)
+  if recoveryStateConn then recoveryStateConn:Disconnect();recoveryStateConn=nil end
+  if not hum then return end
+  recoveryStateConn=hum.StateChanged:Connect(function(_,newState)
+   if not alive or not (antiStun or antiRagdoll) then return end
+   if gui:GetAttribute("FlingSequenceActive") or flightRoot then return end
+   if not focused or not scriptsActive() then return end
+   if antiStun and (newState==Enum.HumanoidStateType.Physics or newState==Enum.HumanoidStateType.Seated) then
+    pcall(function()
+     hum.PlatformStand=false;hum.Sit=false
+     hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+     if recoveryAggressive then task.defer(function() if hum.Parent then hum:ChangeState(Enum.HumanoidStateType.Running) end end) end
+     lastRecoveryReason="StateChanged anti-stun";lastRecoveryAt=os.clock()
+     if recoveryStatusLabel and recoveryStatusLabel.Parent then recoveryStatusLabel.Text="Last recovery: StateChanged anti-stun";recoveryStatusLabel.TextColor3=T.ok end
+    end)
+   end
+   if antiRagdoll and (newState==Enum.HumanoidStateType.Ragdoll or newState==Enum.HumanoidStateType.FallingDown) then
+    pcall(function()
+     hum.PlatformStand=false
+     hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+     local r=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+     if r then
+      r.AssemblyAngularVelocity=Vector3.zero
+      r.CFrame=r.CFrame+Vector3.new(0,0.4,0)
+     end
+     if recoveryAggressive then task.defer(function() if hum.Parent then hum:ChangeState(Enum.HumanoidStateType.Running) end end) end
+     lastRecoveryReason="StateChanged anti-ragdoll + hitbox nudge";lastRecoveryAt=os.clock()
+     if recoveryStatusLabel and recoveryStatusLabel.Parent then recoveryStatusLabel.Text="Last recovery: StateChanged anti-ragdoll + hitbox nudge";recoveryStatusLabel.TextColor3=T.ok end
+    end)
+   end
+  end)
+ end
+ local function onChar(char)
+  local h=char and char:FindFirstChildOfClass("Humanoid") or (char and char:WaitForChild("Humanoid",3))
+  if h then bindRecoveryState(h) end
+ end
+ if LP.Character then task.defer(onChar,LP.Character) end
+ connect(LP.CharacterAdded,onChar)
+ local accumulator=0
+ connect(RS.Heartbeat,function(dt)
+  if not alive then return end
+  local permitted=focused and scriptsActive() and not gui:GetAttribute("FlingSequenceActive")
+  local character=LP.Character
+  local hum=character and character:FindFirstChildOfClass("Humanoid")
+  local root=character and character:FindFirstChild("HumanoidRootPart")
+  if fly and permitted and hum and hum.Health>0 and root and not root.Anchored then
+   if flightRoot~=root then
+    stopFlight();flightHum=hum;flightRoot=root;oldRotate=hum.AutoRotate;oldPlatform=hum.PlatformStand;hum.AutoRotate=false;hum.PlatformStand=true
+    attachment=Instance.new("Attachment");attachment.Name="JJSFlyAttachment";attachment.Parent=root
+    velocity=Instance.new("LinearVelocity");velocity.Name="JJSFlyVelocity";velocity.Attachment0=attachment;velocity.RelativeTo=Enum.ActuatorRelativeTo.World;velocity.MaxForce=math.max(root.AssemblyMass,1)*workspace.Gravity*40;velocity.VectorVelocity=Vector3.zero;velocity.Parent=root
+    orientation=Instance.new("AlignOrientation");orientation.Name="JJSFlyOrientation";orientation.Attachment0=attachment;orientation.Mode=Enum.OrientationAlignmentMode.OneAttachment;orientation.MaxTorque=1000000;orientation.Responsiveness=20;orientation.Parent=root
+   end
+   local camera=workspace.CurrentCamera
+   if camera then
+    local direction=Vector3.zero
+    local typing=UIS:GetFocusedTextBox()~=nil
+    if not typing then
+     if UIS.KeyboardEnabled then
+      local x=(UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0)
+      local z=(UIS:IsKeyDown(Enum.KeyCode.W) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
+      direction=camera.CFrame.RightVector*x+camera.CFrame.LookVector*z
+     else direction=hum.MoveDirection end
+     direction+=Vector3.yAxis*((up or UIS:IsKeyDown(Enum.KeyCode.Space)) and 1 or 0)
+     direction-=Vector3.yAxis*((down or UIS:IsKeyDown(Enum.KeyCode.LeftControl)) and 1 or 0)
+    end
+    if direction.Magnitude>1 then direction=direction.Unit end
+    velocity.VectorVelocity=direction*speed
+    local look=Vector3.new(camera.CFrame.LookVector.X,0,camera.CFrame.LookVector.Z);if look.Magnitude>.01 then orientation.CFrame=CFrame.lookAt(Vector3.zero,look.Unit) end;root.AssemblyAngularVelocity=Vector3.zero
+   else velocity.VectorVelocity=Vector3.zero end
+  elseif flightRoot then stopFlight() end
+  -- High-rate local recovery (do not share the 0.15s hitbox throttle)
+  if permitted and not flightRoot and character and hum and root and hum.Health>0 and (antiStun or antiRagdoll) then
+   pcall(function()
+    local function mark(reason)
+     lastRecoveryAt=os.clock();lastRecoveryReason=reason
+     if recoveryStatusLabel and recoveryStatusLabel.Parent then
+      recoveryStatusLabel.Text="Last recovery: "..reason.."  ("..string.format("%.1fs",os.clock())..")"
+      recoveryStatusLabel.TextColor3=T.ok
+     end
+    end
+    local function breakLocalRagdollConstraints()
+     if not recoveryBreakConstraints then return 0 end
+     local n=0
+     for _,o in ipairs(character:GetDescendants()) do
+      if o:IsA("BallSocketConstraint") or o:IsA("NoCollisionConstraint") or o:IsA("RigidConstraint") then
+       -- Only disable constraints that look like ragdoll helpers (often added under character)
+       local nm=string.lower(o.Name)
+       if nm:find("ragdoll",1,true) or nm:find("socket",1,true) or nm:find("nocollide",1,true) or o:IsA("BallSocketConstraint") then
+        pcall(function() o.Enabled=false end)
+        n+=1
+       end
+      elseif o:IsA("BodyVelocity") or o:IsA("BodyAngularVelocity") or o:IsA("BodyForce") or o:IsA("BodyThrust") then
+       local nm=string.lower(o.Name)
+       if nm:find("ragdoll",1,true) or nm:find("fling",1,true) or nm:find("stun",1,true) then
+        pcall(function() o:Destroy() end);n+=1
+       end
+      end
+     end
+     return n
+    end
+    local function clearVel()
+     if not recoveryClearVel or not root.Parent then return end
+     -- Soft damp: kill tumble without nuking intentional knockback every frame forever
+     local ang=root.AssemblyAngularVelocity
+     if ang.Magnitude>8 then root.AssemblyAngularVelocity=ang*0.15 end
+     if hum.PlatformStand or hum:GetState()==Enum.HumanoidStateType.Physics
+      or hum:GetState()==Enum.HumanoidStateType.Ragdoll
+      or hum:GetState()==Enum.HumanoidStateType.FallingDown then
+      local v=root.AssemblyLinearVelocity
+      root.AssemblyLinearVelocity=Vector3.new(v.X*0.35,math.min(v.Y,12),v.Z*0.35)
+     end
+    end
+    local function nudgeHitbox(reasonTag)
+     -- Move local root slightly to break stuck physics / re-register standing
+     if not root or not root.Parent then return end
+     pcall(function()
+      local look=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z)
+      if look.Magnitude<.05 then look=Vector3.new(0,0,-1) else look=look.Unit end
+      local up=Vector3.new(0,0.35,0)
+      local side=Vector3.new(-look.Z,0,look.X)*0.15
+      -- tiny teleport up + forward to exit floor/ragdoll embeds
+      root.CFrame=CFrame.new(root.Position+up+look*0.2+side, root.Position+up+look*2)
+      root.AssemblyLinearVelocity=Vector3.new(0,6,0)
+      root.AssemblyAngularVelocity=Vector3.zero
+      -- brief local size pulse on HRP only (enemies unaffected); restore next frame
+      local old=root.Size
+      root.Size=Vector3.new(math.max(old.X,2.2),math.max(old.Y,2.2),math.max(old.Z,1.2))
+      task.defer(function()
+       if root.Parent then pcall(function() root.Size=old end) end
+      end)
+     end)
+    end
+    local function forceUp(reason)
+     pcall(function() hum.PlatformStand=false end)
+     pcall(function() hum.Sit=false end)
+     pcall(function() hum.AutoRotate=true end)
+     pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+     nudgeHitbox(reason)
+     if recoveryAggressive then
+      task.defer(function()
+       if not hum.Parent or hum.Health<=0 then return end
+       pcall(function()
+        local st=hum:GetState()
+        if st==Enum.HumanoidStateType.GettingUp or st==Enum.HumanoidStateType.Freefall
+         or st==Enum.HumanoidStateType.Physics or st==Enum.HumanoidStateType.Ragdoll
+         or st==Enum.HumanoidStateType.FallingDown then
+         hum:ChangeState(Enum.HumanoidStateType.Running)
+         if root and root.Parent then
+          root.AssemblyAngularVelocity=Vector3.zero
+          root.CFrame=root.CFrame+Vector3.new(0,0.2,0)
+         end
+        end
+       end)
+      end)
+     end
+     clearVel()
+     mark(reason)
+    end
+
+    local state=hum:GetState()
+    -- Anti-stun: upright lock / physics lock / sit
+    if antiStun then
+     if hum.PlatformStand then forceUp("PlatformStand cleared") end
+     if hum.Sit then pcall(function() hum.Sit=false end);mark("Sit cleared") end
+     if state==Enum.HumanoidStateType.Physics then forceUp("Physics -> GettingUp") end
+     if state==Enum.HumanoidStateType.Seated then pcall(function() hum.Sit=false;hum:ChangeState(Enum.HumanoidStateType.GettingUp) end);mark("Seated exit") end
+    end
+    -- Anti-ragdoll: knockdown states + local constraints
+    if antiRagdoll then
+     if state==Enum.HumanoidStateType.Ragdoll or state==Enum.HumanoidStateType.FallingDown then
+      local broken=breakLocalRagdollConstraints()
+      forceUp(state==Enum.HumanoidStateType.Ragdoll and ("Ragdoll exit"..(broken>0 and (" +"..broken.." constraints") or "")) or "FallingDown exit")
+     elseif recoveryAggressive then
+      -- Motor6Ds sometimes go limp while still "Running"; soft constraint pass
+      breakLocalRagdollConstraints()
+     end
+    end
+   end)
+  end
+
+  accumulator+=dt;if accumulator<.05 then return end;accumulator=0
+  -- Enemy hitbox expand + optional punch-reach assist (NEVER modifies local character parts)
+  if (expand or punchExpand) and permitted then
+   local keep={}
+   local myRoot=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+   local myChar=LP.Character
+   for h in pairs(hitboxHumanoids) do
+    local char=h.Parent
+    if char and char~=myChar and not (Players:GetPlayerFromCharacter(char)==LP) and char:IsDescendantOf(workspace) and h and h.Health>0 then
+     local root=char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+     if root and root:IsA("BasePart") then
+      local far=myRoot and (root.Position-myRoot.Position).Magnitude or 0
+      local inHitboxRange=expand and (not myRoot or far<=250)
+      -- Punch range: only enlarge enemies within a close fight distance
+      local inPunchRange=punchExpand and myRoot and far<=math.max(12,punchSize+6)
+      if inHitboxRange or inPunchRange then
+       local sizeMul=1
+       local base=boxSize
+       if inPunchRange and not inHitboxRange then
+        base=math.max(4,punchSize) -- punch-only mode uses punch size on enemy HRP-scale
+       elseif inPunchRange and inHitboxRange then
+        base=math.max(boxSize,punchSize)
+       end
+       for _,part in ipairs(collectHitParts(char)) do
+        if part~=nil and part.Parent and not part:IsDescendantOf(myChar) then
+         keep[part]=true
+         if not savedBoxes[part] then
+          savedBoxes[part]={size=part.Size,transparency=part.Transparency,collide=part.CanCollide,massless=part.Massless,canQuery=part.CanQuery}
+         end
+         local original=savedBoxes[part].size
+         local n=part.Name
+         local target
+         if n=="HumanoidRootPart" then
+          target=Vector3.new(base,base,base)
+         elseif n=="Head" then
+          target=Vector3.new(base*.5,base*.5,base*.5)
+         elseif n:find("Arm",1,true) or n:find("Hand",1,true) then
+          target=Vector3.new(base*.35,base*.65,base*.35)
+         elseif n=="UpperTorso" or n=="LowerTorso" or n=="Torso" then
+          target=Vector3.new(base*.8,base*.65,base*.45)
+         else
+          target=Vector3.new(base*.7,base*.7,base*.7)
+         end
+         -- Never shrink below original; only expand
+         target=Vector3.new(
+          math.max(original.X,target.X),
+          math.max(original.Y,target.Y),
+          math.max(original.Z,target.Z)
+         )
+         pcall(function()
+          if (part.Size-target).Magnitude>.08 then part.Size=target end
+          part.Transparency=math.clamp(part.Transparency,0.55,0.85)
+          part.CanCollide=false
+          -- Massless on enemies only — does not freeze local character
+          part.Massless=true
+         end)
+        end
+       end
+      end
+     end
+    end
+   end
+   local stale={};for part in pairs(savedBoxes) do if not keep[part] then table.insert(stale,part) end end
+   for _,part in ipairs(stale) do restoreBox(part) end
+  else restoreBoxes() end
+  -- Local punch-range visuals only (never resize real limbs — that freezes the character)
+  if punchExpand and permitted and character and hum and hum.Health>0 then
+   local anchors={}
+   for _,name in ipairs({"LeftHand","RightHand","Left Hand","Right Hand","Left Arm","Right Arm","LeftArm","RightArm","LeftLowerArm","RightLowerArm"}) do
+    local p=character:FindFirstChild(name)
+    if p and p:IsA("BasePart") then table.insert(anchors,p) end
+   end
+   if #anchors==0 then
+    local root=character:FindFirstChild("HumanoidRootPart")
+    if root then table.insert(anchors,root) end
+   end
+   for _,anchor in ipairs(anchors) do
+    local key=anchor:GetFullName()
+    local ball=punchVisuals[key]
+    if not ball or not ball.Parent then
+     ball=Instance.new("Part")
+     ball.Name="JJSPunchReachVisual"
+     ball.Shape=Enum.PartType.Ball
+     ball.Material=Enum.Material.ForceField
+     ball.Color=T.acc
+     ball.Transparency=.55
+     ball.Anchored=false
+     ball.CanCollide=false
+     ball.CanTouch=false
+     ball.CanQuery=false
+     ball.Massless=true
+     ball.CastShadow=false
+     ball.Size=Vector3.new(punchSize,punchSize,punchSize)
+     local weld=Instance.new("WeldConstraint")
+     weld.Part0=anchor
+     weld.Part1=ball
+     ball.CFrame=anchor.CFrame
+     ball.Parent=character
+     weld.Parent=ball
+     punchVisuals[key]=ball
+    else
+     local s=Vector3.new(punchSize,punchSize,punchSize)
+     if (ball.Size-s).Magnitude>.05 then ball.Size=s end
+    end
+   end
+  else
+   clearPunchVisuals()
+  end
+ end)
+ local function cleanup()
+  if not alive then return end
+  alive=false;fly=false;expand=false;punchExpand=false;antiStun=false;antiRagdoll=false;up=false;down=false
+  stopFlight();restoreBoxes();clearPunchVisuals()
+  if recoveryStateConn then recoveryStateConn:Disconnect();recoveryStateConn=nil end
+ end
+ connect(LP.CharacterRemoving,function()
+  up=false;down=false;stopFlight();restoreBoxes();clearPunchVisuals()
+  if recoveryStateConn then recoveryStateConn:Disconnect();recoveryStateConn=nil end
+ end)
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+
+;__JJSBoot:run("Advanced ESP and Experimental Range",function()
+ local alive=true;local raw=__JJSBoot.rawMake
+ local options={boxes=false,corners=false,skeleton=false,tracers=false,chams=false,items=false,reach=false};local maxDistance=1000;local range=12
+ local records={};local tools={};local tags={}
+ local screen=raw("ScreenGui",PG,{Name="JJSAdvancedESP",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=995})
+ local function note(p,text) return make("TextLabel",p,{Size=UDim2.new(1,0,0,64),Text=text,TextWrapped=true,BackgroundTransparency=1,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=nextOrder(p)+2}) end
+ for _,e in ipairs({{"2D Boxes","boxes"},{"Corner Boxes","corners"},{"Skeleton ESP","skeleton"},{"Tracers","tracers"},{"Chams","chams"},{"Dropped Items ESP","items"}}) do
+  local key=e[2];local p=card(pages.ESP,e[1],"");toggle(p,e[1],function() return options[key] end,function(v) options[key]=v end)
+  if key=="items" then note(p,"Marks streamed-in Workspace Tools with Handles, excluding equipped tools. Non-Tool pickups need game-specific identification.") end
+ end
+ local config=card(pages.ESP,"Advanced ESP Distance","");moduleSlider(config,"Maximum distance",100,3000,maxDistance," studs",function() return maxDistance end,function(v) maxDistance=v end)
+ local reachPanel=card(pages.Combat,"Range Expander (Local Preview)","")
+ toggle(reachPanel,"Range preview",function() return options.reach end,function(v) options.reach=v end)
+ moduleSlider(reachPanel,"Preview radius",3,40,range," studs",function() return range end,function(v) range=v end)
+ note(reachPanel,"Local visualization of a reach radius around you (ground ring + vertical volume). Does not extend server hit detection or change attacks.")
+ local ring=Instance.new("Part");ring.Name="JJSRangePreview";ring.Shape=Enum.PartType.Cylinder;ring.Anchored=true;ring.CanCollide=false;ring.CanTouch=false;ring.CanQuery=false;ring.Material=Enum.Material.ForceField;ring.Color=T.acc;ring.Transparency=.55;ring.CastShadow=false
+ local volume=Instance.new("Part");volume.Name="JJSRangeVolume";volume.Shape=Enum.PartType.Cylinder;volume.Anchored=true;volume.CanCollide=false;volume.CanTouch=false;volume.CanQuery=false;volume.Material=Enum.Material.ForceField;volume.Color=T.acc;volume.Transparency=.85;volume.CastShadow=false
+ local function segment(rec,n,a,b)
+  local l=rec.lines[n]
+  if not l then l=raw("Frame",rec.folder,{AnchorPoint=Vector2.new(.5,.5),BorderSizePixel=0,BackgroundColor3=T.acc});rec.lines[n]=l end
+  local d=b-a;l.Position=UDim2.fromOffset((a.X+b.X)/2,(a.Y+b.Y)/2);l.Size=UDim2.fromOffset(d.Magnitude,1.5);l.Rotation=math.deg(math.atan2(d.Y,d.X));l.Visible=true
+ end
+ local function consider(o) if o:IsA("Tool") then tools[o]=true end end
+ for _,o in ipairs(workspace:GetDescendants()) do consider(o) end
+ connect(workspace.DescendantAdded,consider)
+ connect(workspace.DescendantRemoving,function(o) tools[o]=nil;if tags[o] then tags[o]:Destroy();tags[o]=nil end end)
+ connect(Players.PlayerRemoving,function(p) local r=records[p];if r then r.folder:Destroy();if r.highlight then r.highlight:Destroy() end;records[p]=nil end end)
+ local elapsed=0
+ connect(RS.RenderStepped,function(dt)
+  if not alive then return end;elapsed+=dt;if elapsed<1/30 then return end;elapsed=0
+  local camera=workspace.CurrentCamera;if not camera then return end
+  local own=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart");local active=scriptsActive()
+  if active and options.reach and own then
+   -- Cylinder axis is local X: flat ground ring + upright volume
+   local d=math.max(2,range*2)
+   ring.Size=Vector3.new(0.12,d,d)
+   ring.CFrame=CFrame.new(own.Position.X,own.Position.Y-2.6,own.Position.Z)*CFrame.Angles(0,0,math.pi/2)
+   ring.Color=T.acc;ring.Parent=workspace
+   volume.Size=Vector3.new(6,d,d)
+   volume.CFrame=CFrame.new(own.Position)*CFrame.Angles(0,0,math.pi/2)
+   volume.Color=T.acc;volume.Parent=workspace
+  else ring.Parent=nil;volume.Parent=nil end
+  local function project(v) local p,on=camera:WorldToViewportPoint(v);return Vector2.new(p.X,p.Y),on and p.Z>.1 end
+  for _,player in ipairs(Players:GetPlayers()) do if player~=LP then
+   local r=records[player]
+   if not r then r={folder=raw("Folder",screen,{Name="ESP_"..player.UserId}),lines={}};records[player]=r end
+   for _,l in ipairs(r.lines) do l.Visible=false end
+   local c=player.Character;local h=c and c:FindFirstChildOfClass("Humanoid");local root=c and c:FindFirstChild("HumanoidRootPart")
+   local valid=active and own and root and h and h.Health>0 and (own.Position-root.Position).Magnitude<=maxDistance
+   if r.character~=c then
+    r.character=c;r.motors={};if r.highlight then r.highlight:Destroy();r.highlight=nil end
+    if c then for _,o in ipairs(c:GetDescendants()) do if o:IsA("Motor6D") then table.insert(r.motors,o) end end end
+   end
+   if valid and options.chams then
+    if not r.highlight then local t=Instance.new("Highlight");t.Name="JJSChams";t.Adornee=c;t.FillColor=T.acc;t.OutlineColor=T.txt;t.FillTransparency=.65;t.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop;t.Parent=screen;r.highlight=t end
+    r.highlight.Enabled=true
+   elseif r.highlight then r.highlight.Enabled=false end
+   if valid then
+    local n=0;local function draw(a,b) n+=1;segment(r,n,a,b) end
+    if options.boxes or options.corners then
+     local ok,cf,size=pcall(c.GetBoundingBox,c)
+     if ok then
+      local lo=Vector2.new(math.huge,math.huge);local hi=Vector2.new(-math.huge,-math.huge);local front=true;local any=false
+      for x=-1,1,2 do for y=-1,1,2 do for z=-1,1,2 do
+       local p,on=camera:WorldToViewportPoint(cf:PointToWorldSpace(Vector3.new(size.X*x,size.Y*y,size.Z*z)*.5))
+       front=front and p.Z>.1;any=any or on;lo=Vector2.new(math.min(lo.X,p.X),math.min(lo.Y,p.Y));hi=Vector2.new(math.max(hi.X,p.X),math.max(hi.Y,p.Y))
+      end end end
+      if front and any then
+       local a,b,c2,d=lo,Vector2.new(hi.X,lo.Y),hi,Vector2.new(lo.X,hi.Y)
+       if options.boxes then draw(a,b);draw(b,c2);draw(c2,d);draw(d,a) end
+       if options.corners then local w=(hi.X-lo.X)*.25;local hh=(hi.Y-lo.Y)*.25
+        for _,v in ipairs({{a,w,hh},{b,-w,hh},{c2,-w,-hh},{d,w,-hh}}) do draw(v[1],v[1]+Vector2.new(v[2],0));draw(v[1],v[1]+Vector2.new(0,v[3])) end
+       end
+      end
+     end
+    end
+    if options.tracers then local p,on=project(root.Position);if on then draw(Vector2.new(camera.ViewportSize.X/2,camera.ViewportSize.Y-10),p) end end
+    if options.skeleton then for _,j in ipairs(r.motors) do
+     local a,b=j.Part0,j.Part1
+     if a and b and a:IsDescendantOf(c) and b:IsDescendantOf(c) and not a:FindFirstAncestorOfClass("Accessory") and not b:FindFirstAncestorOfClass("Accessory") then local p,on=project(a.Position);local q,visible=project(b.Position);if on and visible then draw(p,q) end end
+    end end
+   end
+  end end
+  for tool in pairs(tools) do
+   local h=tool:FindFirstChild("Handle");local parent=tool.Parent
+   local held=parent and parent:IsA("Model") and parent:FindFirstChildOfClass("Humanoid")
+   local valid=active and options.items and own and h and h:IsA("BasePart") and tool:IsDescendantOf(workspace) and not held and (h.Position-own.Position).Magnitude<=maxDistance
+   local tag=tags[tool]
+   if valid then
+    if not tag then tag=Instance.new("BillboardGui");tag.Name="JJSDroppedItem";tag.Size=UDim2.fromOffset(200,38);tag.StudsOffset=Vector3.new(0,1.5,0);tag.AlwaysOnTop=true;tag.Parent=screen;raw("TextLabel",tag,{Name="Label",Size=UDim2.fromScale(1,1),BackgroundTransparency=1,TextColor3=T.acc,TextStrokeTransparency=.3,Font=Enum.Font.GothamBold,TextSize=12});tags[tool]=tag end
+    tag.Adornee=h;tag.Enabled=true;tag.Label.Text=tool.Name.."  "..math.floor((h.Position-own.Position).Magnitude).." studs"
+   elseif tag then tag.Enabled=false end
+  end
+ end)
+ local function cleanup() if not alive then return end;alive=false;ring:Destroy();volume:Destroy();screen:Destroy();table.clear(records);table.clear(tools);table.clear(tags) end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+;__JJSBoot:run("Combo Studio",function()
+ local Http=game:GetService("HttpService");local p=card(pages.Macros,"Combo Studio","")
+ local alive,recording,playing=true,false,false;local generation=0;local started=0;local events={};local held={};local recorded={};local library={}
+ local allowed={W=true,A=true,S=true,D=true,Q=true,F=true,R=true,G=true,One=true,Two=true,Three=true,Four=true,Space=true,LeftControl=true,LeftShift=true}
+ local function textBox(text,height)
+  return make("TextBox",p,{Size=UDim2.new(1,0,0,height),Text=text,ClearTextOnFocus=false,BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Code,TextSize=11,LayoutOrder=nextOrder(p)+2})
+ end
+ local name=textBox("Custom Combo",32);local editor=textBox("",160);editor.MultiLine=true;editor.TextWrapped=true;editor.TextXAlignment=Enum.TextXAlignment.Left;editor.TextYAlignment=Enum.TextYAlignment.Top
+ local status=make("TextLabel",p,{Size=UDim2.new(1,0,0,72),Text="Keyboard / left-click recording. Disable other macros first. Practice templates are not verified true combos.",TextWrapped=true,BackgroundTransparency=1,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,LayoutOrder=nextOrder(p)+2})
+ local function setBusy() gui:SetAttribute("ComboStudioBusy",recording or playing) end
+ local function send(e)
+  if e.kind=="key" then VIM:SendKeyEvent(e.down,Enum.KeyCode[e.code],false,game)
+  else local pos=UIS:GetMouseLocation();local inset=game:GetService("GuiService"):GetGuiInset();VIM:SendMouseButtonEvent(pos.X-inset.X,pos.Y-inset.Y,0,e.down,game,0) end
+  held[e.kind..":"..e.code]=e.down and e or nil
+ end
+ local function release()
+  local list={};for _,e in pairs(held) do table.insert(list,{kind=e.kind,code=e.code,down=false}) end
+  for _,e in ipairs(list) do pcall(send,e) end;table.clear(held)
+ end
+ local function stop()
+  generation+=1
+  if recording then for _,e in pairs(recorded) do if #events<2000 then table.insert(events,{t=math.min(os.clock()-started,120),kind=e.kind,code=e.code,down=false}) end end end
+  recording=false;playing=false;table.clear(recorded);release();setBusy()
+ end
+ local function export() editor.Text=Http:JSONEncode({schema="JJSCombo",version=1,name=name.Text,events=events});return editor.Text end
+ local function validate(text)
+  assert(#text<=300000,"JSON exceeds size limit");local data=Http:JSONDecode(text)
+  assert(type(data)=="table" and data.schema=="JJSCombo" and data.version==1 and type(data.events)=="table" and #data.events<=2000,"Unsupported combo schema or event count")
+  local clean={};local last=-1
+  for _,e in ipairs(data.events) do
+   assert(type(e)=="table" and type(e.t)=="number" and e.t==e.t and e.t>=0 and e.t<=120 and e.t>=last,"Invalid timing (0-120 seconds, sorted)")
+   assert(type(e.down)=="boolean" and ((e.kind=="key" and allowed[e.code]) or (e.kind=="mouse" and e.code=="MouseButton1")),"Unsupported input")
+   table.insert(clean,{t=e.t,kind=e.kind,code=e.code,down=e.down});last=e.t
+  end
+  return clean,type(data.name)=="string" and data.name:sub(1,80) or "Imported Combo"
+ end
+ local function button(title,fn)
+  local b=make("TextButton",p,{Size=UDim2.new(1,0,0,32),Text=title,BackgroundColor3=T.p2,TextColor3=T.txt,Font=Enum.Font.Gotham,TextSize=12,LayoutOrder=nextOrder(p)+2});corner(b,5)
+  connect(b.Activated,function() local ok,err=pcall(fn);if not ok then status.Text=tostring(err) end end)
+ end
+ button("Record (3 second countdown)",function()
+  stop();events={};local id=generation;status.Text="Recording starts in 3 seconds. Close menu; Escape or Stop ends recording."
+  task.spawn(function() task.wait(3);if alive and generation==id then recording=true;started=os.clock();setBusy();status.Text="Recording (120 seconds max)." end end)
+ end)
+ local function capture(i,down,processed)
+  if not recording or UIS:GetFocusedTextBox() then return end
+  if down and i.KeyCode==Enum.KeyCode.Escape then stop();export();return end
+  local e
+  if i.UserInputType==Enum.UserInputType.Keyboard and allowed[i.KeyCode.Name] then e={kind="key",code=i.KeyCode.Name}
+  elseif i.UserInputType==Enum.UserInputType.MouseButton1 then e={kind="mouse",code="MouseButton1"} else return end
+  local key=e.kind..":"..e.code
+  if down and processed or not down and not recorded[key] then return end
+  if #events>=1990 then stop();export();status.Text="Event limit reached.";return end
+  e.down=down;e.t=math.min(os.clock()-started,120);table.insert(events,e);recorded[key]=down and e or nil
+ end
+ connect(UIS.InputBegan,function(i,g) capture(i,true,g);if playing and i.KeyCode==Enum.KeyCode.Escape then stop();status.Text="Replay cancelled." end end)
+ connect(UIS.InputEnded,function(i,g) capture(i,false,g) end)
+ button("Stop / Cancel",function() stop();export();status.Text="Stopped: "..#events.." events." end)
+ button("Replay (3 second countdown)",function()
+  assert(okVIM and VIM,"Input simulation unavailable");stop();local copy=validate(export());assert(#copy>0,"No events");local id=generation;playing=true;setBusy();status.Text="Replay starts in 3 seconds. Close menu; Escape cancels."
+  task.spawn(function()
+   task.wait(3);local start=os.clock()
+   local ok,err=pcall(function() for _,e in ipairs(copy) do
+    while alive and generation==id and os.clock()-start<e.t do RS.Heartbeat:Wait() end
+    if not alive or generation~=id or not running then return end
+    if UIS:GetFocusedTextBox() then error("Stopped for typing") end;send(e)
+   end end)
+   if generation==id then release();playing=false;setBusy();status.Text=ok and "Replay finished." or tostring(err) end
+  end)
+ end)
+ button("Export JSON",function() stop();export();status.Text="JSON exported to editor." end)
+ button("Import JSON",function() stop();local data,title=validate(editor.Text);events=data;name.Text=title;status.Text="Imported "..#events.." events." end)
+ local function safeName() local n=name.Text:gsub("[^%w_%-]","_"):sub(1,64);assert(#n>0,"Enter a name");return n end
+ button("Save (session + file if supported)",function()
+  stop();local n=safeName();local text=export();library[n]=text
+  if type(writefile)=="function" and type(makefolder)=="function" then pcall(makefolder,"JJSCombos");writefile("JJSCombos/"..n..".json",text);status.Text="Saved session + JSON file: "..n else status.Text="Saved session only. Copy JSON to preserve it; file APIs unavailable." end
+ end)
+ button("Load named custom combo",function()
+  stop();local n=safeName();local text=library[n];if not text and type(readfile)=="function" then text=readfile("JJSCombos/"..n..".json") end
+  assert(text,"No combo with this name");local data,title=validate(text);events=data;name.Text=title;editor.Text=text;status.Text="Loaded "..#events.." events."
+ end)
+ local preset=0
+ button("Cycle / Load built-in preset",function()
+  stop();preset=preset%3+1;events={};name.Text=({"Three M1 practice","M1 jump practice","Skill sequence practice"})[preset]
+  local function add(t,kind,code) table.insert(events,{t=t,kind=kind,code=code,down=true});table.insert(events,{t=t+.05,kind=kind,code=code,down=false}) end
+  if preset<3 then for i=0,2 do add(i*.6,"mouse","MouseButton1") end;if preset==2 then add(1.9,"key","Space");add(2.05,"mouse","MouseButton1") end
+  else for i,k in ipairs({"One","Two","Three","Four"}) do add((i-1)*1.5,"key",k) end end
+  export();status.Text="Loaded practice template: "..name.Text..". Not a verified character combo."
+ end)
+ connect(RS.Heartbeat,function() if recording and os.clock()-started>=120 then stop();export() end end)
+ connect(UIS.WindowFocusReleased,stop);connect(LP.CharacterRemoving,stop)
+ local function cleanup() if not alive then return end;alive=false;stop() end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+
+
+;__JJSBoot:run("Triggerbot",function()
+ local alive=true
+ local on=false
+ local range=12
+ local fov=110
+ local gap=.14
+ local last=-math.huge
+ local teamCheck=true
+ local includeNPC=true
+ local npcHumans={}
+ local p=card(pages.Combat,"Triggerbot","")
+ toggle(p,"Triggerbot",function() return on end,function(v) on=v end)
+ moduleSlider(p,"Trigger range",3,30,range," studs",function() return range end,function(v) range=v end)
+ moduleSlider(p,"Trigger FOV",30,180,fov," deg",function() return fov end,function(v) fov=v end)
+ moduleSlider(p,"Click gap",40,500,math.floor(gap*1000+.5)," ms",function() return math.floor(gap*1000+.5) end,function(v) gap=v/1000 end)
+ toggle(p,"Skip teammates",function() return teamCheck end,function(v) teamCheck=v end)
+ toggle(p,"Include NPCs",function() return includeNPC end,function(v) includeNPC=v end)
+ make("TextLabel",p,{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,Text="Auto M1 when a living player or NPC is in range + FOV (camera or character facing). Close the hub to run. Local clicks only.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(p)+2})
+ local function registerNPC(o)
+  if o:IsA("Humanoid") then
+   local m=o.Parent
+   if m and m:IsA("Model") and m~=LP.Character and not Players:GetPlayerFromCharacter(m) then npcHumans[o]=m end
+  end
+ end
+ for _,o in ipairs(workspace:GetDescendants()) do registerNPC(o) end
+ connect(workspace.DescendantAdded,registerNPC)
+ connect(workspace.DescendantRemoving,function(o) if o:IsA("Humanoid") then npcHumans[o]=nil end end)
+ local function click()
+  if not okVIM or not VIM then return false end
+  local pos=UIS:GetMouseLocation()
+  local inset=game:GetService("GuiService"):GetGuiInset()
+  local x,y=pos.X-inset.X,pos.Y-inset.Y
+  local ok1=pcall(function() VIM:SendMouseButtonEvent(x,y,0,true,game,1) end)
+  if not ok1 then ok1=pcall(function() VIM:SendMouseButtonEvent(x,y,0,true,game,0) end) end
+  task.delay(.04,function()
+   pcall(function() if okVIM and VIM then VIM:SendMouseButtonEvent(x,y,0,false,game,1) end end)
+   pcall(function() if okVIM and VIM then VIM:SendMouseButtonEvent(x,y,0,false,game,0) end end)
+  end)
+  return ok1
+ end
+ local function inFOV(fromPos,look,targetPos)
+  local offset=targetPos-fromPos
+  local dist=offset.Magnitude
+  if dist<1.0 or dist>range then return false,dist end
+  local ang=math.deg(math.acos(math.clamp(look.Unit:Dot(offset.Unit),-1,1)))
+  return ang<=fov*.5,dist
+ end
+ local function enemyInFront()
+  local char=LP.Character
+  local hum=char and char:FindFirstChildOfClass("Humanoid")
+  local root=char and char:FindFirstChild("HumanoidRootPart")
+  local cam=workspace.CurrentCamera
+  if not hum or hum.Health<=0 or not root or not cam then return false end
+  local looks={cam.CFrame.LookVector}
+  local flat=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z)
+  if flat.Magnitude>.05 then table.insert(looks,flat.Unit) end
+  local bestDist=range+0.01
+  local found=false
+  local function consider(r)
+   if not r or not r.Parent then return end
+   for _,look in ipairs(looks) do
+    local ok,dist=inFOV(root.Position,look,r.Position)
+    if ok and dist<bestDist then bestDist=dist;found=true end
+   end
+  end
+  for _,plr in ipairs(Players:GetPlayers()) do
+   if plr~=LP then
+    if not (teamCheck and not LP.Neutral and not plr.Neutral and LP.Team and LP.Team==plr.Team) then
+     local c=plr.Character
+     local h=c and c:FindFirstChildOfClass("Humanoid")
+     local r=c and (c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("UpperTorso") or c:FindFirstChild("Torso"))
+     if h and h.Health>0 and r then consider(r) end
+    end
+   end
+  end
+  if includeNPC then
+   for h,m in pairs(npcHumans) do
+    if h.Parent and m and m.Parent and h.Health>0 then
+     local r=m:FindFirstChild("HumanoidRootPart") or m:FindFirstChild("UpperTorso") or m:FindFirstChild("Torso")
+     if r then consider(r) end
+    else npcHumans[h]=nil end
+   end
+  end
+  return found
+ end
+ connect(RS.Heartbeat,function()
+  if not alive or not on then return end
+  if not scriptsActive() or main.Visible or UIS:GetFocusedTextBox() then return end
+  if busy or todoBusy or tripleJumpBusy or manualSequenceBusy then return end
+  if gui:GetAttribute("ComboStudioBusy") or gui:GetAttribute("AutoParryHolding") or gui:GetAttribute("FlingSequenceActive") then return end
+  if os.clock()-last<gap then return end
+  if enemyInFront() then
+   if click() then last=os.clock() end
+  end
+ end)
+ local function cleanup() alive=false;on=false;table.clear(npcHumans) end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+;__JJSBoot:run("Dash HUD",function()
+ local alive=true
+ local enabled=true
+ -- JJS community notes: forward/still dash ~6s CD; side/back ~2s CD
+ local FRONT_CD,SIDE_CD=6,2
+ local lastKind="—"
+ local frontReadyAt,sideReadyAt=0,0
+ local flashUntil={Front=0,Left=0,Right=0,Back=0}
+ local counts={Front=0,Left=0,Right=0,Back=0}
+ local layer=Instance.new("ScreenGui")
+ layer.Name="JJSDashHUD"
+ layer.ResetOnSpawn=false
+ layer.IgnoreGuiInset=true
+ layer.DisplayOrder=1002
+ layer.Parent=PG
+ local panel=Instance.new("Frame")
+ panel.Name="DashHudPanel"
+ panel.Size=UDim2.fromOffset(188,150)
+ panel.Position=UDim2.new(1,-206,0,96)
+ panel.BackgroundColor3=Color3.fromRGB(22,15,12)
+ panel.BackgroundTransparency=.12
+ panel.BorderSizePixel=0
+ panel.Active=true
+ panel.Parent=layer
+ local corner=Instance.new("UICorner");corner.CornerRadius=UDim.new(0,10);corner.Parent=panel
+ local stroke=Instance.new("UIStroke");stroke.Color=T.acc;stroke.Thickness=1;stroke.Parent=panel
+ local title=Instance.new("TextLabel")
+ title.BackgroundTransparency=1
+ title.Size=UDim2.new(1,-12,0,18)
+ title.Position=UDim2.fromOffset(8,6)
+ title.Font=Enum.Font.GothamBold
+ title.TextSize=12
+ title.TextXAlignment=Enum.TextXAlignment.Left
+ title.TextColor3=T.txt
+ title.Text="Dash CD  (drag)"
+ title.Parent=panel
+ local lastLabel=Instance.new("TextLabel")
+ lastLabel.BackgroundTransparency=1
+ lastLabel.Size=UDim2.new(1,-12,0,14)
+ lastLabel.Position=UDim2.fromOffset(8,24)
+ lastLabel.Font=Enum.Font.Gotham
+ lastLabel.TextSize=11
+ lastLabel.TextXAlignment=Enum.TextXAlignment.Left
+ lastLabel.TextColor3=T.dim
+ lastLabel.Text="Last: —"
+ lastLabel.Parent=panel
+ -- Front cooldown row
+ local frontRow=Instance.new("Frame");frontRow.Size=UDim2.new(1,-16,0,28);frontRow.Position=UDim2.fromOffset(8,42);frontRow.BackgroundColor3=T.p2;frontRow.BorderSizePixel=0;frontRow.Parent=panel
+ local fc=Instance.new("UICorner");fc.CornerRadius=UDim.new(0,6);fc.Parent=frontRow
+ local frontFill=Instance.new("Frame");frontFill.Size=UDim2.fromScale(1,1);frontFill.BackgroundColor3=T.acc;frontFill.BorderSizePixel=0;frontFill.Parent=frontRow
+ local ffc=Instance.new("UICorner");ffc.CornerRadius=UDim.new(0,6);ffc.Parent=frontFill
+ local frontText=Instance.new("TextLabel");frontText.BackgroundTransparency=1;frontText.Size=UDim2.fromScale(1,1);frontText.Font=Enum.Font.GothamBold;frontText.TextSize=12;frontText.TextColor3=T.txt;frontText.Text="Front  READY";frontText.Parent=frontRow
+ -- Side cooldown row (Left/Right/Back share ~2s in JJS notes)
+ local sideRow=Instance.new("Frame");sideRow.Size=UDim2.new(1,-16,0,28);sideRow.Position=UDim2.fromOffset(8,74);sideRow.BackgroundColor3=T.p2;sideRow.BorderSizePixel=0;sideRow.Parent=panel
+ local sc=Instance.new("UICorner");sc.CornerRadius=UDim.new(0,6);sc.Parent=sideRow
+ local sideFill=Instance.new("Frame");sideFill.Size=UDim2.fromScale(1,1);sideFill.BackgroundColor3=Color3.fromRGB(80,200,120);sideFill.BorderSizePixel=0;sideFill.Parent=sideRow
+ local sfc=Instance.new("UICorner");sfc.CornerRadius=UDim.new(0,6);sfc.Parent=sideFill
+ local sideText=Instance.new("TextLabel");sideText.BackgroundTransparency=1;sideText.Size=UDim2.fromScale(1,1);sideText.Font=Enum.Font.GothamBold;sideText.TextSize=12;sideText.TextColor3=T.txt;sideText.Text="Side  READY";sideText.Parent=sideRow
+ local cells={}
+ local order={{"Front",UDim2.fromOffset(8,108)},{"Left",UDim2.fromOffset(52,108)},{"Right",UDim2.fromOffset(96,108)},{"Back",UDim2.fromOffset(140,108)}}
+ for _,entry in ipairs(order) do
+  local name,pos=entry[1],entry[2]
+  local b=Instance.new("TextLabel")
+  b.Size=UDim2.fromOffset(40,22)
+  b.Position=pos
+  b.BackgroundColor3=T.p2
+  b.TextColor3=T.dim
+  b.Font=Enum.Font.GothamBold
+  b.TextSize=10
+  b.Text=name:sub(1,1)
+  b.BorderSizePixel=0
+  b.Parent=panel
+  local c=Instance.new("UICorner");c.CornerRadius=UDim.new(0,5);c.Parent=b
+  cells[name]=b
+ end
+ local dragging,dragStart,origin,touch=false,nil,nil,nil
+ connect(panel.InputBegan,function(input)
+  if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+   dragging=true;dragStart=input.Position;origin=panel.Position;touch=input
+  end
+ end)
+ connect(UIS.InputChanged,function(input)
+  if dragging and (input==touch or input.UserInputType==Enum.UserInputType.MouseMovement) then
+   local d=input.Position-dragStart
+   panel.Position=UDim2.new(origin.X.Scale,origin.X.Offset+d.X,origin.Y.Scale,origin.Y.Offset+d.Y)
+  end
+ end)
+ connect(UIS.InputEnded,function(input) if input==touch then dragging=false;touch=nil end end)
+ local function paint()
+  local now=os.clock()
+  local fLeft=math.max(0,frontReadyAt-now)
+  local sLeft=math.max(0,sideReadyAt-now)
+  if fLeft<=0 then
+   frontFill.Size=UDim2.fromScale(1,1);frontText.Text="Front  READY ("..FRONT_CD.."s)";frontText.TextColor3=T.ok
+  else
+   frontFill.Size=UDim2.fromScale(math.clamp(1-fLeft/FRONT_CD,0,1),1)
+   frontText.Text=string.format("Front  %.1fs",fLeft);frontText.TextColor3=T.txt
+  end
+  if sLeft<=0 then
+   sideFill.Size=UDim2.fromScale(1,1);sideText.Text="Side  READY ("..SIDE_CD.."s)";sideText.TextColor3=T.ok
+  else
+   sideFill.Size=UDim2.fromScale(math.clamp(1-sLeft/SIDE_CD,0,1),1)
+   sideText.Text=string.format("Side  %.1fs",sLeft);sideText.TextColor3=T.txt
+  end
+  for kind,cell in pairs(cells) do
+   local hot=now<flashUntil[kind]
+   cell.BackgroundColor3=hot and T.acc or T.p2
+   cell.TextColor3=hot and Color3.fromRGB(28,14,6) or T.dim
+  end
+  lastLabel.Text="Last: "..lastKind
+  layer.Enabled=enabled and hubUnlocked and __JJSBoot.ready
+ end
+ local function classifyDash()
+  local char=LP.Character
+  local hum=char and char:FindFirstChildOfClass("Humanoid")
+  local root=char and char:FindFirstChild("HumanoidRootPart")
+  if not hum or not root then return "Front" end
+  local move=hum.MoveDirection
+  if move.Magnitude<.08 then return "Front" end
+  local look=Vector3.new(root.CFrame.LookVector.X,0,root.CFrame.LookVector.Z)
+  if look.Magnitude<.05 then return "Front" end
+  look=look.Unit
+  local flat=Vector3.new(move.X,0,move.Z)
+  if flat.Magnitude<.05 then return "Front" end
+  flat=flat.Unit
+  local forward=look:Dot(flat)
+  local right=look:Cross(Vector3.yAxis).Unit:Dot(flat)
+  if forward>.55 then return "Front" end
+  if forward<-.55 then return "Back" end
+  if right>0 then return "Right" end
+  return "Left"
+ end
+ local function noteDash()
+  local kind=classifyDash()
+  lastKind=kind
+  counts[kind]=(counts[kind] or 0)+1
+  flashUntil[kind]=os.clock()+.45
+  local now=os.clock()
+  if kind=="Front" then frontReadyAt=now+FRONT_CD else sideReadyAt=now+SIDE_CD end
+  paint()
+ end
+ connect(UIS.InputBegan,function(input,g)
+  if g or not alive then return end
+  if input.KeyCode==Enum.KeyCode.Q then noteDash() end
+ end)
+ local lastVel=Vector3.zero
+ connect(RS.Heartbeat,function()
+  if not alive then return end
+  paint()
+  local char=LP.Character
+  local root=char and char:FindFirstChild("HumanoidRootPart")
+  if not root then return end
+  local vel=root.AssemblyLinearVelocity
+  local horizontal=Vector3.new(vel.X,0,vel.Z)
+  local prev=Vector3.new(lastVel.X,0,lastVel.Z)
+  lastVel=vel
+  if horizontal.Magnitude>38 and (horizontal.Magnitude-prev.Magnitude)>28 then
+   local recent=false
+   local now=os.clock()
+   for _,t in pairs(flashUntil) do if now<t then recent=true break end end
+   if not recent then noteDash() end
+  end
+ end)
+ local ui=card(pages.Visuals,"Dash HUD","")
+ toggle(ui,"Show Dash HUD",function() return enabled end,function(v) enabled=v;paint() end)
+ make("TextLabel",ui,{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,Text="Movable cooldown HUD. Front dash CD = 6s, Side/Back dash CD = 2s (JJS community estimates). Bars count down after Q / dash burst. Not server-synced.",TextWrapped=true,TextColor3=T.dim,Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextOrder(ui)+2})
+ local function cleanup()
+  if not alive then return end
+  alive=false
+  if layer then layer:Destroy() end
+ end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+
+
+
+;__JJSBoot:run("Stun Status ESP",function()
+ -- JJS: stun = upright action lock after hit (~0.75s on M1); ragdoll = knockdown/physics (separate from stun).
+ -- Client-side only: Humanoid state + hit-reaction anim names. Not a server stun flag.
+ local alive=true
+ local on=false
+ local maxDist=200
+ local showSelf=false
+ local teamSkip=true
+ local raw=__JJSBoot.rawMake
+ local screen=raw("ScreenGui",PG,{Name="JJSStunStatusESP",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=996})
+ local records={}
+ local hitNames={"hitreaction","hitreact","hitstun","gethit","takinghit","receivedhit","hurt","flinch","stagger","stun","ragdoll","knockback","knockdown","landedhit","damage"}
+ local function norm(s) return tostring(s or ""):lower():gsub("[^%w]","") end
+ local function isHitAnim(track)
+  if not track or not track.IsPlaying or track.Speed<=0 then return false end
+  local names={track.Name}
+  local anim=track.Animation
+  if anim then table.insert(names,anim.Name) end
+  for _,n0 in ipairs(names) do
+   local n=norm(n0)
+   for _,bad in ipairs(hitNames) do if n:find(bad,1,true) then return true end end
+  end
+  return false
+ end
+ local function isStunned(char,hum)
+  if not hum or hum.Health<=0 then return false,"down" end
+  local st=hum:GetState()
+  if hum.PlatformStand then return true,"platform" end
+  if st==Enum.HumanoidStateType.Ragdoll then return true,"ragdoll" end
+  if st==Enum.HumanoidStateType.FallingDown then return true,"falling" end
+  if st==Enum.HumanoidStateType.Physics then return true,"physics" end
+  if st==Enum.HumanoidStateType.Dead then return false,"dead" end
+  local animator=hum:FindFirstChildOfClass("Animator") or (char and char:FindFirstChildOfClass("Animator"))
+  if animator then
+   for _,t in ipairs(animator:GetPlayingAnimationTracks()) do
+    if isHitAnim(t) then return true,"hitstun" end
+   end
+  end
+  return false,"free"
+ end
+ local function ensure(player)
+  local r=records[player]
+  if r then return r end
+  local folder=raw("Folder",screen,{Name="Stun_"..player.UserId})
+  local box=raw("Frame",folder,{Name="Box",BackgroundTransparency=.72,BorderSizePixel=0,Visible=false})
+  local stroke=Instance.new("UIStroke");stroke.Thickness=2;stroke.Parent=box
+  local tag=raw("TextLabel",folder,{Name="Tag",BackgroundTransparency=1,Size=UDim2.fromOffset(90,16),Font=Enum.Font.GothamBold,TextSize=11,TextStrokeTransparency=.4,Visible=false,TextXAlignment=Enum.TextXAlignment.Center})
+  r={folder=folder,box=box,stroke=stroke,tag=tag,character=nil}
+  records[player]=r
+  return r
+ end
+ local function clearPlayer(player)
+  local r=records[player]
+  if r then r.folder:Destroy();records[player]=nil end
+ end
+ local panel=card(pages.ESP,"Stun Status (Special)","")
+ -- Special module chrome: blue outline frame
+ local special=make("Frame",panel,{
+  Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=Color3.fromRGB(18,28,48),
+  BorderSizePixel=0,LayoutOrder=nextOrder(panel)+1
+ })
+ corner(special,8)
+ local blue=Instance.new("UIStroke");blue.Name="SpecialBlueOutline";blue.Color=Color3.fromRGB(64,156,255);blue.Thickness=2.5;blue.Parent=special
+ make("TextLabel",special,{
+  Size=UDim2.new(1,-16,0,18),Position=UDim2.fromOffset(8,8),BackgroundTransparency=1,
+  Text="SPECIAL MODULE",TextColor3=Color3.fromRGB(120,190,255),Font=Enum.Font.GothamBold,TextSize=11,
+  TextXAlignment=Enum.TextXAlignment.Left
+ })
+ make("TextLabel",special,{
+  Size=UDim2.new(1,-16,0,64),Position=UDim2.fromOffset(8,28),BackgroundTransparency=1,TextWrapped=true,
+  Text="RED box = stunned or ragdolled (JJS: upright M1 stun ~0.75s, or ragdoll / physics / falling / hit-reaction anim). GREEN box = free to act. Client estimate only — not a server stun flag.",
+  TextColor3=Color3.fromRGB(180,200,230),Font=Enum.Font.Gotham,TextSize=11,TextXAlignment=Enum.TextXAlignment.Left
+ })
+ make("Frame",special,{Size=UDim2.new(1,0,0,8),BackgroundTransparency=1}) -- bottom pad
+ toggle(panel,"Stun Status ESP",function() return on end,function(v) on=v;if not v then for _,r in pairs(records) do r.box.Visible=false;r.tag.Visible=false end end end)
+ moduleSlider(panel,"Max distance",50,500,maxDist," studs",function() return maxDist end,function(v) maxDist=v end)
+ toggle(panel,"Skip teammates",function() return teamSkip end,function(v) teamSkip=v end)
+ toggle(panel,"Show self",function() return showSelf end,function(v) showSelf=v end)
+ connect(Players.PlayerRemoving,clearPlayer)
+ local elapsed=0
+ connect(RS.RenderStepped,function(dt)
+  if not alive then return end
+  elapsed+=dt;if elapsed<1/30 then return end;elapsed=0
+  local cam=workspace.CurrentCamera
+  local own=LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+  local active=on and scriptsActive()
+  for _,player in ipairs(Players:GetPlayers()) do
+   if player==LP and not showSelf then
+    local r=records[player];if r then r.box.Visible=false;r.tag.Visible=false end
+   else
+    local skip=teamSkip and player~=LP and not LP.Neutral and not player.Neutral and LP.Team and LP.Team==player.Team
+    local char=player.Character
+    local hum=char and char:FindFirstChildOfClass("Humanoid")
+    local root=char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"))
+    local r=ensure(player)
+    local ok=active and not skip and root and hum and hum.Health>0 and own and (root.Position-own.Position).Magnitude<=maxDist
+    if not ok then r.box.Visible=false;r.tag.Visible=false
+    else
+     local stunned,reason=isStunned(char,hum)
+     local color=stunned and Color3.fromRGB(220,48,48) or Color3.fromRGB(64,210,96)
+     local label=stunned and ("STUN "..string.upper(tostring(reason))) or "FREE"
+     -- Bounding box from character
+     local cf,size
+     local okbb,cf0,size0=pcall(function() return char:GetBoundingBox() end)
+     if okbb and typeof(cf0)=="CFrame" then cf,size=cf0,size0 else cf,size=root.CFrame,Vector3.new(4,6,2) end
+     local corners={}
+     local hx,hy,hz=size.X*.5,size.Y*.5,size.Z*.5
+     local any,minX,minY,maxX,maxY=false,math.huge,math.huge,-math.huge,-math.huge
+     for _,ox in ipairs({-hx,hx}) do for _,oy in ipairs({-hy,hy}) do for _,oz in ipairs({-hz,hz}) do
+      local p,onScreen=cam:WorldToViewportPoint(cf:PointToWorldSpace(Vector3.new(ox,oy,oz)))
+      if p.Z>.1 then
+       any=true
+       minX=math.min(minX,p.X);minY=math.min(minY,p.Y);maxX=math.max(maxX,p.X);maxY=math.max(maxY,p.Y)
+      end
+     end end end
+     if any then
+      local pad=3
+      r.box.Position=UDim2.fromOffset(minX-pad,minY-pad)
+      r.box.Size=UDim2.fromOffset(math.max(8,maxX-minX+pad*2),math.max(8,maxY-minY+pad*2))
+      r.box.BackgroundColor3=color
+      r.stroke.Color=color
+      r.box.Visible=true
+      r.tag.Text=label
+      r.tag.TextColor3=color
+      r.tag.Position=UDim2.fromOffset((minX+maxX)*.5-45,minY-18)
+      r.tag.Visible=true
+     else r.box.Visible=false;r.tag.Visible=false end
+    end
+   end
+  end
+ end)
+ local function cleanup()
+  if not alive then return end;alive=false;on=false
+  for _,r in pairs(records) do r.folder:Destroy() end
+  table.clear(records)
+  if screen then screen:Destroy() end
+ end
+ connect(gui.Destroying,cleanup);connect(unload.Activated,cleanup)
+end)
+
+
+-- Organize module cards inside each category page (stable LayoutOrder)
+do
+ local orderMap={
+  Macros={"Follow-up","Todo macro","Copied sequence","Blackflash Chain V2","Blackflash Chain V3","V2 / V3 Route Calculator","Combo Studio"},
+  Combat={"Ultra Instinct","Auto Parry","Triggerbot","Hitbox Expander (Local Only)","Expand Punch Range (Enemy Reach Assist)","Range Expander (Local Preview)","Cursed Partners Blackflash","Fling (Spin Self)","Remote Train Activation","Auto Counter"},
+  Targeting={"Camera assist and pull"},
+  Movement={"Fly","Follow Behind - Automatic Path Jumps","Speed","Build Speed","Jump Power","Loop Teleport Behind","Low Gravity - Local","Slow Spin","Domain Invade"},
+  Player={"Invisible (Local Only)","Local Recovery","Player Scanner","Serversided Box Morph"},
+  ESP={"Stun Status (Special)","Player ESP","Advanced ESP Distance","2D Boxes","Corner Boxes","Skeleton ESP","Skeleton Overlay","Tracers","Chams","Dropped Items ESP","Items and Non-player Dummies","Build Logic Visibility"},
+  Visuals={"Dash HUD","Popups, voices and kill finisher","Decorative Background"},
+  Animations={"Cosmetic Animation Previews"},
+  Settings={"Session","v2.20 Device and Loading","Mobile compatibility","Device and Loading"},
+ }
+ local function organizePages()
+  for pageName,order in pairs(orderMap) do
+   local page=pages[pageName]
+   if page then
+    local rank={}
+    for i,title in ipairs(order) do rank[title]=i end
+    for _,child in ipairs(page:GetChildren()) do
+     if child:IsA("Frame") and child.Name:find("Group_",1,true)==1 then
+      local title=child.Name:gsub("^Group_","")
+      local r=rank[title]
+      if r then child.LayoutOrder=r
+      else child.LayoutOrder=(child.LayoutOrder or 0)+500 end
+     end
+    end
+   end
+  end
+ end
+ organizePages()
+ task.defer(organizePages)
+end
+
+applyResponsiveLayout()
 end,function(e) return debug.traceback(tostring(e),2) end)
-if not __okMain then warn("JJS HUB v2.6: "..tostring(__errMain)) end
+if not __okMain then warn("JJS HUB v2.20: "..tostring(__errMain)) end
 __JJSBoot:finish(__okMain)
